@@ -21,11 +21,12 @@ var app = new Vue({
     data: {
         days: 4,
         building: {
+            heat_loss: 4200,
             internal_gains: 390,
             fabric: [
-                { WK: 340, kWhK: 8, T: 13 },
-                { WK: 650, kWhK: 8, T: 17 },
-                { WK: 1000, kWhK: 2, T: 18 }
+                { proportion: 52, WK: 0, kWhK: 12, T: 16 },
+                { proportion: 28, WK: 0, kWhK: 6, T: 17 },
+                { proportion: 20, WK: 0, kWhK: 1, T: 18 }
             ],
             fabric_WK: 0
         },
@@ -104,8 +105,22 @@ var app = new Vue({
 
             // These only need to be calculated once
             // Calculate heat loss coefficient
+
+
+            // Calculate fabric WK
+            app.building.fabric_WK = app.building.heat_loss / 23;
+            let fabric_WK_inv = 1 / app.building.fabric_WK;
+
+            var remaining_proportion = 100;
+            remaining_proportion -= app.building.fabric[2].proportion;
+            remaining_proportion -= app.building.fabric[1].proportion;
+            app.building.fabric[0].proportion = remaining_proportion;
+            
             var sum = 0;
             for (var z in app.building.fabric) {
+                let WK_inv = 0.01 * app.building.fabric[z].proportion * fabric_WK_inv;
+                app.building.fabric[z].WK = 1 / WK_inv;
+
                 sum += (1 / app.building.fabric[z].WK*1);
             }
             app.building.fabric_WK = 1 / sum;
@@ -543,17 +558,23 @@ $('#graph').bind("plothover", function (event, pos, item) {
 
             $("#tooltip").remove();
 
-            let unit = "";
-            let dp = 0;
-            if (item.series.label == "Elec") { unit = "W"; dp = 0; }
-            else if (item.series.label == "Heat") { unit = "W"; dp = 0; }
-            else if (item.series.label == "FlowT") { unit = "°C"; dp = 1; }
-            else if (item.series.label == "ReturnT") { unit = "°C"; dp = 1; }
-            else if (item.series.label == "RoomT") { unit = "°C"; dp = 1; }
+            var tooltipstr = "";
+            // Add time to tooltip
+            tooltipstr += new Date(item.datapoint[0]).toISOString().slice(11, 16) + "<br>";
+            // Add elec_data
+            tooltipstr += "Elec: " + (elec_data[z][1]).toFixed(0) + "W<br>";
+            // Add heat_data
+            tooltipstr += "Heat: " + (heat_data[z][1]).toFixed(0) + "W<br>";
+            // Add flowT_data
+            tooltipstr += "FlowT: " + (flowT_data[z][1]).toFixed(1) + "°C<br>";
+            // Add returnT_data
+            tooltipstr += "ReturnT: " + (returnT_data[z][1]).toFixed(1) + "°C<br>";
+            // Add roomT_data
+            tooltipstr += "RoomT: " + (roomT_data[z][1]).toFixed(1) + "°C<br>";
+            // Add outsideT_data
+            tooltipstr += "OutsideT: " + (outsideT_data[z][1]).toFixed(1) + "°C<br>";
 
-            var itemTime = hour_to_time_str(item.datapoint[0] / 3600000);
-            var itemValue = item.datapoint[1];
-            tooltip(item.pageX, item.pageY, item.series.label + ": " + (item.datapoint[1]).toFixed(dp) + unit + "<br>" + itemTime, "#fff", "#000");
+            tooltip(item.pageX, item.pageY, tooltipstr, "#fff", "#000");
 
         }
     } else $("#tooltip").remove();

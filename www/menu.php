@@ -24,6 +24,12 @@ $menu = array(
         "title" => "Radiator Schedule",
         "description" => "Calculate radiator heat output"
     ),
+    "radequation" => array(
+        "category" => "Heat Loss",
+        "case" => "RadEquation",
+        "title" => "Radiator Equation",
+        "description" => "Calculate radiator heat output"
+    ),
     "dynamic_heatpump_v1" => array(
         "category" => "Dynamic Simulation",
         "case" => "dynamic_heatpump_v1",

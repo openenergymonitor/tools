@@ -121,12 +121,42 @@
             <br>
             <div class="card">
                 <div class="card-body">
-                    <h4>Building fabric ({{ building.fabric_WK | toFixed(0) }} W/K)</h4>
+                    <h4>Building fabric</h4>
+
+                    <!-- add entry for heat loss -->
+                    <div class="row">
+                        <div class="col">
+                            <label class="form-label">Heat loss</label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" v-model.number="building.heat_loss" @change="simulate" />
+                                <span class="input-group-text">W</span>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Heat loss coefficient</label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" :value="building.fabric_WK | toFixed(0)" disabled />
+                                <span class="input-group-text">W/K</span>
+                            </div>
+                        </div>
+                    </div>
+
                     <table class="table">
+                        <tr>
+                            <th>Proportion</th>
+                            <th>W/K</th>
+                            <th>kWh/K</th>
+                        </tr>
                         <tr v-for="(layer,index) in building.fabric">
                             <td>
                                 <div class="input-group mb-3">
-                                    <input type="text" class="form-control" v-model.number="layer.WK" @change="simulate" />
+                                    <input type="text" class="form-control" v-model="layer.proportion" @change="simulate" :disabled="index==0" />
+                                    <span class="input-group-text">%</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="input-group mb-3">
+                                    <input type="text" class="form-control" :value="layer.WK | toFixed(0)" disabled />
                                     <span class="input-group-text">W/K</span>
                                 </div>
                             </td>
@@ -134,12 +164,6 @@
                                 <div class="input-group mb-3">
                                     <input type="text" class="form-control" v-model.number="layer.kWhK" @change="simulate" />
                                     <span class="input-group-text">kWh/K</span>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="input-group mb-3">
-                                    <input type="text" class="form-control" v-model.number="layer.T"  @change="simulate" />
-                                    <span class="input-group-text">°C</span>
                                 </div>
                             </td>
                         </tr>
@@ -446,4 +470,4 @@
         </div>
     </div>
 </div>
-<script src="<?php echo $path; ?>dynamic_heatpump_v1.js?v=24"></script>
+<script src="<?php echo $path; ?>dynamic_heatpump_v1.js?v=26"></script>
