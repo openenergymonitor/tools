@@ -116,4 +116,52 @@ var app = new Vue({
     }
 });
 
+var previousPoint = null;
 app.model();
+
+// flot tooltip
+$('#graph').bind("plothover", function (event, pos, item) {
+    if (item) {
+        var z = item.dataIndex;
+
+        if (previousPoint != item.datapoint) {
+            previousPoint = item.datapoint;
+
+            $("#tooltip").remove();
+
+            var tooltipstr = "";
+
+            tooltipstr = item.datapoint[1].toFixed(1) + "°C Flow @ " + item.datapoint[0].toFixed(1) + "°C Outside";
+
+            //tooltipstr += "Outside Temperature: " + item.datapoint[0].toFixed(1) + "°C<br>";
+            //tooltipstr += "Flow Temperature: " + item.datapoint[1].toFixed(1) + "°C";
+
+            tooltip(item.pageX, item.pageY, tooltipstr, "#fff", "#000");
+
+        }
+    } else $("#tooltip").remove();
+});
+
+function tooltip(x, y, contents, bgColour, borderColour = "rgb(255, 221, 221)") {
+    var offset = 10;
+    var elem = $('<div id="tooltip">' + contents + '</div>').css({
+        position: 'absolute',
+        color: "#000",
+        display: 'none',
+        'font-weight': 'bold',
+        border: '1px solid ' + borderColour,
+        padding: '2px',
+        'background-color': bgColour,
+        opacity: '0.8',
+        'text-align': 'left'
+    }).appendTo("body").fadeIn(200);
+
+    var elemY = y - elem.height() - offset;
+    var elemX = x - elem.width() - offset;
+    if (elemY < 0) { elemY = 0; }
+    if (elemX < 0) { elemX = 0; }
+    elem.css({
+        top: elemY,
+        left: elemX
+    });
+}

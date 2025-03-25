@@ -116,4 +116,4 @@
     </div>
 
 </div>
-<script src="<?php echo $path; ?>weathercomp.js?v=1"></script>
+<script src="<?php echo $path; ?>weathercomp.js?v=3"></script>
