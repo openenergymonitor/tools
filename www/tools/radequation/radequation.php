@@ -124,7 +124,7 @@
             rated_DT: 50,
             heat_output: 0,
 
-            flow_temperature2: 40,
+            flow_temperature2: 38,
             DT2: 5,
             room_temperature2: 20,
             heat_output2: 3.3,
