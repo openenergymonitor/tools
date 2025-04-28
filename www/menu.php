@@ -106,6 +106,12 @@ $menu = array(
         "title" => "UK Grid Simulator",
         "description" => "Can you match supply and demand on the UK grid?"
     ),
+    "dynamic_uvalues" => array(
+        "category" => "Dynamic Simulation",
+        "case" => "dynamic_uvalues",
+        "title" => "Dynamic U-values",
+        "description" => "Explore time-varying U-value of a solid stone wall"
+    ),
     "lcoe" => array(
         "case" => "LCOE",
         "title" => "LCOE",
