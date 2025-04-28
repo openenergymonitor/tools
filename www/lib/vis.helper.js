@@ -65,15 +65,15 @@ var view =
     this.end = (new Date()).getTime();    //Get end time
   },
 
-  'calc_interval':function(npoints=600, min_interval=5)
+  'calc_interval':function(npoints=600, min_interval=5, scaler=1000)
   {
-    var interval = Math.round(((this.end - this.start)*0.001)/npoints);
+    var interval = Math.round(((this.end - this.start)*(1/scaler))/npoints);
     var outinterval = this.round_interval(interval);
     
     if (outinterval<min_interval) outinterval = min_interval;
     if (!this.fixinterval) this.interval = outinterval;
     
-    var intervalms = this.interval*1000;
+    var intervalms = this.interval*scaler;
     this.start = Math.floor(this.start / intervalms) * intervalms;
     this.end = Math.ceil(this.end / intervalms) * intervalms;
   },
