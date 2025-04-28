@@ -325,6 +325,9 @@
                 let flowT_weighted_sum = 0;
                 let flowT_minus_outside_weighted_sum = 0;
                 let outside_weighted_sum = 0;
+
+                var histogram_hours_at_modulation = [];
+                var modulation_bucket = 10;
                 
                 for (var i = 0; i < series[0].data.length; i++) {
                     let outsideTemp = series[0].data[i][1];
@@ -391,7 +394,28 @@
                         month_heat_kwh = 0;
                         month_elec_kwh = 0;
                     }
+
+                    // Create histogram of hours at modulation
+                    if (heatDemand>0) {
+                        let modulation = Math.round((heatDemand / (app.heatpumpCapacity*1000)) * 100);
+                        let bucket = Math.floor(modulation / modulation_bucket) * modulation_bucket;
+
+                        if (bucket > 100) {
+                            bucket = 100;
+                        }
+                        if (bucket < 0) {
+                            bucket = 0;
+                        }
+
+                        if (!histogram_hours_at_modulation[bucket]) {
+                            histogram_hours_at_modulation[bucket] = 0;
+                        }
+                        histogram_hours_at_modulation[bucket] += heatDemand / 1000;
+                    }
+
                 }
+
+                console.log(histogram_hours_at_modulation);
 
                 app.weighted_flow_temp = flowT_weighted_sum / app.annual_heat_kwh;
                 app.weighted_flow_minus_outside = flowT_minus_outside_weighted_sum / app.annual_heat_kwh;
