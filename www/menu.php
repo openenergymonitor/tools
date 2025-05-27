@@ -112,6 +112,12 @@ $menu = array(
         "title" => "Dynamic U-values",
         "description" => "Explore time-varying U-value of a solid stone wall"
     ),
+    "ventilation_12831" => array(
+        "category" => "Heat Loss",
+        "case" => "ventilation_12831",
+        "title" => "EN12831 Ventilation",
+        "description" => "EN12831 Reference Ventilation Calculation"
+    ),
     "lcoe" => array(
         "case" => "LCOE",
         "title" => "LCOE",
