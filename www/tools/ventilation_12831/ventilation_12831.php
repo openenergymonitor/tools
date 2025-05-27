@@ -6,7 +6,7 @@
     <div class="row">
         <div class="col">
             <h3>EN12831 Ventilation Calculation</h3>
-            <p>See source code for a reference implementation of the EN12831 ventilation calculation. Example given below has also been validated to give the same result as the MCS heat load calculator (without extract ventilation).</p>
+            <p>See source code for a reference implementation of the EN12831 ventilation calculation.</p>
 
             <p><i>Note: Party walls to neighboring properties are not included in the example external envelope areas below.</i></p>
 
