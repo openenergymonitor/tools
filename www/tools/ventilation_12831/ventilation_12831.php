@@ -360,7 +360,6 @@
                     room.effective_ach_zone = (ventilationHeatloss_zone / (0.33 * (room.temperature - this.outside))) / room.volume;
                     room.effective_qv_room = room.volume * room.effective_ach_room; // m3/h
                     room.effective_qv_zone = room.volume * room.effective_ach_zone; // m3/h
-
                 }
 
                 console.log("Total Ventilation Heatloss: " + totalVentilationHeatloss_zone);
