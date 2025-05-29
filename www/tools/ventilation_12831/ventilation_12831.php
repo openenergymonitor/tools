@@ -27,11 +27,21 @@
                 <span class="input-group-text">m<sup>2</sup></span>
             </div>
         </div>
+    </div>
+    <div class="row">
         <div class="col">
-            <label class="form-label">Air permeability at 50 Pa</label>
+            <label class="form-label">Air permeability</label>
             <div class="input-group mb-3">
                 <input type="text" class="form-control" :value="estimated_qenv50 | number(2)" disabled>
                 <span class="input-group-text">m<sup>3</sup>/h.m<sup>2</sup> @ 50 Pa</span>
+            </div>
+        </div>
+
+        <div class="col">
+            <label class="form-label">Air change rate</label>
+            <div class="input-group mb-3">
+                <input type="text" class="form-control" :value="estimated_ach | number(2)" disabled>
+                <span class="input-group-text">ACH</span>
             </div>
         </div>
     </div>
@@ -114,8 +124,9 @@
             </tbody>
         </table>
 
-        <p><b>External envelope areas:</b> The example calculation given here is a mid-terrace house, the external envelope areas do not include the party wall areas with the neighboring properties. This is consistent with how party walls are treated in the MCS heat load calculator and EN 12831 definition 6.3.3.6 but is inconsistent with the CIBSE TM23 and ISO 9972 definition of envelope area. How this is treated may change in future.</p>
+        <p><b>Minimum air change rates:</b> The MCS heat load calculator, is in the absence of an updated national annex, using the minimum air change rates from CIBSE DHDG Table 3.8. These are different from the default values provided in the EN 12831-1:2017 standard in Table B.7 of 0.5 ACH for all rooms apart from secondary/internal rooms which should be 0.0 ACH. It could be argued that the default values from the EN 12831 standard are better suited to be used here.</p>
 
+        <p><b>External envelope areas:</b> The example calculation given here is a mid-terrace house, the external envelope areas do not include the party wall areas with the neighboring properties. This is consistent with how party walls are treated in the MCS heat load calculator and EN 12831 definition 6.3.3.6 but is inconsistent with the CIBSE TM23 and ISO 9972 definition of envelope area. How this is treated may change in future.</p>
 
         <p><b>Building vs room heat loss</b>: Note that EN 12831-1:2017 calculates a different heat loss for rooms individually as compared to the zone as a whole. Rooms facing the wind will have cold air pushed into them. This air would then move, pre-warmed, to adjoining rooms on the other side of the building, resulting in higher heating requirements for wind-facing rooms than those on the leeward side. The latter halving reflects an averaging out of these effects across the entire building.</p>
 
@@ -131,6 +142,7 @@
             TFA: 76.4,             // Total Floor Area in m2
             number_of_bedrooms: 3, // Number of bedrooms
             estimated_qenv50: 0,   // Estimated air permeability at 50 Pa in m3/h/m2
+            estimated_ach: 0,      // Estimated air change rate in h-1
 
             outside: -4.5,
             qenv50: 12.4, // m3/h/m2
@@ -191,6 +203,7 @@
                 let p50 = n50 * this.zone.volume / this.zone.envelope_area; // m3/h/m2
 
                 this.estimated_qenv50 = p50; // m3/h/m2 @ 50 Pa
+                this.estimated_ach = ach; // h-1
             },
 
             model: function() {
