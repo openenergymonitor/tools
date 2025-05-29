@@ -82,9 +82,9 @@
                     <th>Room</th>
                     <th>Volume (m<sup>3</sup>)</th>
                     <th>External<br>Envelope<br>Area (m<sup>2</sup>)</th>
-                    <th>Room Temperatures (°C)</th>
+                    <th>Room Temp (°C)</th>
                     <th>Minimum air change rates<br>N<sub>min</sub> (h<sup>-1</sup>)</th>
-                    <th>Exhaust air m3/hr</th>
+                    <th>Air Terminal Device (ATD)<br>m3/hr</th>
                     <th>Ventilation<br>Heat Loss *Room*</th>
                     <th>Ventilation<br>Heat Loss *Zone*</th>
                 </tr>
@@ -96,7 +96,7 @@
                     <td><input type="number" class="form-control form-control-sm" v-model="room.envelope_area" @change="update"></td>
                     <td><input type="number" class="form-control form-control-sm" v-model="room.temperature" @change="update"></td>
                     <td><input type="number" class="form-control form-control-sm" v-model="room.n_min" @change="update"></td>
-                    <td><input type="number" class="form-control form-control-sm" v-model="room.qv_exh_i" @change="update"></td>
+                    <td><input type="number" class="form-control form-control-sm" v-model="room.qv_ATD_design_i" @change="update"></td>
                     <td>{{ room.ventilationHeatLoss | number(0) }} W</td>
                     <td>{{ room.ventilationHeatLoss_zone | number(0) }} W</td>
                 </tr>
@@ -107,7 +107,7 @@
                     <td>{{ rooms.reduce((sum, room) => sum + room.envelope_area, 0) | number(1) }} m<sup>2</sup></td>
                     <td></td>
                     <td></td>
-                    <td>{{ zone.qv_exh_z | number(0) }} m<sup>3</sup>/h</td>
+                    <td>{{ zone.qv_ATD_design_z | number(0) }} m<sup>3</sup>/h</td>
                     <td>{{ rooms.reduce((sum, room) => sum + room.ventilationHeatLoss, 0) | number(0) }} W</td>
                     <td>{{ zone.ventilationHeatLoss | number(0) }} W*</td>
                 </tr>
@@ -138,14 +138,14 @@
             ffac_z: 8, // > 1 exposed facades
 
             rooms: [
-                { name: "Livingroom", volume: 56.93, envelope_area: 36.72, temperature: 21, n_min: 1.5, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, ventilationHeatLoss: 0, ventilationHeatLoss_zone: 0 },
-                { name: "Hall", volume: 15.84, envelope_area: 9.6, temperature: 18, n_min: 2.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0 },
-                { name: "Kitchen", volume: 17.28, envelope_area: 20.16, temperature: 18, n_min: 2.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0 },
-                { name: "Bed 1", volume: 23.52, envelope_area: 13.88, temperature: 18, n_min: 1.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0 },
-                { name: "Bed 2", volume: 20.74, envelope_area: 14.88, temperature: 18, n_min: 1.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0 },
-                { name: "Bed 3", volume: 9.5, envelope_area: 8.28, temperature: 18, n_min: 1.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0 },
-                { name: "Landing", volume: 19.01, envelope_area: 7.92, temperature: 18, n_min: 2.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0 },
-                { name: "Bathroom", volume: 19.01, envelope_area: 21.6, temperature: 22, n_min: 3.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0 }
+                { name: "Livingroom", volume: 56.93, envelope_area: 36.72, temperature: 21, n_min: 1.5, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0, ventilationHeatLoss: 0, ventilationHeatLoss_zone: 0 },
+                { name: "Hall", volume: 15.84, envelope_area: 9.6, temperature: 18, n_min: 2.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0 },
+                { name: "Kitchen", volume: 17.28, envelope_area: 20.16, temperature: 18, n_min: 2.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0 },
+                { name: "Bed 1", volume: 23.52, envelope_area: 13.88, temperature: 18, n_min: 1.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0 },
+                { name: "Bed 2", volume: 20.74, envelope_area: 14.88, temperature: 18, n_min: 1.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0 },
+                { name: "Bed 3", volume: 9.5, envelope_area: 8.28, temperature: 18, n_min: 1.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0 },
+                { name: "Landing", volume: 19.01, envelope_area: 7.92, temperature: 18, n_min: 2.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0 },
+                { name: "Bathroom", volume: 19.01, envelope_area: 21.6, temperature: 22, n_min: 3.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0 }
             ],
 
             zone: {
@@ -154,7 +154,8 @@
                 ventilationHeatLoss: 0,
                 qv_exh_z: 0,
                 qv_comb_z: 0,
-                qv_sup_z: 0
+                qv_sup_z: 0,
+                qv_ATD_design_z: 0,
             }
         },
         methods: {
@@ -219,12 +220,16 @@
                 // Supply air volume flow from the ventilation zone (z) (Sum of rooms, I)
                 let qv_sup_z = 0; // m3/h
 
+                // Design air volume flow of the ATDs in the ventilation zone (z)
+                let qv_ATD_design_z = 0; // m3/h
+
                 for (var i = 0; i < this.rooms.length; i++) {
                     var room = this.rooms[i];
                     //  
                     room.qv_exh_i = 1 * room.qv_exh_i;
                     room.qv_comb_i = 1 * room.qv_comb_i;
                     room.qv_sup_i = 1 * room.qv_sup_i;
+                    room.qv_ATD_design_i = 1 * room.qv_ATD_design_i;
                     
                     // Formula 25
                     qv_exh_z += room.qv_exh_i;      // m3/h
@@ -232,20 +237,25 @@
                     qv_comb_z += room.qv_comb_i;    // m3/h
                     // Formula 27
                     qv_sup_z += room.qv_sup_i;      // m3/h
+
+                    // Formula B.1 (B.2.12 Estimation of design data of external ATDs)
+                    // Use B.1 when the design volume flow of each single ATD or for each room with ATDs is known.
+                    // Other forumlas are available when this is not known see B.2 & B.3
+                    qv_ATD_design_z += room.qv_ATD_design_i; // m3/h
                     
                 }
-                this.zone.qv_exh_z = qv_exh_z;      // Update zone exhaust air volume flow
-                this.zone.qv_comb_z = qv_comb_z;    // Update zone combustion air volume flow
-                this.zone.qv_sup_z = qv_sup_z;      // Update zone supply air volume flow
+                this.zone.qv_exh_z = qv_exh_z;                  // Update zone exhaust air volume flow
+                this.zone.qv_comb_z = qv_comb_z;                // Update zone combustion air volume flow
+                this.zone.qv_sup_z = qv_sup_z;                  // Update zone supply air volume flow
+                this.zone.qv_ATD_design_z = qv_ATD_design_z;    // Update zone ATD design air volume flow
 
-                // Air volume flow into the ventilation zone (z) through ATDs at a pressure difference of 50 Pa in accordance with Formula (29)
-                let qv_ATD_50_z = 0; // m3/h
+                // Air volume flow into the ventilation zone (z) through ATDs at a pressure difference of 50 Pa in accordance with Formula (30)
+                // Pressure exponent for leakages
+                let Vleak_z = 0.67; // Default value from B.2.14
 
-                // Design air volume flow of the ATDs in the ventilation zone (z)
-                let qv_ATD_design_z = 0;
-
-                // External air volume flow into the zone (z) through ATDs in accordance with Formula (21)
-                let qv_ATD_z = 0;
+                // Forula 30
+                // The design pressure difference for the ATDs of a ventilation zone (z) may be estimated with delta p ATD,design,z = 4 Pa (page 71)
+                let qv_ATD_50_z = qv_ATD_design_z * Math.pow((50 / 4), Vleak_z); // m3/h
 
                 // ATD authority of the ATDs in zone (z) in accordance with Formula (22)
                 let a_ATD_z = qv_ATD_50_z / (qv_ATD_50_z + (qenv50 * Aenvz));
@@ -270,6 +280,9 @@
                 // 6.3.3.3.4 External air volume flow into the ventilation zone (z) through the building envelope (page 37)
                 let qv_env_z = Math.max(qv_exh_z + qv_comb_z - qv_sup_z, 0) + qv_inf_add_z;
 
+                // External air volume flow into the zone (z) through ATDs in accordance with Formula (21)
+                let qv_ATD_z = a_ATD_z * qv_env_z;
+
                 // Formula 20 (page 36)
                 let qv_leak_z = (1 - a_ATD_z) * qv_env_z;
 
@@ -285,8 +298,7 @@
                     console.log("Room: " + room.name);
 
                     // Design air volume flow of the ATDs in the ventilation room (I)
-                    let qv_ATD_design_i = 0;
-                    let plus_ATD = (qv_ATD_design_z > 0 ? (qv_ATD_z * (qv_ATD_design_i / qv_ATD_design_z)) : 0);
+                    let plus_ATD = (qv_ATD_design_z > 0 ? (qv_ATD_z * (room.qv_ATD_design_i / qv_ATD_design_z)) : 0);
 
                     // Formula 19 (page 35)
                     // external air volume flow into the room (i) through leakages and ATDs in accordance with 6.3.3.3.2
