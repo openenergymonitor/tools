@@ -1,17 +1,41 @@
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
 
-<?php $title = "Template"; ?>
+<?php $title = "EN12831 Ventilation Calculation"; ?>
 
 <div class="container mt-3" style="max-width:800px" id="app">
     <div class="row">
         <div class="col">
             <h3>EN12831 Ventilation Calculation</h3>
             <p>See source code for a reference implementation of the EN12831 ventilation calculation.</p>
-
-            <p><i>Note: Party walls to neighboring properties are not included in the example external envelope areas below.</i></p>
-
         </div>
     </div>
+    <hr>
+
+    <p>Estimated air permeability rate calculated from minimum ventilation rates table 1.7 CIBSE DHDG.</p>
+
+    <div class="row">
+        <div class="col">
+            <label class="form-label">Number of bedrooms</label>
+            <div class="input-group mb-3">
+                <input type="text" class="form-control" v-model.number="number_of_bedrooms" @change="update">
+            </div>  
+        </div>
+        <div class="col">
+            <label class="form-label">Total floor area</label>
+            <div class="input-group mb-3">
+                <input type="text" class="form-control" v-model.number="TFA" @change="update">
+                <span class="input-group-text">m<sup>2</sup></span>
+            </div>
+        </div>
+        <div class="col">
+            <label class="form-label">Air permeability at 50 Pa</label>
+            <div class="input-group mb-3">
+                <input type="text" class="form-control" :value="estimated_qenv50 | number(2)" disabled>
+                <span class="input-group-text">m<sup>3</sup>/h.m<sup>2</sup> @ 50 Pa</span>
+            </div>
+        </div>
+    </div>
+
     <hr>
 
     <div class="row">
@@ -23,10 +47,10 @@
             </div>  
         </div>
         <div class="col">
-            <label class="form-label">Air permeability test result</label>
+            <label class="form-label">Air permeability test result (or copy from above)</label>
             <div class="input-group mb-3">
                 <input type="text" class="form-control" v-model.number="qenv50" @change="update">
-                <span class="input-group-text">m<sup>3</sup>/h/m<sup>2</sup> @ 50 Pa</span>
+                <span class="input-group-text">m<sup>3</sup>/h.m<sup>2</sup> @ 50 Pa</span>
             </div>
         </div>
     </div>
@@ -90,7 +114,10 @@
             </tbody>
         </table>
 
-        <p>*Note: Note that EN 12831-1:2017 calculates a different heat loss for rooms individually as compared to the zone as a whole. Rooms facing the wind will have cold air pushed into them. This air would then move, pre-warmed, to adjoining rooms on the other side of the building, resulting in higher heating requirements for wind-facing rooms than those on the leeward side. The latter halving reflects an averaging out of these effects across the entire building.</p>
+        <p><b>External envelope areas:</b> The example calculation given here is a mid-terrace house, the external envelope areas do not include the party wall areas with the neighboring properties. This is consistent with how party walls are treated in the MCS heat load calculator and EN 12831 definition 6.3.3.6 but is inconsistent with the CIBSE TM23 and ISO 9972 definition of envelope area. How this is treated may change in future.</p>
+
+
+        <p><b>Building vs room heat loss</b>: Note that EN 12831-1:2017 calculates a different heat loss for rooms individually as compared to the zone as a whole. Rooms facing the wind will have cold air pushed into them. This air would then move, pre-warmed, to adjoining rooms on the other side of the building, resulting in higher heating requirements for wind-facing rooms than those on the leeward side. The latter halving reflects an averaging out of these effects across the entire building.</p>
 
         </div>
     </div>
@@ -101,6 +128,10 @@
         el: '#app',
 
         data: {
+            TFA: 76.4,             // Total Floor Area in m2
+            number_of_bedrooms: 3, // Number of bedrooms
+            estimated_qenv50: 0,   // Estimated air permeability at 50 Pa in m3/h/m2
+
             outside: -4.5,
             qenv50: 12.4, // m3/h/m2
             fqv_z: 0.05, // Table B.8
@@ -118,6 +149,8 @@
             ],
 
             zone: {
+                volume: 0,          // Total volume of the zone (sum of room volumes)
+                envelope_area: 0,   // Total envelope area of the zone (sum of room envelope areas)
                 ventilationHeatLoss: 0,
                 qv_exh_z: 0,
                 qv_comb_z: 0,
@@ -128,7 +161,44 @@
             update: function () {
                 this.model();
             },
+
+            calculate_air_permeability: function() {
+                // ------------------------------------------------------------------------------------
+                // This calculator is not in EN12831-1:2017 but is used in the MCS heat load calculator
+                // Calculate air permeability from minimum ventilation rates table 1.7 CIBSE DHDG
+
+                // Table 1.7 Whole-building ventilation rates
+                // Number of bedrooms        1, 2, 3, 4, 5
+                let min_ventilation_rates = [13, 17 ,21, 25, 29]; // l/s
+                let min_ventilation_rate_ls_beds = min_ventilation_rates[this.number_of_bedrooms - 1]; // l/s
+
+                // Note: In addition, the minimum ventilation rate would not be less than 0.3 l/s per m2 of internal floor area (this includes each floor).
+                let min_ventilation_rate_ls_alt = this.TFA * 0.3; // l/s
+
+                let min_ventilation_rate_ls = Math.max(min_ventilation_rate_ls_beds, min_ventilation_rate_ls_alt); // l/s
+
+                // Convert to an air change rate
+                let ach = (min_ventilation_rate_ls * 3.6) / this.zone.volume; // Convert to h-1
+
+                // Convert to an air change rate at 50 Pa
+                let n50 = ach * 20;
+
+                // Calculate the air permeability at 50 Pa
+                let p50 = n50 * this.zone.volume / this.zone.envelope_area; // m3/h/m2
+
+                this.estimated_qenv50 = p50; // m3/h/m2 @ 50 Pa
+            },
+
             model: function() {
+
+                // Calculate total volume and envelope area of the zone
+                this.zone.volume = this.rooms.reduce((sum, room) => sum + room.volume, 0);
+                this.zone.envelope_area = this.rooms.reduce((sum, room) => sum + room.envelope_area, 0);
+
+                this.calculate_air_permeability();
+
+                // ------------------------------------------------------------------------------------
+                // EN12831-1:2017 calculation section
 
                 // Envelope of the ventilation zone (z)
                 let Aenvz = 0;
