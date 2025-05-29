@@ -113,8 +113,8 @@
 
                 <tr style="background-color: #f8f9fa;">
                     <td>Total</td>
-                    <td>{{ rooms.reduce((sum, room) => sum + room.volume, 0) | number(1) }} m<sup>3</sup></td>
-                    <td>{{ rooms.reduce((sum, room) => sum + room.envelope_area, 0) | number(1) }} m<sup>2</sup></td>
+                    <td>{{ zone.volume | number(1) }} m<sup>3</sup></td>
+                    <td>{{ zone.envelope_area | number(1) }} m<sup>2</sup></td>
                     <td></td>
                     <td></td>
                     <td>{{ zone.qv_ATD_design_z | number(0) }} m<sup>3</sup>/h</td>
@@ -209,8 +209,22 @@
             model: function() {
 
                 // Calculate total volume and envelope area of the zone
-                this.zone.volume = this.rooms.reduce((sum, room) => sum + room.volume, 0);
-                this.zone.envelope_area = this.rooms.reduce((sum, room) => sum + room.envelope_area, 0);
+                this.zone.volume = 0;
+                this.zone.envelope_area = 0;
+                
+                for (var i = 0; i < this.rooms.length; i++) {
+                    var room = this.rooms[i];
+
+                    room.volume = parseFloat(room.volume) || 0; // Ensure volume is a number
+                    room.envelope_area = parseFloat(room.envelope_area) || 0; // Ensure envelope area is a number
+                    room.temperature = parseFloat(room.temperature) || 18; // Default temperature to 18 if not set
+                    room.n_min = parseFloat(room.n_min) || 0;
+
+                    this.zone.volume += room.volume; // Sum of all room volumes
+                    this.zone.envelope_area += room.envelope_area; // Sum of all room envelope areas
+                    room.ventilationHeatLoss = 0; // Reset heat loss for each room
+                    room.ventilationHeatLoss_zone = 0; // Reset zone heat loss for each room
+                }
 
                 this.calculate_air_permeability();
 
@@ -218,12 +232,8 @@
                 // EN12831-1:2017 calculation section
 
                 // Envelope of the ventilation zone (z)
-                let Aenvz = 0;
-                for (var i = 0; i < this.rooms.length; i++) {
-                    var room = this.rooms[i];
-                    Aenvz += room.envelope_area;
-                }
-            
+                let Aenvz = this.zone.envelope_area; // m2
+
                 // Specific air permeability of the envelope at 50pa
                 let qenv50 = this.qenv50; // m3/h/m2
 

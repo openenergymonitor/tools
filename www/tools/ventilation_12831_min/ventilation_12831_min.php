@@ -99,8 +99,8 @@
 
                 <tr style="background-color: #f8f9fa;">
                     <td>Total</td>
-                    <td>{{ rooms.reduce((sum, room) => sum + room.volume, 0) | number(1) }} m<sup>3</sup></td>
-                    <td>{{ rooms.reduce((sum, room) => sum + room.envelope_area, 0) | number(1) }} m<sup>2</sup></td>
+                    <td>{{ zone.volume | number(1) }} m<sup>3</sup></td>
+                    <td>{{ zone.envelope_area | number(1) }} m<sup>2</sup></td>
                     <td></td>
                     <td></td>
                     <td>{{ zone.ventilationHeatLoss_sum_rooms | number(0) }} W <span style="color:#666; font-size:12px">({{zone.effective_ach_rooms | number(2)}})</span></td>
@@ -186,11 +186,25 @@
 
             model: function() {
 
+                this.zone.volume = 0;
+                this.zone.envelope_area = 0;
+                
+                for (var i = 0; i < this.rooms.length; i++) {
+                    var room = this.rooms[i];
 
+                    room.volume = parseFloat(room.volume) || 0; // Ensure volume is a number
+                    room.envelope_area = parseFloat(room.envelope_area) || 0; // Ensure envelope area is a number
+                    room.temperature = parseFloat(room.temperature) || 18; // Default temperature to 18 if not set
+                    room.n_min = parseFloat(room.n_min) || 0;
 
-                // Calculate total volume and envelope area of the zone
-                this.zone.volume = this.rooms.reduce((sum, room) => sum + room.volume, 0);
-                this.zone.envelope_area = this.rooms.reduce((sum, room) => sum + room.envelope_area, 0);
+                    this.zone.volume += room.volume; // Sum of all room volumes
+                    this.zone.envelope_area += room.envelope_area; // Sum of all room envelope areas
+                    room.ventilationHeatLoss = 0; // Reset heat loss for each room
+                    room.ventilationHeatLoss_zone = 0; // Reset zone heat loss for each room
+                    room.used_min_room = false; // Reset used minimum room value
+                    room.used_min_zone = false; // Reset used minimum zone value
+
+                }
 
                 this.n50 = (this.qenv50 * this.zone.envelope_area) / this.zone.volume; // Air change rate at 50 Pa in h-1
                 this.ACH = this.n50 / 20; // Air change rate in h-1
@@ -199,11 +213,7 @@
                 // EN12831-1:2017 calculation section
 
                 // Envelope of the ventilation zone (z)
-                let Aenvz = 0;
-                for (var i = 0; i < this.rooms.length; i++) {
-                    var room = this.rooms[i];
-                    Aenvz += room.envelope_area;
-                }
+                let Aenvz = this.zone.envelope_area;
 
                 // Orientation factor (default: 2, B.2.14)
                 let fdir_z = 2;
