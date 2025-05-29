@@ -176,7 +176,32 @@ var app = new Vue({
         delete_space: function (index) {
             this.schedule.splice(index, 1);
             this.simulate();
+        },
+        zoom_out: function () {
+            view.zoomout();
+            view.calc_interval(2400, 30, 1);
+            plot();
+        },
+        zoom_in: function () {
+            view.zoomin();
+            view.calc_interval(2400, 30, 1);
+            plot();
+        },
+        pan_left: function () {
+            view.panleft();
+            plot();
+        },
+        pan_right: function () {
+            view.panright();
+            plot();
+        },
+        reset: function () {
+            view.start = outside_data_start;
+            view.end = outside_data_end;
+            view.calc_interval(2400, 30, 1);
+            plot();
         }
+
     },
     filters: {
         toFixed: function (val, dp) {
@@ -206,6 +231,12 @@ function hour_to_time_str(hour_min) {
 $('#graph').width($('#graph_bound').width()).height($('#graph_bound').height());
 
 // var hs = 0.1;
+roomT_data = [];
+outsideT_data = [];
+flowT_data = [];
+returnT_data = [];
+elec_data = [];
+heat_data = [];
 
 ITerm = 0
 error = 0
@@ -230,14 +261,16 @@ function update_fabric_starting_temperatures() {
 
 function sim(conf) {
 
-    if (conf.record_timeseries) {
+    //if (conf.record_timeseries) {
+    /*
         roomT_data = [];
         outsideT_data = [];
         flowT_data = [];
         returnT_data = [];
         elec_data = [];
         heat_data = [];
-    }
+        */
+    //}
 
     if (app.control.fixed_compressor_speed>100) app.control.fixed_compressor_speed = 100;
     if (app.control.fixed_compressor_speed<40) app.control.fixed_compressor_speed = 40;
@@ -502,7 +535,7 @@ function sim(conf) {
         room_temp_sum += room;
 
         // Populate time series data arrays for plotting
-        if (conf.record_timeseries && i > start_of_last_day) {
+        // if (conf.record_timeseries && i > start_of_last_day) {
             let timems = time*1000;
             roomT_data.push([timems, room]);
             outsideT_data.push([timems, outside]);
@@ -510,7 +543,7 @@ function sim(conf) {
             returnT_data.push([timems, return_temperature]);
             elec_data.push([timems, heatpump_elec]);
             heat_data.push([timems, heatpump_heat]);
-        }
+        // }
     }
 
     return {
@@ -533,7 +566,6 @@ function plot() {
         { label: "ReturnT", data: returnT_data, color: 3, yaxis: 2, lines: { show: true, fill: false } },
         { label: "RoomT", data: roomT_data, color: "#000", yaxis: 1, lines: { show: true, fill: false } },
         { label: "OutsideT", data: outsideT_data, color: "#0000cc", yaxis: 1, lines: { show: true, fill: false } }
-
     ];
 
     var options = {

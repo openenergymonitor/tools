@@ -97,8 +97,8 @@
                     <td><input type="number" class="form-control form-control-sm" v-model="room.temperature" @change="update"></td>
                     <td><input type="number" class="form-control form-control-sm" v-model="room.n_min" @change="update"></td>
                     <td><input type="number" class="form-control form-control-sm" v-model="room.qv_ATD_design_i" @change="update"></td>
-                    <td>{{ room.ventilationHeatLoss | number(0) }} W</td>
-                    <td>{{ room.ventilationHeatLoss_zone | number(0) }} W</td>
+                    <td>{{ room.ventilationHeatLoss | number(0) }} W <span style="color:#666; font-size:12px">({{room.effective_ach_room | number(1)}})</span></td>
+                    <td>{{ room.ventilationHeatLoss_zone | number(0) }} W <span style="color:#666; font-size:12px">({{room.effective_ach_zone | number(1)}})</span></td>
                 </tr>
 
                 <tr style="background-color: #f8f9fa;">
@@ -108,7 +108,7 @@
                     <td></td>
                     <td></td>
                     <td>{{ zone.qv_ATD_design_z | number(0) }} m<sup>3</sup>/h</td>
-                    <td>{{ rooms.reduce((sum, room) => sum + room.ventilationHeatLoss, 0) | number(0) }} W</td>
+                    <td>{{ zone.ventilationHeatLoss_sum_rooms | number(0) }} W</td>
                     <td>{{ zone.ventilationHeatLoss | number(0) }} W*</td>
                 </tr>
             </tbody>
@@ -138,7 +138,7 @@
             ffac_z: 8, // > 1 exposed facades
 
             rooms: [
-                { name: "Livingroom", volume: 56.93, envelope_area: 36.72, temperature: 21, n_min: 1.5, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0, ventilationHeatLoss: 0, ventilationHeatLoss_zone: 0 },
+                { name: "Livingroom", volume: 56.93, envelope_area: 36.72, temperature: 21, n_min: 1.5, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0, ventilationHeatLoss: 0, ventilationHeatLoss_zone: 0, effective_ach_room:0, effective_ach_zone:0 },
                 { name: "Hall", volume: 15.84, envelope_area: 9.6, temperature: 18, n_min: 2.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0 },
                 { name: "Kitchen", volume: 17.28, envelope_area: 20.16, temperature: 18, n_min: 2.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0 },
                 { name: "Bed 1", volume: 23.52, envelope_area: 13.88, temperature: 18, n_min: 1.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0 },
@@ -152,6 +152,9 @@
                 volume: 0,          // Total volume of the zone (sum of room volumes)
                 envelope_area: 0,   // Total envelope area of the zone (sum of room envelope areas)
                 ventilationHeatLoss: 0,
+                ventilationHeatLoss_sum_rooms:  0,
+                effective_ach_rooms: 0,
+                effective_ach_zone: 0,
                 qv_exh_z: 0,
                 qv_comb_z: 0,
                 qv_sup_z: 0,
@@ -350,10 +353,17 @@
                     room.ventilationHeatLoss = ventilationHeatloss_room;
                     room.ventilationHeatLoss_zone = ventilationHeatloss_zone;
                     totalVentilationHeatloss_zone += ventilationHeatloss_zone;
+
+                    // Calculate effective air change rates
+                    // =(ventilationHeatloss_room/(0.33*(room.temperature - this.outside)))/room.volume
+                    room.effective_ach_room = (ventilationHeatloss_room / (0.33 * (room.temperature - this.outside))) / room.volume;
+                    room.effective_ach_zone = (ventilationHeatloss_zone / (0.33 * (room.temperature - this.outside))) / room.volume;
                 }
 
                 console.log("Total Ventilation Heatloss: " + totalVentilationHeatloss_zone);
                 this.zone.ventilationHeatLoss = totalVentilationHeatloss_zone;
+                this.zone.ventilationHeatLoss_sum_rooms = this.rooms.reduce((sum, room) => sum + room.ventilationHeatLoss, 0);
+                
             }
         },
         filters: {

@@ -16,8 +16,19 @@
             <h3>Dynamic heat pump simulator</h3>
             <p>Explore continuous vs intermittent heating, temperature set-backs and schedules.</p>
             <div class="alert alert-warning"><i class="fa-solid fa-person-digging"></i> Please help improve this <b>open source</b> heat pump simulator, see source code below.</div>
+
+            <div class="btn-group" role="group" style="width: 250px; float:right">
+                <button type="button" class="btn btn-outline-secondary" @click="zoom_in">+</button>
+                <button type="button" class="btn btn-outline-secondary" @click="zoom_out">-</button>
+                <button type="button" class="btn btn-outline-secondary" @click="pan_left"><</button>
+                <button type="button" class="btn btn-outline-secondary" @click="pan_right">></button>
+                <button type="button" class="btn btn-outline-secondary" @click="reset">RESET</button>
+            </div>
         </div>
     </div>
+
+
+    
     <div class="row">
         <div id="graph_bound" style="width:100%; height:400px; position:relative; ">
             <div id="graph"></div>
@@ -470,4 +481,4 @@
         </div>
     </div>
 </div>
-<script src="<?php echo $path; ?>dynamic_heatpump_v1.js?v=27"></script>
+<script src="<?php echo $path; ?>dynamic_heatpump_v1.js?v=29"></script>
