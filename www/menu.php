@@ -118,6 +118,12 @@ $menu = array(
         "title" => "EN12831 Ventilation",
         "description" => "EN12831 Reference Ventilation Calculation"
     ),
+    "ventilation_12831_min" => array(
+        "category" => "Heat Loss",
+        "case" => "ventilation_12831_min",
+        "title" => "EN12831 Ventilation (Minimal version)",
+        "description" => "EN12831 Reference Ventilation Calculation"
+    ),
     "lcoe" => array(
         "case" => "LCOE",
         "title" => "LCOE",
