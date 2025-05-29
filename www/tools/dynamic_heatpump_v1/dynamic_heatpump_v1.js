@@ -231,12 +231,14 @@ function hour_to_time_str(hour_min) {
 $('#graph').width($('#graph_bound').width()).height($('#graph_bound').height());
 
 // var hs = 0.1;
+/*
 roomT_data = [];
 outsideT_data = [];
 flowT_data = [];
 returnT_data = [];
 elec_data = [];
 heat_data = [];
+*/
 
 ITerm = 0
 error = 0
@@ -261,16 +263,14 @@ function update_fabric_starting_temperatures() {
 
 function sim(conf) {
 
-    //if (conf.record_timeseries) {
-    /*
+    if (conf.record_timeseries) {
         roomT_data = [];
         outsideT_data = [];
         flowT_data = [];
         returnT_data = [];
         elec_data = [];
         heat_data = [];
-        */
-    //}
+    }
 
     if (app.control.fixed_compressor_speed>100) app.control.fixed_compressor_speed = 100;
     if (app.control.fixed_compressor_speed<40) app.control.fixed_compressor_speed = 40;
@@ -535,7 +535,7 @@ function sim(conf) {
         room_temp_sum += room;
 
         // Populate time series data arrays for plotting
-        // if (conf.record_timeseries && i > start_of_last_day) {
+        if (conf.record_timeseries && i > start_of_last_day) {
             let timems = time*1000;
             roomT_data.push([timems, room]);
             outsideT_data.push([timems, outside]);
@@ -543,7 +543,7 @@ function sim(conf) {
             returnT_data.push([timems, return_temperature]);
             elec_data.push([timems, heatpump_elec]);
             heat_data.push([timems, heatpump_heat]);
-        // }
+        }
     }
 
     return {
