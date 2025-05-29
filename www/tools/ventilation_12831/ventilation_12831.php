@@ -97,8 +97,8 @@
                     <td><input type="number" class="form-control form-control-sm" v-model="room.temperature" @change="update"></td>
                     <td><input type="number" class="form-control form-control-sm" v-model="room.n_min" @change="update"></td>
                     <td><input type="number" class="form-control form-control-sm" v-model="room.qv_ATD_design_i" @change="update"></td>
-                    <td>{{ room.ventilationHeatLoss | number(0) }} W <span style="color:#666; font-size:12px">({{room.effective_ach_room | number(1)}})</span></td>
-                    <td>{{ room.ventilationHeatLoss_zone | number(0) }} W <span style="color:#666; font-size:12px">({{room.effective_ach_zone | number(1)}})</span></td>
+                    <td>{{ room.ventilationHeatLoss | number(0) }} W <span style="color:#666; font-size:12px">({{room.effective_ach_room | number(2)}})</span></td>
+                    <td>{{ room.ventilationHeatLoss_zone | number(0) }} W <span style="color:#666; font-size:12px">({{room.effective_ach_zone | number(2)}})</span></td>
                 </tr>
 
                 <tr style="background-color: #f8f9fa;">
@@ -108,8 +108,8 @@
                     <td></td>
                     <td></td>
                     <td>{{ zone.qv_ATD_design_z | number(0) }} m<sup>3</sup>/h</td>
-                    <td>{{ zone.ventilationHeatLoss_sum_rooms | number(0) }} W</td>
-                    <td>{{ zone.ventilationHeatLoss | number(0) }} W*</td>
+                    <td>{{ zone.ventilationHeatLoss_sum_rooms | number(0) }} W <span style="color:#666; font-size:12px">({{zone.effective_ach_rooms | number(2)}})</span></td>
+                    <td>{{ zone.ventilationHeatLoss | number(0) }} W <span style="color:#666; font-size:12px">({{zone.effective_ach_zone | number(2)}})</span></td>
                 </tr>
             </tbody>
         </table>
@@ -355,14 +355,24 @@
                     totalVentilationHeatloss_zone += ventilationHeatloss_zone;
 
                     // Calculate effective air change rates
-                    // =(ventilationHeatloss_room/(0.33*(room.temperature - this.outside)))/room.volume
+                    // This is not part of the standard, just a helper for ease of reference
                     room.effective_ach_room = (ventilationHeatloss_room / (0.33 * (room.temperature - this.outside))) / room.volume;
                     room.effective_ach_zone = (ventilationHeatloss_zone / (0.33 * (room.temperature - this.outside))) / room.volume;
+                    room.effective_qv_room = room.volume * room.effective_ach_room; // m3/h
+                    room.effective_qv_zone = room.volume * room.effective_ach_zone; // m3/h
+
                 }
 
                 console.log("Total Ventilation Heatloss: " + totalVentilationHeatloss_zone);
                 this.zone.ventilationHeatLoss = totalVentilationHeatloss_zone;
                 this.zone.ventilationHeatLoss_sum_rooms = this.rooms.reduce((sum, room) => sum + room.ventilationHeatLoss, 0);
+
+                // Calculate effective air change rates
+                // This is not part of the standard, just a helper for ease of reference
+                let effective_qv_rooms = this.rooms.reduce((sum, room) => sum + room.effective_qv_room, 0);
+                let effective_qv_zone = this.rooms.reduce((sum, room) => sum + room.effective_qv_zone, 0);
+                this.zone.effective_ach_rooms = effective_qv_rooms / this.zone.volume; // h-1
+                this.zone.effective_ach_zone = effective_qv_zone / this.zone.volume; // h-1
                 
             }
         },
