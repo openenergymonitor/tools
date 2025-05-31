@@ -2,7 +2,7 @@
 
 <?php $title = "EN12831 Ventilation Calculation"; ?>
 
-<div class="container mt-3" style="max-width:800px" id="app">
+<div class="container mt-3" style="max-width:1100px" id="app">
     <div class="row">
         <div class="col">
             <h3>EN12831 Ventilation Calculation</h3>
@@ -95,38 +95,78 @@
                     <th>Room Temp (°C)</th>
                     <th>Minimum air change rates<br>N<sub>min</sub> (h<sup>-1</sup>)</th>
                     <th>Air Terminal Device (ATD)<br>m3/hr</th>
-                    <th>Ventilation<br>Heat Loss *Room*</th>
-                    <th>Ventilation<br>Heat Loss *Zone*</th>
+                    <th style="width:130px">Ventilation<br>Heat Loss *Room*</th>
+                    <th style="width:130px">Ventilation<br>Heat Loss *Zone*</th>
+                    <th v-if="show_no_limits_comparison" style="width:130px">Ventilation<br>Heat Loss *Room*<br>No Min</th>
+                    <th v-if="show_no_limits_comparison" style="width:130px">Ventilation<br>Heat Loss *Zone*<br>No Min</th>
                 </tr>
             </thead>
             <tbody>
                 <tr v-for="(room, index) in rooms" :key="index">
-                    <td><input type="text" class="form-control form-control-sm" v-model="room.name" @change="update"></td>
-                    <td><input type="number" class="form-control form-control-sm" v-model="room.volume" @change="update"></td>
-                    <td><input type="number" class="form-control form-control-sm" v-model="room.envelope_area" @change="update"></td>
-                    <td><input type="number" class="form-control form-control-sm" v-model="room.temperature" @change="update"></td>
-                    <td><input type="number" class="form-control form-control-sm" v-model="room.n_min" @change="update"></td>
-                    <td><input type="number" class="form-control form-control-sm" v-model="room.qv_ATD_design_i" @change="update"></td>
-                    <td>{{ room.ventilationHeatLoss | number(0) }} W <span style="color:#666; font-size:12px">({{room.effective_ach_room | number(2)}})</span></td>
-                    <td>{{ room.ventilationHeatLoss_zone | number(0) }} W <span style="color:#666; font-size:12px">({{room.effective_ach_zone | number(2)}})</span></td>
+                    <td>{{ room.name }} </td>
+                    <td><input type="number" class="form-control form-control-sm" v-model.number="room.volume" @change="update"></td>
+                    <td><input type="number" class="form-control form-control-sm" v-model.number="room.envelope_area" @change="update"></td>
+                    <td><input type="number" class="form-control form-control-sm" v-model.number="room.temperature" @change="update"></td>
+                    <td><input type="number" class="form-control form-control-sm" v-model.number="room.n_min" @change="update"></td>
+                    <td><input type="number" class="form-control form-control-sm" v-model.number="room.qv_ATD_design_i" @change="update"></td>
+                    <td>{{ room.vent_heat_loss | number(0) }} W <span style="color:#666; font-size:12px">({{ room.qv_room / room.volume | number(2)}})</span></td>
+                    <td>{{ room.vent_heat_loss_zone | number(0) }} W <span style="color:#666; font-size:12px">({{room.qv_zone / room.volume | number(2)}})</span></td>
+
+                    <!-- Show comparison with no limits -->
+                    <td v-if="show_no_limits_comparison">
+                        {{ room.vent_heat_loss_nl | number(0) }} W 
+                        <span style="color:#888; font-size:12px">
+                            ({{room.qv_room_nl / room.volume | number(2)}})
+                        </span>                    
+                    </td>
+                    <td v-if="show_no_limits_comparison">
+                        {{ room.vent_heat_loss_zone_nl | number(0) }} W
+                        <span style="color:#888; font-size:12px">
+                            ({{room.qv_zone_nl / room.volume | number(2)}})
+                        </span>
+                    </td>
                 </tr>
 
-                <tr style="background-color: #f8f9fa;">
+                <tr style="background-color: #f8f9fa;" :style="{ color: last_row_color }">
                     <td>Total</td>
                     <td>{{ zone.volume | number(1) }} m<sup>3</sup></td>
                     <td>{{ zone.envelope_area | number(1) }} m<sup>2</sup></td>
                     <td></td>
                     <td></td>
                     <td>{{ zone.qv_ATD_design_z | number(0) }} m<sup>3</sup>/h</td>
-                    <td>{{ zone.ventilationHeatLoss_sum_rooms | number(0) }} W <span style="color:#666; font-size:12px">({{zone.effective_ach_rooms | number(2)}})</span></td>
-                    <td>{{ zone.ventilationHeatLoss | number(0) }} W <span style="color:#666; font-size:12px">({{zone.effective_ach_zone | number(2)}})</span></td>
+                    <td>{{ zone.vent_heat_loss_rooms | number(0) }} W <span style="color:#666; font-size:12px">({{zone.qv_rooms / zone.volume | number(2)}})</span></td>
+                    <td>{{ zone.vent_heat_loss | number(0) }} W <span style="color:#666; font-size:12px">({{zone.qv_zone / zone.volume | number(2)}})</span></td>
+
+                    <!-- Show comparison with no limits -->
+                    <td v-if="show_no_limits_comparison">{{ zone.vent_heat_loss_rooms_nl | number(0) }} W
+                        <span style="color:#666; font-size:12px">({{100*(1-zone.vent_heat_loss_rooms_nl / zone.vent_heat_loss_rooms) | number(2)}}%)</span>
+                    </td>
+                    <td v-if="show_no_limits_comparison">{{ zone.vent_heat_loss_nl | number(0) }} W
+                        <span style="color:#666; font-size:12px">({{100*(1-zone.vent_heat_loss_nl / zone.vent_heat_loss) | number(2)}}%)</span>
+                    </td>
                 </tr>
             </tbody>
         </table>
 
-        <p><b>Minimum air change rates:</b> The MCS heat load calculator, is in the absence of an updated national annex, using the minimum air change rates from CIBSE DHDG Table 3.8. These are different from the default values provided in the EN 12831-1:2017 standard in Table B.7 of 0.5 ACH for all rooms apart from secondary/internal rooms which should be 0.0 ACH. It could be argued that the default values from the EN 12831 standard are better suited to be used here.</p>
+        <div class="row">
+            <div class="col">
+                <div class="input-group mb-3">
+                    <span class="input-group-text">Use simplified natural ventilation + ATD calculation</span>
+                    <span class="input-group-text"><input type="checkbox" v-model="use_simplified_model" @change="update"></span>
+                </div>  
+            </div>
+            <div class="col">
+                <div class="input-group mb-3">
+                    <span class="input-group-text">Show no limits comparison</span>
+                    <span class="input-group-text"><input type="checkbox" v-model="show_no_limits_comparison" :disabled="!use_simplified_model" @change="update"></span>
+                </div>  
+            </div>
+        </div>
+
+        <p><b>Minimum air change rates:</b> The MCS heat load calculator sets the minimum air change rates to values found in the CIBSE DHDG Table 3.8. Carefully studying the equations in the standard suggests this is the wrong approach. These minimum air change rates appear designed to be used as a floor for air change rates in very air-tight buildings, for normal buildings the equations that derive ventilation heat loss from the air-permeability value produce suitable results without the need for artificially high limits.</p>
 
         <p><b>External envelope areas:</b> The example calculation given here is a mid-terrace house, the external envelope areas do not include the party wall areas with the neighboring properties. This is consistent with how party walls are treated in the MCS heat load calculator and EN 12831 definition 6.3.3.6 but is inconsistent with the CIBSE TM23 and ISO 9972 definition of envelope area. How this is treated may change in future.</p>
+        <p>The blower door test for the example property above came to 8.4 m3/h.m2 @ 50 Pa, but this was calculated for an envelope area that included party walls (240 m2). This air-permeability rate entered above represents the same volume flow 8.4 m3/h.m2 x 240 m2 = 2016 m3/hr, but this is now divided by the smaller envelope area without the party walls of 133 m2. This results in a revised air-permeability value of 15.2 m3/h.m2.</p>
 
         <p><b>Building vs room heat loss</b>: Note that EN 12831-1:2017 calculates a different heat loss for rooms individually as compared to the zone as a whole. Rooms facing the wind will have cold air pushed into them. This air would then move, pre-warmed, to adjoining rooms on the other side of the building, resulting in higher heating requirements for wind-facing rooms than those on the leeward side. The latter halving reflects an averaging out of these effects across the entire building.</p>
 
@@ -135,38 +175,61 @@
 </div>
 
 <script>
+
+    // Example building (mid-terrace 3 bed home)
+    var rooms = [
+        { name: "Livingroom", volume: 56.93, envelope_area: 36.72, temperature: 21, n_min: 0.5 },
+        { name: "Hall", volume: 15.84, envelope_area: 9.6, temperature: 18, n_min: 0.5 },
+        { name: "Kitchen", volume: 17.28, envelope_area: 20.16, temperature: 18, n_min: 0.5, qv_ATD_design_i: 10 },
+        { name: "Bed 1", volume: 23.52, envelope_area: 13.88, temperature: 18, n_min: 0.5 },
+        { name: "Bed 2", volume: 20.74, envelope_area: 14.88, temperature: 18, n_min: 0.5 },
+        { name: "Bed 3", volume: 9.5, envelope_area: 8.28, temperature: 18, n_min: 0.5 },
+        { name: "Landing", volume: 19.01, envelope_area: 7.92, temperature: 18, n_min: 0.0 },
+        { name: "Bathroom", volume: 19.01, envelope_area: 21.6, temperature: 22, n_min: 0.5, qv_ATD_design_i: 10 }
+    ];
+
+    // Initialize room properties if not defined
+    for (var i = 0; i < rooms.length; i++) {
+        var room = rooms[i];
+        if (room.qv_exh_i === undefined) room.qv_exh_i = 0;
+        if (room.qv_comb_i === undefined) room.qv_comb_i = 0;
+        if (room.qv_sup_i === undefined) room.qv_sup_i = 0;
+        if (room.qv_ATD_design_i === undefined) room.qv_ATD_design_i = 0;
+
+        room.vent_heat_loss = 0;      // Ventilation heat loss for the room
+        room.vent_heat_loss_zone = 0; // Ventilation heat loss for the zone
+        room.qv_room = 0;
+        room.qv_zone = 0;        
+    }
+
     var app = new Vue({
         el: '#app',
 
         data: {
+            use_simplified_model: false, // Use simplified natural ventilation + ATD calculation
+            show_no_limits_comparison: false, // Show comparison with no limits
+            last_row_color: '#d4edda', // Used to flash the last row in the table
+
             TFA: 76.4,             // Total Floor Area in m2
             number_of_bedrooms: 3, // Number of bedrooms
             estimated_qenv50: 0,   // Estimated air permeability at 50 Pa in m3/h/m2
             estimated_ach: 0,      // Estimated air change rate in h-1
 
-            outside: -4.5,
-            qenv50: 12.4, // m3/h/m2
+            outside: -2,
+            qenv50: 15.2, // m3/h/m2
+
+            // Volume flow factor
             fqv_z: 0.05, // Table B.8
+
+            // Adjustment factor for the number of exposed facades
             ffac_z: 8, // > 1 exposed facades
 
-            rooms: [
-                { name: "Livingroom", volume: 56.93, envelope_area: 36.72, temperature: 21, n_min: 1.5, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0, ventilationHeatLoss: 0, ventilationHeatLoss_zone: 0, effective_ach_room:0, effective_ach_zone:0 },
-                { name: "Hall", volume: 15.84, envelope_area: 9.6, temperature: 18, n_min: 2.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0 },
-                { name: "Kitchen", volume: 17.28, envelope_area: 20.16, temperature: 18, n_min: 2.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0 },
-                { name: "Bed 1", volume: 23.52, envelope_area: 13.88, temperature: 18, n_min: 1.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0 },
-                { name: "Bed 2", volume: 20.74, envelope_area: 14.88, temperature: 18, n_min: 1.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0 },
-                { name: "Bed 3", volume: 9.5, envelope_area: 8.28, temperature: 18, n_min: 1.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0 },
-                { name: "Landing", volume: 19.01, envelope_area: 7.92, temperature: 18, n_min: 2.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0 },
-                { name: "Bathroom", volume: 19.01, envelope_area: 21.6, temperature: 22, n_min: 3.0, qv_exh_i: 0, qv_comb_i:0, qv_sup_i:0, qv_ATD_design_i:0 }
-            ],
+            rooms: rooms,
 
             zone: {
                 volume: 0,          // Total volume of the zone (sum of room volumes)
                 envelope_area: 0,   // Total envelope area of the zone (sum of room envelope areas)
-                ventilationHeatLoss: 0,
-                ventilationHeatLoss_sum_rooms:  0,
-                effective_ach_rooms: 0,
-                effective_ach_zone: 0,
+
                 qv_exh_z: 0,
                 qv_comb_z: 0,
                 qv_sup_z: 0,
@@ -175,7 +238,27 @@
         },
         methods: {
             update: function () {
-                this.model();
+                if (!this.use_simplified_model) {   
+                    this.full_EN12831_ventilation_calc();
+                    this.show_no_limits_comparison = false;
+                } else {
+                    // Use the simplified natural ventilation + ATD calculation
+                    this.natural_vent_plus_ATDs_only();
+
+                    if (this.show_no_limits_comparison) {
+                        // Show comparison with no limits
+                        this.natural_vent_plus_ATDs_only_no_limits();
+                    }
+                }
+
+                this.flash_last_row();
+            },
+
+            flash_last_row: function() {
+                this.last_row_color = '#4444cc'; // Flash last row color
+                setTimeout(() => {
+                    this.last_row_color = '#000'; // Reset last row color
+                }, 200);
             },
 
             calculate_air_permeability: function() {
@@ -206,25 +289,10 @@
                 this.estimated_ach = ach; // h-1
             },
 
-            model: function() {
+            full_EN12831_ventilation_calc: function() {
 
-                // Calculate total volume and envelope area of the zone
-                this.zone.volume = 0;
-                this.zone.envelope_area = 0;
-                
-                for (var i = 0; i < this.rooms.length; i++) {
-                    var room = this.rooms[i];
-
-                    room.volume = parseFloat(room.volume) || 0; // Ensure volume is a number
-                    room.envelope_area = parseFloat(room.envelope_area) || 0; // Ensure envelope area is a number
-                    room.temperature = parseFloat(room.temperature) || 18; // Default temperature to 18 if not set
-                    room.n_min = parseFloat(room.n_min) || 0;
-
-                    this.zone.volume += room.volume; // Sum of all room volumes
-                    this.zone.envelope_area += room.envelope_area; // Sum of all room envelope areas
-                    room.ventilationHeatLoss = 0; // Reset heat loss for each room
-                    room.ventilationHeatLoss_zone = 0; // Reset zone heat loss for each room
-                }
+                this.zone.volume = this.rooms.reduce((sum, room) => sum + room.volume, 0);                  // Total volume of the zone
+                this.zone.envelope_area = this.rooms.reduce((sum, room) => sum + room.envelope_area, 0);    // Total envelope area of the zone
 
                 this.calculate_air_permeability();
 
@@ -251,12 +319,7 @@
 
                 for (var i = 0; i < this.rooms.length; i++) {
                     var room = this.rooms[i];
-                    //  
-                    room.qv_exh_i = 1 * room.qv_exh_i;
-                    room.qv_comb_i = 1 * room.qv_comb_i;
-                    room.qv_sup_i = 1 * room.qv_sup_i;
-                    room.qv_ATD_design_i = 1 * room.qv_ATD_design_i;
-                    
+
                     // Formula 25
                     qv_exh_z += room.qv_exh_i;      // m3/h
                     // Formula 26
@@ -286,22 +349,16 @@
                 // ATD authority of the ATDs in zone (z) in accordance with Formula (22)
                 let a_ATD_z = qv_ATD_50_z / (qv_ATD_50_z + (qenv50 * Aenvz));
 
-                // Volume flow factor
-                let fqv_z = this.fqv_z;
-
                 // Orientation factor (default: 2, B.2.14)
                 let fdir_z = 2;
-                
-                // Adjustment factor for the number of exposed facades
-                let ffac_z = this.ffac_z;
 
                 // Formula 29 (fe,z) (page 38)
                 // Adjustment factor taking into account the additional pressure difference due to unbalanced ventilation in accordance with Formula 29
                 let fe_z_part = (qv_exh_z + qv_comb_z - qv_sup_z) / ((qenv50 * Aenvz) + qv_ATD_50_z);
-                let fe_z = 1 / (1+(ffac_z/fqv_z)*Math.pow(fe_z_part,2));
+                let fe_z = 1 / (1+(this.ffac_z/this.fqv_z)*Math.pow(fe_z_part,2));
 
                 // 6.3.3.3.5 Air volume flow through additional infiltration into the zone (z) (page 37)
-                let qv_inf_add_z = ((qenv50*Aenvz)+qv_ATD_50_z)*fqv_z*fe_z;
+                let qv_inf_add_z = ((qenv50*Aenvz)+qv_ATD_50_z)*this.fqv_z*fe_z;
 
                 // 6.3.3.3.4 External air volume flow into the ventilation zone (z) through the building envelope (page 37)
                 let qv_env_z = Math.max(qv_exh_z + qv_comb_z - qv_sup_z, 0) + qv_inf_add_z;
@@ -312,16 +369,8 @@
                 // Formula 20 (page 36)
                 let qv_leak_z = (1 - a_ATD_z) * qv_env_z;
 
-                console.log("fe,z: " + fe_z);
-                console.log("qv_inf_add_z: " + qv_inf_add_z);
-                console.log("qv_env_z: " + qv_env_z);
-                console.log("qv_leak_z: " + qv_leak_z);
-
-                let totalVentilationHeatloss_zone = 0;
-
                 for (var i = 0; i < this.rooms.length; i++) {
                     var room = this.rooms[i];
-                    console.log("Room: " + room.name);
 
                     // Design air volume flow of the ATDs in the ventilation room (I)
                     let plus_ATD = (qv_ATD_design_z > 0 ? (qv_ATD_z * (room.qv_ATD_design_i / qv_ATD_design_z)) : 0);
@@ -332,7 +381,6 @@
 
                     // 6.3.3.3.2 External air volume flow into the room (I) through the building envelope
                     let qv_env_i = (qv_inf_add_z/qv_env_z)*Math.min(qv_env_z,qv_leak_plus_ATD_i*fdir_z)+((qv_env_z-qv_inf_add_z)/qv_env_z)*qv_leak_plus_ATD_i
-
 
                     let qv_min_i = room.n_min * room.volume; // m3/h
 
@@ -349,7 +397,7 @@
                     // 6.3.3.3.3 Technical air volume flow into the room (i)
                     let qv_techn_i = Math.max(qv_sup_i + qv_transfer_ij, qv_exh_i + qv_comb_i);
 
-                    let ventilationHeatloss_room = 0.33 * (
+                    room.vent_heat_loss = 0.33 * (
                         (Math.max(qv_env_i + qv_open_i, qv_min_i - qv_techn_i) * (room.temperature - this.outside)) +
                         (qv_sup_i * (room.temperature - O_rec_z)) +
                         (qv_transfer_ij * (room.temperature - O_rec_z))
@@ -361,42 +409,136 @@
                     // >1 rooms = 0.5
                     let fi_z = 0.5;
 
-                    let ventilationHeatloss_zone = 0.33 * (
+                    room.vent_heat_loss_zone = 0.33 * (
                         (Math.max(qv_leak_plus_ATD_i + qv_open_i, (fi_z*qv_min_i) - qv_techn_i) * (room.temperature - this.outside)) +
                         (qv_sup_i * (room.temperature - O_rec_z)) +
                         (qv_transfer_ij * (room.temperature - O_rec_z))
                     );
 
-                    // Print the results
-                    console.log("- qv_leak_plus_ATD_i: " + qv_leak_plus_ATD_i);
-                    console.log("- qv_env_i: " + qv_env_i);
-                    console.log("- heat loss room: " + ventilationHeatloss_room);
-                    console.log("- heat loss zone: " + ventilationHeatloss_zone);
-
-                    room.ventilationHeatLoss = ventilationHeatloss_room;
-                    room.ventilationHeatLoss_zone = ventilationHeatloss_zone;
-                    totalVentilationHeatloss_zone += ventilationHeatloss_zone;
-
-                    // Calculate effective air change rates
-                    // This is not part of the standard, just a helper for ease of reference
-                    room.effective_ach_room = (ventilationHeatloss_room / (0.33 * (room.temperature - this.outside))) / room.volume;
-                    room.effective_ach_zone = (ventilationHeatloss_zone / (0.33 * (room.temperature - this.outside))) / room.volume;
-                    room.effective_qv_room = room.volume * room.effective_ach_room; // m3/h
-                    room.effective_qv_zone = room.volume * room.effective_ach_zone; // m3/h
+                    // Used for calculating the effective air change rates (not part of the standard)
+                    room.qv_room = room.vent_heat_loss / (0.33 * (room.temperature - this.outside));
+                    room.qv_zone = room.vent_heat_loss_zone / (0.33 * (room.temperature - this.outside));
                 }
 
-                console.log("Total Ventilation Heatloss: " + totalVentilationHeatloss_zone);
-                this.zone.ventilationHeatLoss = totalVentilationHeatloss_zone;
-                this.zone.ventilationHeatLoss_sum_rooms = this.rooms.reduce((sum, room) => sum + room.ventilationHeatLoss, 0);
-
-                // Calculate effective air change rates
-                // This is not part of the standard, just a helper for ease of reference
-                let effective_qv_rooms = this.rooms.reduce((sum, room) => sum + room.effective_qv_room, 0);
-                let effective_qv_zone = this.rooms.reduce((sum, room) => sum + room.effective_qv_zone, 0);
-                this.zone.effective_ach_rooms = effective_qv_rooms / this.zone.volume; // h-1
-                this.zone.effective_ach_zone = effective_qv_zone / this.zone.volume; // h-1
+                this.zone.vent_heat_loss_rooms = this.rooms.reduce((sum, room) => sum + room.vent_heat_loss, 0);
+                this.zone.vent_heat_loss = this.rooms.reduce((sum, room) => sum + room.vent_heat_loss_zone, 0); // Total ventilation heat loss for the zone
                 
+                this.zone.qv_rooms = this.rooms.reduce((sum, room) => sum + room.qv_room, 0);
+                this.zone.qv_zone = this.rooms.reduce((sum, room) => sum + room.qv_zone, 0);
+            },
+
+            // ------------------------------------------------------------------------------------------------
+            // Simplification: Natural ventilation with ATDs only (no extract, supply & combustion factors)
+            // ------------------------------------------------------------------------------------------------
+            natural_vent_plus_ATDs_only: function() {
+
+                this.zone.volume = this.rooms.reduce((sum, room) => sum + room.volume, 0);                  // Total volume of the zone
+                this.zone.envelope_area = this.rooms.reduce((sum, room) => sum + room.envelope_area, 0);    // Total envelope area of the zone
+                this.zone.qv_ATD_design_z = this.rooms.reduce((sum, room) => sum + room.qv_ATD_design_i, 0);// Total ATD volume flow
+
+                this.n50 = (this.qenv50 * this.zone.envelope_area) / this.zone.volume;                      // Air change rate at 50 Pa in h-1
+                this.ACH = this.n50 *this.fqv_z;                                                            // Air change rate in h-1
+
+                // ------------------------------------------------------------------------------------
+                // EN12831-1:2017 calculation section
+
+                // Envelope of the ventilation zone (z)
+                let Aenvz = this.zone.envelope_area;
+
+                // 
+                let ATD_factor = Math.pow(50/4,0.67) * this.fqv_z;
+
+                // air-permeability under normal conditions (m3/h.m2)
+                let qenv = this.qenv50 * this.fqv_z;
+
+                for (var i = 0; i < this.rooms.length; i++) {
+                    var room = this.rooms[i];
+
+                    // --------------------------------------------------------------------------
+                    // The calculation of the ATD volume flow is significantly simplified when 
+                    // there are no extract, supply & combustion factors to take into account.
+                    // It is only proportional to the ATD volume flow for the room.
+                    let qv_ATD =  room.qv_ATD_design_i * ATD_factor;
+
+                    // The calculation for qv_leak_plus_ATD_i also simplifies out when 
+                    // there are no extract, supply & combustion factors to take into account.
+                    // It becomes only proportional to:
+                    // the air-permeability test result (qenv50) divide by 20 x room.envelope_area
+                    let qv_leak_plus_ATD_i = (qenv * room.envelope_area) + qv_ATD;
+
+                    // 6.3.3.3.2 External air volume flow into the room (I) through the building envelope
+                    // Double leakage or whole zone which ever is smaller
+                    // qv_env_z is only going to be smaller if room.envelope_area * fdir_z > Aenvz
+                    let fdir_z = 2; // Orientation factor (default: 2, B.2.14)
+                    let qv_env_i = Math.min(qenv * Aenvz, qv_leak_plus_ATD_i * fdir_z);
+
+                    // Calculate minimum volume flow rate
+                    let qv_min_i = room.n_min * room.volume; // m3/h
+
+                    // Mark that this room used the minimum room value
+                    room.used_min_room = (qv_min_i > qv_env_i) ? true : false;
+
+                    // Apply minimum volume flow rate 
+                    if (qv_min_i > qv_env_i) qv_env_i = qv_min_i;
+
+                    // 6.3.3.3.1 Heated space (17)
+                    room.vent_heat_loss = 0.33 * qv_env_i * (room.temperature - this.outside);
+
+                    // Apply minimum volume flow rate 
+                    let fi_z = 0.5; // 1 room = 1, >1 rooms = 0.5
+
+                    // Mark that this room used the minimum zone value
+                    room.used_min_zone = (qv_min_i*fi_z > qv_leak_plus_ATD_i) ? true : false; 
+
+                    if (qv_min_i*fi_z > qv_leak_plus_ATD_i) qv_leak_plus_ATD_i = qv_min_i*fi_z;
+
+                    // 6.3.3.3.1 Zone (16)
+                    room.vent_heat_loss_zone = 0.33 * qv_leak_plus_ATD_i * (room.temperature - this.outside);
+                    
+                    room.qv_room = qv_env_i;           // m3/h
+                    room.qv_zone = qv_leak_plus_ATD_i; // m3/hr
+                }
+
+                this.zone.vent_heat_loss_rooms = this.rooms.reduce((sum, room) => sum + room.vent_heat_loss, 0);
+                this.zone.vent_heat_loss = this.rooms.reduce((sum, room) => sum + room.vent_heat_loss_zone, 0); // Total ventilation heat loss for the zone
+
+                this.zone.qv_rooms = this.rooms.reduce((sum, room) => sum + room.qv_room, 0);
+                this.zone.qv_zone = this.rooms.reduce((sum, room) => sum + room.qv_zone, 0);
+            },
+
+
+            // ------------------------------------------------------------------------------------------------
+            // The simplest form: natural ventilation with ATDs only, no minimum volume flow rates
+            // ------------------------------------------------------------------------------------------------
+            natural_vent_plus_ATDs_only_no_limits: function() {
+                let Aenvz = this.zone.envelope_area;
+                let ATD_factor = Math.pow(50/4,0.67) * this.fqv_z;
+                let qenv = this.qenv50 * this.fqv_z;
+
+                for (var i = 0; i < this.rooms.length; i++) {
+                    var room = this.rooms[i];
+
+                    let qv_ATD =  room.qv_ATD_design_i * ATD_factor;
+                    let qv_leak_plus_ATD_i = (qenv * room.envelope_area) + qv_ATD;
+
+                    let fdir_z = 2; // Orientation factor (default: 2, B.2.14)
+
+                    // 6.3.3.3.1 Heated space (17)
+                    room.vent_heat_loss_nl = 0.33 * qv_leak_plus_ATD_i * fdir_z * (room.temperature - this.outside);
+                    // 6.3.3.3.1 Zone (16)
+                    room.vent_heat_loss_zone_nl = 0.33 * qv_leak_plus_ATD_i * (room.temperature - this.outside);
+                    
+                    room.qv_room_nl = qv_leak_plus_ATD_i * fdir_z; // m3/h
+                    room.qv_zone_nl = qv_leak_plus_ATD_i; // m3/hr
+                }
+
+                this.zone.vent_heat_loss_rooms_nl = this.rooms.reduce((sum, room) => sum + room.vent_heat_loss_nl, 0);
+                this.zone.vent_heat_loss_nl = this.rooms.reduce((sum, room) => sum + room.vent_heat_loss_zone_nl, 0); // Total ventilation heat loss for the zone
+
+                this.zone.qv_rooms_nl = this.rooms.reduce((sum, room) => sum + room.qv_room_nl, 0);
+                this.zone.qv_zone_nl = this.rooms.reduce((sum, room) => sum + room.qv_zone_nl, 0);
             }
+
         },
         filters: {
             number: function (value, decimals) {
@@ -405,5 +547,5 @@
             }
         }
     });
-    app.model();
+    app.update();
 </script>
