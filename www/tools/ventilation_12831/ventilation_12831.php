@@ -11,37 +11,92 @@
     </div>
     <hr>
 
-    <p>Estimated air permeability rate calculated from minimum ventilation rates table 1.7 CIBSE DHDG.</p>
+    <div style="background-color:#f4f4f4; padding:10px; border-radius:5px;">
+        <!-- Air permeability entry or estimation method selection -->
+        <div class="row">
+            <div class="col">
+                <label class="form-label"><b>Air permeability entry or estimation method</b></label>
+                <select class="form-select" v-model="air_permeability_calc_method" @change="update">
 
-    <div class="row">
-        <div class="col">
-            <label class="form-label">Number of bedrooms</label>
-            <div class="input-group mb-3">
-                <input type="text" class="form-control" v-model.number="number_of_bedrooms" @change="update">
-            </div>  
-        </div>
-        <div class="col">
-            <label class="form-label">Total floor area</label>
-            <div class="input-group mb-3">
-                <input type="text" class="form-control" v-model.number="TFA" @change="update">
-                <span class="input-group-text">m<sup>2</sup></span>
-            </div>
-        </div>
-    </div>
-    <div class="row">
-        <div class="col">
-            <label class="form-label">Air permeability</label>
-            <div class="input-group mb-3">
-                <input type="text" class="form-control" :value="estimated_qenv50 | number(2)" disabled>
-                <span class="input-group-text">m<sup>3</sup>/h.m<sup>2</sup> @ 50 Pa</span>
+                    <option value="Test">Manual entry e.g from test result with envelope area entry and correction</option>
+                    <option value="MCS">MCS based on minimum ventilation rates table 1.7 CIBSE DHDG</option>
+                    <!--
+                    <option value="SAP">SAP based air permeability estimator</option>
+                    <option value="TableB6">EN 12831 Table B.6</option>
+                    -->
+                </select>
             </div>
         </div>
 
-        <div class="col">
-            <label class="form-label">Air change rate</label>
-            <div class="input-group mb-3">
-                <input type="text" class="form-control" :value="estimated_ach | number(2)" disabled>
-                <span class="input-group-text">ACH</span>
+        <!-- Manual entry with envelope area entry and correction -->
+        <div v-if="air_permeability_calc_method=='Test'">
+            <div class="row mt-3">
+                <div class="col">
+                    <label class="form-label">Air permeability test result</label>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" v-model.number="air_permeability_test_result" @change="update">
+                        <span class="input-group-text">m<sup>3</sup>/h.m<sup>2</sup> @ 50 Pa</span>
+                    </div>
+                </div>
+                <div class="col">
+                    <label class="form-label">Envelope area from test</label>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" v-model.number="air_permeability_test_envelope_area" @change="update">
+                        <span class="input-group-text">m<sup>2</sup></span>
+                    </div>
+                </div>
+                <div class="col">
+                    <label class="form-label">Envelope area from assessment</label>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" :value="zone.envelope_area | number(0)" disabled>
+                        <span class="input-group-text">m<sup>2</sup></span>
+                    </div>
+                </div>                
+
+
+                <div class="col">
+                    <label class="form-label">Envelope area correction</label>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" :value="air_permeability_test_corrected | number(1)" disabled>
+                        <span class="input-group-text">m<sup>3</sup>/h.m<sup>2</sup> @ 50 Pa</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- MCS based on minimum ventilation rates table 1.7 CIBSE DHDG -->
+        <div v-if="air_permeability_calc_method=='MCS'">
+            <div class="row mt-3">
+                <div class="col">
+                    <label class="form-label">Number of bedrooms</label>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" v-model.number="number_of_bedrooms" @change="update">
+                    </div>
+                </div>
+                <div class="col">
+                    <label class="form-label">Total floor area</label>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" v-model.number="TFA" @change="update">
+                        <span class="input-group-text">m<sup>2</sup></span>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col">
+                    <label class="form-label">Air permeability</label>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" :value="estimated_qenv50 | number(2)" disabled>
+                        <span class="input-group-text">m<sup>3</sup>/h.m<sup>2</sup> @ 50 Pa</span>
+                    </div>
+                </div>
+
+                <div class="col">
+                    <label class="form-label">Air change rate</label>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" :value="estimated_ach | number(2)" disabled>
+                        <span class="input-group-text">ACH</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -54,17 +109,8 @@
             <div class="input-group mb-3">
                 <input type="text" class="form-control" v-model.number="outside" @change="update">
                 <span class="input-group-text">°C</span>
-            </div>  
-        </div>
-        <div class="col">
-            <label class="form-label">Air permeability test result (or copy from above)</label>
-            <div class="input-group mb-3">
-                <input type="text" class="form-control" v-model.number="qenv50" @change="update">
-                <span class="input-group-text">m<sup>3</sup>/h.m<sup>2</sup> @ 50 Pa</span>
             </div>
         </div>
-    </div>
-    <div class="row">
         <div class="col">
             <label class="form-label">Volume flow ratio (Table B.8)</label>
             <div class="input-group mb-3">
@@ -85,90 +131,125 @@
     <div class="row">
         <div class="col">
 
-        <!-- input table for rooms -->
-        <table class="table table-bordered">
-            <thead>
-                <tr>
-                    <th>Room</th>
-                    <th>Volume (m<sup>3</sup>)</th>
-                    <th>External<br>Envelope<br>Area (m<sup>2</sup>)</th>
-                    <th>Room Temp (°C)</th>
-                    <th>Minimum air change rates<br>N<sub>min</sub> (h<sup>-1</sup>)</th>
-                    <th>Air Terminal Device (ATD)<br>m3/hr</th>
-                    <th style="width:130px">Ventilation<br>Heat Loss *Room*</th>
-                    <th style="width:130px">Ventilation<br>Heat Loss *Zone*</th>
-                    <th v-if="show_no_limits_comparison" style="width:130px">Ventilation<br>Heat Loss *Room*<br>No Min</th>
-                    <th v-if="show_no_limits_comparison" style="width:130px">Ventilation<br>Heat Loss *Zone*<br>No Min</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr v-for="(room, index) in rooms" :key="index">
-                    <td>{{ room.name }} </td>
-                    <td><input type="number" class="form-control form-control-sm" v-model.number="room.volume" @change="update"></td>
-                    <td><input type="number" class="form-control form-control-sm" v-model.number="room.envelope_area" @change="update"></td>
-                    <td><input type="number" class="form-control form-control-sm" v-model.number="room.temperature" @change="update"></td>
-                    <td><input type="number" class="form-control form-control-sm" v-model.number="room.n_min" @change="update"></td>
-                    <td><input type="number" class="form-control form-control-sm" v-model.number="room.qv_ATD_design_i" @change="update"></td>
-                    <td>{{ room.vent_heat_loss | number(0) }} W <span style="color:#666; font-size:12px">({{ room.qv_room / room.volume | number(2)}})</span></td>
-                    <td>{{ room.vent_heat_loss_zone | number(0) }} W <span style="color:#666; font-size:12px">({{room.qv_zone / room.volume | number(2)}})</span></td>
+            <!-- input table for rooms -->
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Room</th>
+                        <th>Volume (m<sup>3</sup>)</th>
+                        <th>External<br>Envelope<br>Area (m<sup>2</sup>)</th>
+                        <th>Room Temp (°C)</th>
+                        <th>Minimum air change rates<br>N<sub>min</sub> (h<sup>-1</sup>)</th>
+                        <th>Air Terminal Device (ATD)<br>m3/hr</th>
+                        <th style="width:130px">Ventilation<br>Heat Loss *Room*</th>
+                        <th style="width:130px">Ventilation<br>Heat Loss *Zone*</th>
+                        <th v-if="show_no_limits_comparison" style="width:130px">Ventilation<br>Heat Loss *Room*<br>No
+                            Min</th>
+                        <th v-if="show_no_limits_comparison" style="width:130px">Ventilation<br>Heat Loss *Zone*<br>No
+                            Min</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="(room, index) in rooms" :key="index">
+                        <td>{{ room.name }} </td>
+                        <td><input type="number" class="form-control form-control-sm" v-model.number="room.volume"
+                                @change="update"></td>
+                        <td><input type="number" class="form-control form-control-sm"
+                                v-model.number="room.envelope_area" @change="update"></td>
+                        <td><input type="number" class="form-control form-control-sm" v-model.number="room.temperature"
+                                @change="update"></td>
+                        <td><input type="number" class="form-control form-control-sm" v-model.number="room.n_min"
+                                @change="update"></td>
+                        <td><input type="number" class="form-control form-control-sm"
+                                v-model.number="room.qv_ATD_design_i" @change="update"></td>
+                        <td>{{ room.vent_heat_loss | number(0) }} W <span style="color:#666; font-size:12px">({{
+                                room.qv_room / room.volume | number(2)}})</span></td>
+                        <td>{{ room.vent_heat_loss_zone | number(0) }} W <span
+                                style="color:#666; font-size:12px">({{room.qv_zone / room.volume | number(2)}})</span>
+                        </td>
 
-                    <!-- Show comparison with no limits -->
-                    <td v-if="show_no_limits_comparison">
-                        {{ room.vent_heat_loss_nl | number(0) }} W 
-                        <span style="color:#888; font-size:12px">
-                            ({{room.qv_room_nl / room.volume | number(2)}})
-                        </span>                    
-                    </td>
-                    <td v-if="show_no_limits_comparison">
-                        {{ room.vent_heat_loss_zone_nl | number(0) }} W
-                        <span style="color:#888; font-size:12px">
-                            ({{room.qv_zone_nl / room.volume | number(2)}})
-                        </span>
-                    </td>
-                </tr>
+                        <!-- Show comparison with no limits -->
+                        <td v-if="show_no_limits_comparison">
+                            {{ room.vent_heat_loss_nl | number(0) }} W
+                            <span style="color:#888; font-size:12px">
+                                ({{room.qv_room_nl / room.volume | number(2)}})
+                            </span>
+                        </td>
+                        <td v-if="show_no_limits_comparison">
+                            {{ room.vent_heat_loss_zone_nl | number(0) }} W
+                            <span style="color:#888; font-size:12px">
+                                ({{room.qv_zone_nl / room.volume | number(2)}})
+                            </span>
+                        </td>
+                    </tr>
 
-                <tr style="background-color: #f8f9fa;" :style="{ color: last_row_color }">
-                    <td>Total</td>
-                    <td>{{ zone.volume | number(1) }} m<sup>3</sup></td>
-                    <td>{{ zone.envelope_area | number(1) }} m<sup>2</sup></td>
-                    <td></td>
-                    <td></td>
-                    <td>{{ zone.qv_ATD_design_z | number(0) }} m<sup>3</sup>/h</td>
-                    <td>{{ zone.vent_heat_loss_rooms | number(0) }} W <span style="color:#666; font-size:12px">({{zone.qv_rooms / zone.volume | number(2)}})</span></td>
-                    <td>{{ zone.vent_heat_loss | number(0) }} W <span style="color:#666; font-size:12px">({{zone.qv_zone / zone.volume | number(2)}})</span></td>
+                    <tr style="background-color: #f8f9fa;" :style="{ color: last_row_color }">
+                        <td>Total</td>
+                        <td>{{ zone.volume | number(1) }} m<sup>3</sup></td>
+                        <td>{{ zone.envelope_area | number(1) }} m<sup>2</sup></td>
+                        <td></td>
+                        <td></td>
+                        <td>{{ zone.qv_ATD_design_z | number(0) }} m<sup>3</sup>/h</td>
+                        <td>{{ zone.vent_heat_loss_rooms | number(0) }} W <span
+                                style="color:#666; font-size:12px">({{zone.qv_rooms / zone.volume | number(2)}})</span>
+                        </td>
+                        <td>{{ zone.vent_heat_loss | number(0) }} W <span
+                                style="color:#666; font-size:12px">({{zone.qv_zone / zone.volume | number(2)}})</span>
+                        </td>
 
-                    <!-- Show comparison with no limits -->
-                    <td v-if="show_no_limits_comparison">{{ zone.vent_heat_loss_rooms_nl | number(0) }} W
-                        <span style="color:#666; font-size:12px">({{100*(1-zone.vent_heat_loss_rooms_nl / zone.vent_heat_loss_rooms) | number(2)}}%)</span>
-                    </td>
-                    <td v-if="show_no_limits_comparison">{{ zone.vent_heat_loss_nl | number(0) }} W
-                        <span style="color:#666; font-size:12px">({{100*(1-zone.vent_heat_loss_nl / zone.vent_heat_loss) | number(2)}}%)</span>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+                        <!-- Show comparison with no limits -->
+                        <td v-if="show_no_limits_comparison">{{ zone.vent_heat_loss_rooms_nl | number(0) }} W
+                            <span style="color:#666; font-size:12px">({{100*(1-zone.vent_heat_loss_rooms_nl /
+                                zone.vent_heat_loss_rooms) | number(2)}}%)</span>
+                        </td>
+                        <td v-if="show_no_limits_comparison">{{ zone.vent_heat_loss_nl | number(0) }} W
+                            <span style="color:#666; font-size:12px">({{100*(1-zone.vent_heat_loss_nl /
+                                zone.vent_heat_loss) | number(2)}}%)</span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
 
-        <div class="row">
-            <div class="col">
-                <div class="input-group mb-3">
-                    <span class="input-group-text">Use simplified natural ventilation + ATD calculation</span>
-                    <span class="input-group-text"><input type="checkbox" v-model="use_simplified_model" @change="update"></span>
-                </div>  
+            <div class="row">
+                <div class="col">
+                    <div class="input-group mb-3">
+                        <span class="input-group-text">Use simplified natural ventilation + ATD calculation</span>
+                        <span class="input-group-text"><input type="checkbox" v-model="use_simplified_model"
+                                @change="update"></span>
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="input-group mb-3">
+                        <span class="input-group-text">Show no limits comparison</span>
+                        <span class="input-group-text"><input type="checkbox" v-model="show_no_limits_comparison"
+                                :disabled="!use_simplified_model" @change="update"></span>
+                    </div>
+                </div>
             </div>
-            <div class="col">
-                <div class="input-group mb-3">
-                    <span class="input-group-text">Show no limits comparison</span>
-                    <span class="input-group-text"><input type="checkbox" v-model="show_no_limits_comparison" :disabled="!use_simplified_model" @change="update"></span>
-                </div>  
-            </div>
-        </div>
 
-        <p><b>Minimum air change rates:</b> The MCS heat load calculator sets the minimum air change rates to values found in the CIBSE DHDG Table 3.8. Carefully studying the equations in the standard suggests this is the wrong approach. These minimum air change rates appear designed to be used as a floor for air change rates in very air-tight buildings, for normal buildings the equations that derive ventilation heat loss from the air-permeability value produce suitable results without the need for artificially high limits.</p>
+            <p><b>Minimum air change rates:</b> The MCS heat load calculator sets the minimum air change rates to values
+                found in the CIBSE DHDG Table 3.8. Carefully studying the equations in the standard suggests this is the
+                wrong approach. These minimum air change rates appear designed to be used as a floor for air change
+                rates in very air-tight buildings, for normal buildings the equations that derive ventilation heat loss
+                from the air-permeability value produce suitable results without the need for artificially high limits.
+            </p>
 
-        <p><b>External envelope areas:</b> The example calculation given here is a mid-terrace house, the external envelope areas do not include the party wall areas with the neighboring properties. This is consistent with how party walls are treated in the MCS heat load calculator and EN 12831 definition 6.3.3.6 but is inconsistent with the CIBSE TM23 and ISO 9972 definition of envelope area. How this is treated may change in future.</p>
-        <p>The blower door test for the example property above came to 8.4 m3/h.m2 @ 50 Pa, but this was calculated for an envelope area that included party walls (240 m2). This air-permeability rate entered above represents the same volume flow 8.4 m3/h.m2 x 240 m2 = 2016 m3/hr, but this is now divided by the smaller envelope area without the party walls of 133 m2. This results in a revised air-permeability value of 15.2 m3/h.m2.</p>
+            <p><b>External envelope areas:</b> The example calculation given here is a mid-terrace house, the external
+                envelope areas do not include the party wall areas with the neighboring properties. This is consistent
+                with how party walls are treated in the MCS heat load calculator and EN 12831 definition 6.3.3.6 but is
+                inconsistent with the CIBSE TM23 and ISO 9972 definition of envelope area. How this is treated may
+                change in future.</p>
+            <p>The blower door test for the example property above came to 8.4 m3/h.m2 @ 50 Pa, but this was calculated
+                for an envelope area that included party walls (240 m2). This air-permeability rate entered above
+                represents the same volume flow 8.4 m3/h.m2 x 240 m2 = 2016 m3/hr, but this is now divided by the
+                smaller envelope area without the party walls of 133 m2. This results in a revised air-permeability
+                value of 15.2 m3/h.m2.</p>
 
-        <p><b>Building vs room heat loss</b>: Note that EN 12831-1:2017 calculates a different heat loss for rooms individually as compared to the zone as a whole. Rooms facing the wind will have cold air pushed into them. This air would then move, pre-warmed, to adjoining rooms on the other side of the building, resulting in higher heating requirements for wind-facing rooms than those on the leeward side. The latter halving reflects an averaging out of these effects across the entire building.</p>
+            <p><b>Building vs room heat loss</b>: Note that EN 12831-1:2017 calculates a different heat loss for rooms
+                individually as compared to the zone as a whole. Rooms facing the wind will have cold air pushed into
+                them. This air would then move, pre-warmed, to adjoining rooms on the other side of the building,
+                resulting in higher heating requirements for wind-facing rooms than those on the leeward side. The
+                latter halving reflects an averaging out of these effects across the entire building.</p>
 
         </div>
     </div>
@@ -199,13 +280,24 @@
         room.vent_heat_loss = 0;      // Ventilation heat loss for the room
         room.vent_heat_loss_zone = 0; // Ventilation heat loss for the zone
         room.qv_room = 0;
-        room.qv_zone = 0;        
+        room.qv_zone = 0;
     }
 
     var app = new Vue({
         el: '#app',
 
         data: {
+            // Options: 
+            // - MCS: MCS based on minimum ventilation rates table 1.7 CIBSE DHDG
+            // - Test: Manual entry with envelope area entry and correction
+            // - SAP: SAP based on air permeability estimator
+            // - TableB6: EN 12831 Table B.6
+            air_permeability_calc_method: 'Test',
+
+            // Method Test:
+            air_permeability_test_result: 8.4,          // m3/h/m2 @ 50 Pa
+            air_permeability_test_envelope_area: 240,   // m2, envelope area used for the test result
+
             use_simplified_model: false, // Use simplified natural ventilation + ATD calculation
             show_no_limits_comparison: false, // Show comparison with no limits
             last_row_color: '#d4edda', // Used to flash the last row in the table
@@ -238,7 +330,7 @@
         },
         methods: {
             update: function () {
-                if (!this.use_simplified_model) {   
+                if (!this.use_simplified_model) {
                     this.full_EN12831_ventilation_calc();
                     this.show_no_limits_comparison = false;
                 } else {
@@ -254,21 +346,21 @@
                 this.flash_last_row();
             },
 
-            flash_last_row: function() {
+            flash_last_row: function () {
                 this.last_row_color = '#4444cc'; // Flash last row color
                 setTimeout(() => {
                     this.last_row_color = '#000'; // Reset last row color
                 }, 200);
             },
 
-            calculate_air_permeability: function() {
+            mcs_air_permeability_estimator: function () {
                 // ------------------------------------------------------------------------------------
                 // This calculator is not in EN12831-1:2017 but is used in the MCS heat load calculator
                 // Calculate air permeability from minimum ventilation rates table 1.7 CIBSE DHDG
 
                 // Table 1.7 Whole-building ventilation rates
                 // Number of bedrooms        1, 2, 3, 4, 5
-                let min_ventilation_rates = [13, 17 ,21, 25, 29]; // l/s
+                let min_ventilation_rates = [13, 17, 21, 25, 29]; // l/s
                 let min_ventilation_rate_ls_beds = min_ventilation_rates[this.number_of_bedrooms - 1]; // l/s
 
                 // Note: In addition, the minimum ventilation rate would not be less than 0.3 l/s per m2 of internal floor area (this includes each floor).
@@ -289,12 +381,25 @@
                 this.estimated_ach = ach; // h-1
             },
 
-            full_EN12831_ventilation_calc: function() {
+            full_EN12831_ventilation_calc: function () {
 
                 this.zone.volume = this.rooms.reduce((sum, room) => sum + room.volume, 0);                  // Total volume of the zone
                 this.zone.envelope_area = this.rooms.reduce((sum, room) => sum + room.envelope_area, 0);    // Total envelope area of the zone
 
-                this.calculate_air_permeability();
+                if (this.air_permeability_calc_method === 'MCS') {
+                    this.mcs_air_permeability_estimator();
+                    this.qenv50 = this.estimated_qenv50; // m3/h/m2 @ 50 Pa
+                } else if (this.air_permeability_calc_method === 'Test') {
+                    // Manual entry with envelope area entry and correction
+                    this.air_permeability_test_corrected = this.air_permeability_test_result * this.air_permeability_test_envelope_area / this.zone.envelope_area; // m3/h/m2 @ 50 Pa
+                    this.qenv50 = this.air_permeability_test_corrected; // m3/h/m2 @ 50 Pa
+                } else if (this.air_permeability_calc_method === 'SAP') {
+                    // SAP based air permeability estimator
+                    this.qenv50 = 15.0; // Placeholder value, replace with actual SAP calculation
+                } else if (this.air_permeability_calc_method === 'TableB6') {
+                    // EN 12831 Table B.6
+                    this.qenv50 = 15.2; // Placeholder value, replace with actual Table B.6 calculation
+                }
 
                 // ------------------------------------------------------------------------------------
                 // EN12831-1:2017 calculation section
@@ -331,7 +436,7 @@
                     // Use B.1 when the design volume flow of each single ATD or for each room with ATDs is known.
                     // Other forumlas are available when this is not known see B.2 & B.3
                     qv_ATD_design_z += room.qv_ATD_design_i; // m3/h
-                    
+
                 }
                 this.zone.qv_exh_z = qv_exh_z;                  // Update zone exhaust air volume flow
                 this.zone.qv_comb_z = qv_comb_z;                // Update zone combustion air volume flow
@@ -355,10 +460,10 @@
                 // Formula 29 (fe,z) (page 38)
                 // Adjustment factor taking into account the additional pressure difference due to unbalanced ventilation in accordance with Formula 29
                 let fe_z_part = (qv_exh_z + qv_comb_z - qv_sup_z) / ((qenv50 * Aenvz) + qv_ATD_50_z);
-                let fe_z = 1 / (1+(this.ffac_z/this.fqv_z)*Math.pow(fe_z_part,2));
+                let fe_z = 1 / (1 + (this.ffac_z / this.fqv_z) * Math.pow(fe_z_part, 2));
 
                 // 6.3.3.3.5 Air volume flow through additional infiltration into the zone (z) (page 37)
-                let qv_inf_add_z = ((qenv50*Aenvz)+qv_ATD_50_z)*this.fqv_z*fe_z;
+                let qv_inf_add_z = ((qenv50 * Aenvz) + qv_ATD_50_z) * this.fqv_z * fe_z;
 
                 // 6.3.3.3.4 External air volume flow into the ventilation zone (z) through the building envelope (page 37)
                 let qv_env_z = Math.max(qv_exh_z + qv_comb_z - qv_sup_z, 0) + qv_inf_add_z;
@@ -380,7 +485,7 @@
                     let qv_leak_plus_ATD_i = (qv_leak_z * (room.envelope_area / Aenvz)) + plus_ATD;
 
                     // 6.3.3.3.2 External air volume flow into the room (I) through the building envelope
-                    let qv_env_i = (qv_inf_add_z/qv_env_z)*Math.min(qv_env_z,qv_leak_plus_ATD_i*fdir_z)+((qv_env_z-qv_inf_add_z)/qv_env_z)*qv_leak_plus_ATD_i
+                    let qv_env_i = (qv_inf_add_z / qv_env_z) * Math.min(qv_env_z, qv_leak_plus_ATD_i * fdir_z) + ((qv_env_z - qv_inf_add_z) / qv_env_z) * qv_leak_plus_ATD_i
 
                     let qv_min_i = room.n_min * room.volume; // m3/h
 
@@ -410,7 +515,7 @@
                     let fi_z = 0.5;
 
                     room.vent_heat_loss_zone = 0.33 * (
-                        (Math.max(qv_leak_plus_ATD_i + qv_open_i, (fi_z*qv_min_i) - qv_techn_i) * (room.temperature - this.outside)) +
+                        (Math.max(qv_leak_plus_ATD_i + qv_open_i, (fi_z * qv_min_i) - qv_techn_i) * (room.temperature - this.outside)) +
                         (qv_sup_i * (room.temperature - O_rec_z)) +
                         (qv_transfer_ij * (room.temperature - O_rec_z))
                     );
@@ -422,7 +527,7 @@
 
                 this.zone.vent_heat_loss_rooms = this.rooms.reduce((sum, room) => sum + room.vent_heat_loss, 0);
                 this.zone.vent_heat_loss = this.rooms.reduce((sum, room) => sum + room.vent_heat_loss_zone, 0); // Total ventilation heat loss for the zone
-                
+
                 this.zone.qv_rooms = this.rooms.reduce((sum, room) => sum + room.qv_room, 0);
                 this.zone.qv_zone = this.rooms.reduce((sum, room) => sum + room.qv_zone, 0);
             },
@@ -430,14 +535,14 @@
             // ------------------------------------------------------------------------------------------------
             // Simplification: Natural ventilation with ATDs only (no extract, supply & combustion factors)
             // ------------------------------------------------------------------------------------------------
-            natural_vent_plus_ATDs_only: function() {
+            natural_vent_plus_ATDs_only: function () {
 
                 this.zone.volume = this.rooms.reduce((sum, room) => sum + room.volume, 0);                  // Total volume of the zone
                 this.zone.envelope_area = this.rooms.reduce((sum, room) => sum + room.envelope_area, 0);    // Total envelope area of the zone
                 this.zone.qv_ATD_design_z = this.rooms.reduce((sum, room) => sum + room.qv_ATD_design_i, 0);// Total ATD volume flow
 
                 this.n50 = (this.qenv50 * this.zone.envelope_area) / this.zone.volume;                      // Air change rate at 50 Pa in h-1
-                this.ACH = this.n50 *this.fqv_z;                                                            // Air change rate in h-1
+                this.ACH = this.n50 * this.fqv_z;                                                            // Air change rate in h-1
 
                 // ------------------------------------------------------------------------------------
                 // EN12831-1:2017 calculation section
@@ -446,7 +551,7 @@
                 let Aenvz = this.zone.envelope_area;
 
                 // 
-                let ATD_factor = Math.pow(50/4,0.67) * this.fqv_z;
+                let ATD_factor = Math.pow(50 / 4, 0.67) * this.fqv_z;
 
                 // air-permeability under normal conditions (m3/h.m2)
                 let qenv = this.qenv50 * this.fqv_z;
@@ -458,7 +563,7 @@
                     // The calculation of the ATD volume flow is significantly simplified when 
                     // there are no extract, supply & combustion factors to take into account.
                     // It is only proportional to the ATD volume flow for the room.
-                    let qv_ATD =  room.qv_ATD_design_i * ATD_factor;
+                    let qv_ATD = room.qv_ATD_design_i * ATD_factor;
 
                     // The calculation for qv_leak_plus_ATD_i also simplifies out when 
                     // there are no extract, supply & combustion factors to take into account.
@@ -488,13 +593,13 @@
                     let fi_z = 0.5; // 1 room = 1, >1 rooms = 0.5
 
                     // Mark that this room used the minimum zone value
-                    room.used_min_zone = (qv_min_i*fi_z > qv_leak_plus_ATD_i) ? true : false; 
+                    room.used_min_zone = (qv_min_i * fi_z > qv_leak_plus_ATD_i) ? true : false;
 
-                    if (qv_min_i*fi_z > qv_leak_plus_ATD_i) qv_leak_plus_ATD_i = qv_min_i*fi_z;
+                    if (qv_min_i * fi_z > qv_leak_plus_ATD_i) qv_leak_plus_ATD_i = qv_min_i * fi_z;
 
                     // 6.3.3.3.1 Zone (16)
                     room.vent_heat_loss_zone = 0.33 * qv_leak_plus_ATD_i * (room.temperature - this.outside);
-                    
+
                     room.qv_room = qv_env_i;           // m3/h
                     room.qv_zone = qv_leak_plus_ATD_i; // m3/hr
                 }
@@ -510,15 +615,15 @@
             // ------------------------------------------------------------------------------------------------
             // The simplest form: natural ventilation with ATDs only, no minimum volume flow rates
             // ------------------------------------------------------------------------------------------------
-            natural_vent_plus_ATDs_only_no_limits: function() {
+            natural_vent_plus_ATDs_only_no_limits: function () {
                 let Aenvz = this.zone.envelope_area;
-                let ATD_factor = Math.pow(50/4,0.67) * this.fqv_z;
+                let ATD_factor = Math.pow(50 / 4, 0.67) * this.fqv_z;
                 let qenv = this.qenv50 * this.fqv_z;
 
                 for (var i = 0; i < this.rooms.length; i++) {
                     var room = this.rooms[i];
 
-                    let qv_ATD =  room.qv_ATD_design_i * ATD_factor;
+                    let qv_ATD = room.qv_ATD_design_i * ATD_factor;
                     let qv_leak_plus_ATD_i = (qenv * room.envelope_area) + qv_ATD;
 
                     let fdir_z = 2; // Orientation factor (default: 2, B.2.14)
@@ -527,7 +632,7 @@
                     room.vent_heat_loss_nl = 0.33 * qv_leak_plus_ATD_i * fdir_z * (room.temperature - this.outside);
                     // 6.3.3.3.1 Zone (16)
                     room.vent_heat_loss_zone_nl = 0.33 * qv_leak_plus_ATD_i * (room.temperature - this.outside);
-                    
+
                     room.qv_room_nl = qv_leak_plus_ATD_i * fdir_z; // m3/h
                     room.qv_zone_nl = qv_leak_plus_ATD_i; // m3/hr
                 }
