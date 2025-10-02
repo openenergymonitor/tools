@@ -496,6 +496,8 @@ function sim(conf) {
             PracticalCOP = IdealCOP * (app.heatpump.prc_carnot / 100);
         } else if (app.heatpump.cop_model == "ecodan") {
             PracticalCOP = get_ecodan_cop(flow_temperature, outside, heatpump_heat / app.heatpump.capacity);
+        } else if (app.heatpump.cop_model == "vaillant5") {
+            PracticalCOP = getCOP(vaillant_data, flow_temperature, outside, 7*(heatpump_heat / app.heatpump.capacity));
         }
 
         if (PracticalCOP > 0) {

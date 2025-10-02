@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/fontawesome.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/solid.min.css">
 <script src="<?php echo $path_lib;?>ecodan.js?v=1"></script>
-
+<script src="<?php echo $path_lib;?>vaillant5.js?v=1"></script>
 <div class="container" style="max-width:1200px" id="app">
     <div class="row">
         <div class="col">
@@ -394,6 +394,7 @@
                                     <option value="carnot_fixed">Carnot (fixed offsets flow+2, outside-6)</option>
                                     <option value="carnot_variable">Carnot (variable offsets proportional to heat)</option>
                                     <option value="ecodan">Ecodan datasheet</option>
+                                    <option value="vaillant5">Vaillant datasheet</option>           
                                 </select>
                             </div>
                         </dic>
@@ -483,4 +484,4 @@
         </div>
     </div>
 </div>
-<script src="<?php echo $path; ?>dynamic_heatpump_v1.js?v=30"></script>
+<script src="<?php echo $path; ?>dynamic_heatpump_v1.js?v=32"></script>
