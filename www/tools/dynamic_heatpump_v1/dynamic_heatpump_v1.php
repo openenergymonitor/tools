@@ -85,6 +85,7 @@
                     </table>
                     <button type="button" class="btn btn-warning" @click="simulate" style="float:right">Refine</button>
                     <button type="button" class="btn btn-info" @click="export_config" style="float:right; margin-right:10px;">Export Config</button>
+                    <button type="button" class="btn btn-success" @click="import_config" style="float:right; margin-right:10px;">Import Config</button>
                     <button type="button" class="btn btn-warning" @click="save_baseline">Save as baseline</button>
                 </div>
             </div>

@@ -232,6 +232,75 @@ var app = new Vue({
                 // Fallback for older browsers
                 prompt('Copy the configuration below:', jsonString);
             }
+        },
+        import_config: function () {
+            var jsonString = prompt('Paste your configuration JSON below:');
+            
+            if (jsonString && jsonString.trim() !== '') {
+                try {
+                    var config = JSON.parse(jsonString);
+                    
+                    // Validate that the config has the expected structure
+                    if (this.validate_config(config)) {
+                        // Apply the imported configuration
+                        if (config.days !== undefined) this.days = config.days;
+                        if (config.building) {
+                            Object.assign(this.building, config.building);
+                        }
+                        if (config.external) {
+                            Object.assign(this.external, config.external);
+                        }
+                        if (config.heatpump) {
+                            Object.assign(this.heatpump, config.heatpump);
+                        }
+                        if (config.control) {
+                            Object.assign(this.control, config.control);
+                        }
+                        if (config.schedule && Array.isArray(config.schedule)) {
+                            this.schedule = JSON.parse(JSON.stringify(config.schedule));
+                        }
+                        
+                        // Update fabric starting temperatures
+                        update_fabric_starting_temperatures();
+                        
+                        // Run simulation with new config
+                        this.simulate();
+                        
+                        alert('Configuration imported successfully!');
+                    } else {
+                        alert('Invalid configuration format. Please check your JSON structure.');
+                    }
+                } catch (e) {
+                    alert('Invalid JSON format. Please check your configuration and try again.\n\nError: ' + e.message);
+                }
+            }
+        },
+        validate_config: function (config) {
+            // Basic validation to ensure config has expected structure
+            if (typeof config !== 'object' || config === null) {
+                return false;
+            }
+            
+            // Check for required main sections (at least one should exist)
+            var hasValidSection = false;
+            
+            if (config.building && typeof config.building === 'object') {
+                hasValidSection = true;
+            }
+            if (config.external && typeof config.external === 'object') {
+                hasValidSection = true;
+            }
+            if (config.heatpump && typeof config.heatpump === 'object') {
+                hasValidSection = true;
+            }
+            if (config.control && typeof config.control === 'object') {
+                hasValidSection = true;
+            }
+            if (config.schedule && Array.isArray(config.schedule)) {
+                hasValidSection = true;
+            }
+            
+            return hasValidSection;
         }
 
     },
