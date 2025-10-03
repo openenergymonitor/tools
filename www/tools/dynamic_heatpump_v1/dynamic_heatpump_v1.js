@@ -37,8 +37,7 @@ var app = new Vue({
             max_time: "14:00"
         },
         heatpump: {
-            capacity: 5000,
-            min_modulation: 2000,
+            capacity: 7500,
             system_water_volume: 120, // Litres
             flow_rate: 12, // Litres per minute
             system_DT: 5,
@@ -48,6 +47,7 @@ var app = new Vue({
             cop_model: "carnot_variable",
             standby: 11,
             pumps: 15,
+            minimum_modulation: 32
         },
         control: {
             mode: AUTO_ADAPT,
@@ -86,6 +86,10 @@ var app = new Vue({
             mean_room_temp: 0,
             max_room_temp: 0,
             total_cost: 0
+        },
+        stats: {
+            flowT_weighted: 0,
+            flowT_minus_outsideT_weighted: 0
         },
         baseline_enabled: false,
         refinements: 3,
@@ -273,7 +277,7 @@ function sim(conf) {
     }
 
     if (app.control.fixed_compressor_speed>100) app.control.fixed_compressor_speed = 100;
-    if (app.control.fixed_compressor_speed<40) app.control.fixed_compressor_speed = 40;
+    if (app.control.fixed_compressor_speed<app.heatpump.minimum_modulation) app.control.fixed_compressor_speed = app.heatpump.minimum_modulation;
 
     var outside_min_time = conf.outside_min_time;
     var outside_max_time = conf.outside_max_time;
@@ -321,6 +325,14 @@ function sim(conf) {
     var total_cost = 0;
     var price = 0;
     
+    let stats_count = 0;
+    let flowT_weighted_sum = 0;
+    let outsideT_weighted_sum = 0;
+    let flowT_minus_outsideT_weighted_sum = 0;
+    let kwh_carnot_elec = 0;
+    let kwh_elec_running = 0;
+    let kwh_heat_running = 0;
+
     for (var i = 0; i < itterations; i++) {
         let time = i * timestep;
         let hour = time / 3600;
@@ -441,12 +453,12 @@ function sim(conf) {
         // Minimum modulation cycling control
         
         // if heat pump is off and demand for heat is more than minimum modulation turn heat pump on
-        if (heatpump_state==0 && heatpump_heat>=(app.heatpump.capacity*0.4) && MWT<(MWT_off-3)) {
+        if (heatpump_state==0 && heatpump_heat>=(app.heatpump.capacity*app.heatpump.minimum_modulation*0.01) && MWT<(MWT_off-3)) {
             heatpump_state = 1;
         }
             
         // If we are below minimum modulation turn heat pump off
-        if (heatpump_heat<(app.heatpump.capacity*0.4) && heatpump_state==1) {
+        if (heatpump_heat<(app.heatpump.capacity*app.heatpump.minimum_modulation*0.01) && heatpump_state==1) {
             MWT_off = MWT;
             heatpump_state = 0;
         }
@@ -497,7 +509,7 @@ function sim(conf) {
         } else if (app.heatpump.cop_model == "ecodan") {
             PracticalCOP = get_ecodan_cop(flow_temperature, outside, heatpump_heat / app.heatpump.capacity);
         } else if (app.heatpump.cop_model == "vaillant5") {
-            PracticalCOP = getCOP(vaillant_data, flow_temperature, outside, 7*(heatpump_heat / app.heatpump.capacity));
+            PracticalCOP = getCOP(vaillant_data, flow_temperature, outside, app.heatpump.capacity*0.001*(heatpump_heat / app.heatpump.capacity));
         }
 
         if (PracticalCOP > 0) {
@@ -511,12 +523,6 @@ function sim(conf) {
             heatpump_elec += app.heatpump.pumps;
         }
         heatpump_elec += app.heatpump.standby;
-
-        // Calculate energy use
-        elec_kwh += heatpump_elec * power_to_kwh;
-        heat_kwh += heatpump_heat * power_to_kwh;
-
-        total_cost += heatpump_elec * power_to_kwh * price * 0.01;
 
         // Building fabric model
 
@@ -534,8 +540,6 @@ function sim(conf) {
             max_room_temp = room;
         }
 
-        room_temp_sum += room;
-
         // Populate time series data arrays for plotting
         if (conf.record_timeseries && i > start_of_last_day) {
             let timems = time*1000;
@@ -545,15 +549,56 @@ function sim(conf) {
             returnT_data.push([timems, return_temperature]);
             elec_data.push([timems, heatpump_elec]);
             heat_data.push([timems, heatpump_heat]);
+
+            // Calculate stats
+
+            // Calculate ideal carnot efficiency
+            let condensor = flow_temperature + 2 + 273.15;
+            let evaporator = outside - 6 + 273.15;
+            let carnot_dt = condensor - evaporator;
+            let ideal_carnot = 0;
+            if (carnot_dt>0) {
+                ideal_carnot = condensor / carnot_dt;
+            }
+
+            if (system_DT>1 && heatpump_heat>0 && ideal_carnot>0) {
+                // Calulate predicted elec consumption based on carnot efficiency
+                kwh_carnot_elec += (heatpump_heat / ideal_carnot) * power_to_kwh;
+                kwh_elec_running += heatpump_elec * power_to_kwh;
+                kwh_heat_running += heatpump_heat * power_to_kwh;
+            }
+
+            room_temp_sum += room;
+            elec_kwh += heatpump_elec * power_to_kwh;
+            heat_kwh += heatpump_heat * power_to_kwh;
+            total_cost += heatpump_elec * power_to_kwh * price * 0.01;
+            flowT_weighted_sum += flow_temperature * heatpump_heat * power_to_kwh;
+            outsideT_weighted_sum += outside * heatpump_heat * power_to_kwh;
+            flowT_minus_outsideT_weighted_sum += heatpump_heat * (flow_temperature-outside) * power_to_kwh;
+
+
+            stats_count++;
         }
     }
 
+    if (stats_count) {
+        app.stats.flowT_weighted = flowT_weighted_sum / heat_kwh;
+        app.stats.outsideT_weighted = outsideT_weighted_sum / heat_kwh;
+        app.stats.flowT_minus_outsideT_weighted = flowT_minus_outsideT_weighted_sum / heat_kwh;
+
+        app.stats.wa_prc_carnot = 0;
+        if (kwh_elec_running>0 && kwh_carnot_elec>0) {
+            app.stats.wa_prc_carnot = (kwh_heat_running / kwh_elec_running) / (kwh_heat_running / kwh_carnot_elec)
+        }
+
+    }
+
     return {
-        elec_kwh: elec_kwh / app.days,
-        heat_kwh: heat_kwh / app.days,
+        elec_kwh: elec_kwh,
+        heat_kwh: heat_kwh,
         max_room_temp: max_room_temp,
-        mean_room_temp: room_temp_sum / itterations,
-        total_cost: total_cost / app.days
+        mean_room_temp: room_temp_sum / stats_count,
+        total_cost: total_cost
     }
     
     // Automatic refinement, disabled for now, running simulation 3 times instead.

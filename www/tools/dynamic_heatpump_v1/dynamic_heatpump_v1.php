@@ -89,6 +89,26 @@
             </div>
         </div>
     </div>
+
+    <div class="row">
+        <div class="col">
+            <table class="table">
+                <tr>
+                    <th>Weighted flow temperature</th>
+                    <th>Weighted outside temperature</th>
+                    <th>Weighted (flowT - outsideT)</th>
+                    <th>Weighted average % carnot</th>
+                </tr>
+                <tr>
+                    <td>{{ stats.flowT_weighted | toFixed(2) }} °C</td>
+                    <td>{{ stats.outsideT_weighted | toFixed(2) }} °C</td>
+                    <td>{{ stats.flowT_minus_outsideT_weighted | toFixed(2) }} °C</td>
+                    <td>{{ stats.wa_prc_carnot*100 | toFixed(1) }} %</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
     <br>
     <div class="row">
         <div class="col">
@@ -363,6 +383,26 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="row">
+                        <div class="col">
+                            <label class="form-label">Minimum modulation</label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" v-model.number="heatpump.minimum_modulation"
+                                    @change="simulate" />
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Minimum output</label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" :value="heatpump.minimum_modulation*heatpump.capacity/100 | toFixed(0)" disabled />
+                                <span class="input-group-text">kW</span>
+                            </div>
+                        </div>
+                    </div>
+
+
                     <div class="row">
                         <div class="col">
                             <label class="form-label">Heat emitter rated output</label>
@@ -399,7 +439,7 @@
                             </div>
                         </dic>
 
-                        <div class="col" v-if="heatpump.cop_model!='ecodan'">
+                        <div class="col" v-if="heatpump.cop_model!='ecodan' && heatpump.cop_model!='vaillant5'">
                             <label class="form-label">Practical COP factor</label>
                             <div class="input-group mb-3">
                                 <input type="text" class="form-control" v-model.number="heatpump.prc_carnot"
@@ -484,4 +524,4 @@
         </div>
     </div>
 </div>
-<script src="<?php echo $path; ?>dynamic_heatpump_v1.js?v=32"></script>
+<script src="<?php echo $path; ?>dynamic_heatpump_v1.js?v=<?php echo time(); ?>"></script>
