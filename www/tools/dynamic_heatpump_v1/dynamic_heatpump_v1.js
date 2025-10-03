@@ -204,6 +204,34 @@ var app = new Vue({
             view.end = outside_data_end;
             view.calc_interval(2400, 30, 1);
             plot();
+        },
+        export_config: function () {
+            // Create exportable config object with all user-settable parameters
+            var config = {
+                days: this.days,
+                building: JSON.parse(JSON.stringify(this.building)),
+                external: JSON.parse(JSON.stringify(this.external)),
+                heatpump: JSON.parse(JSON.stringify(this.heatpump)),
+                control: JSON.parse(JSON.stringify(this.control)),
+                schedule: JSON.parse(JSON.stringify(this.schedule))
+            };
+            
+            // Convert to JSON string with nice formatting
+            var jsonString = JSON.stringify(config, null, 2);
+            
+            // Copy to clipboard
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(jsonString).then(function() {
+                    alert('Configuration exported to clipboard successfully!');
+                }).catch(function(err) {
+                    console.error('Failed to copy to clipboard: ', err);
+                    // Fallback: show the JSON in a modal or alert
+                    prompt('Copy the configuration below:', jsonString);
+                });
+            } else {
+                // Fallback for older browsers
+                prompt('Copy the configuration below:', jsonString);
+            }
         }
 
     },
