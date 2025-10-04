@@ -290,6 +290,6 @@ function getCOP(data, targetFlowTemp, targetAmbientTemp, targetOutput) {
 
 // Example 2: A point that lies on a specific flow temperature plane.
 // Target: Flow=55°C, Ambient=0°C, Output=4.0kW
-let cop2 = getCOP(vaillant_data, 65, 10, 4.0);
-console.log(`COP at 55°C flow, 12°C ambient, 4.2kW output: ${cop2.toFixed(2)}`);
+// let cop2 = getCOP(vaillant_data, 65, 10, 4.0);
+// console.log(`COP at 55°C flow, 12°C ambient, 4.2kW output: ${cop2.toFixed(2)}`);
 
