@@ -43,7 +43,41 @@
 
     <div class="row mt-3" v-if="mean_abs_error !== null">
         <div class="col">
-            <p>Mean absolute error between model and datasheet: <b>{{ mean_abs_error.toFixed(2) }} COP</b> across all data points</p>
+            <p>Mean absolute error between model and datasheet: <b>{{ mean_abs_error.toFixed(3) }} COP</b> across all data points</p>
+        </div>
+    </div>
+
+
+    <div class="row">
+        <div class="col">
+            <h3>Model parameters</h3>
+            <p>The model uses the Carnot COP equation with some practical adjustments to better fit the real-world data. You can adjust these parameters to see how they affect the model fit.</p>
+        </div>
+    </div>
+    <div class="row mt-3">
+
+        <div class="col">
+            <label class="form-label">Condensing temp scale (°C at 120 rps)</label>
+            <div class="input-group mb-3">
+                <input type="text" class="form-control" v-model.number="condensing_scale" @change="update()">
+                <span class="input-group-text">°C</span>
+            </div>
+        </div>
+
+        <div class="col">
+            <label class="form-label">Evaporating temp scale (°C at 120 rps)</label>
+            <div class="input-group mb-3">
+                <input type="text" class="form-control" v-model.number="evaporating_scale" @change="update()">
+                <span class="input-group-text">°C</span>
+            </div>
+        </div>
+
+        <div class="col">
+            <label class="form-label">Practical COP factor</label>
+            <div class="input-group mb-3">
+                <input type="text" class="form-control" v-model.number="practical_cop_factor" @change="update()">
+                <span class="input-group-text">× Carnot COP</span>
+            </div>
         </div>
     </div>
 </div>
@@ -55,7 +89,10 @@
             flow_temperature: 35,
             data: vaillant_data,
             active_flow_temp: '35C',
-            mean_abs_error: null
+            mean_abs_error: null,
+            condensing_scale: 3,
+            evaporating_scale: -7,
+            practical_cop_factor: 0.45
         },
         computed: {
             flow_temps: function() {
@@ -94,14 +131,14 @@
                                     if (flow_temp_data.cop[i][j] !== null) {
 
                                         let speed = model_data.speed[j];
-                                        let condensing_offset = 4 * (speed / 120);
-                                        let evaporating_offset = -10 * (speed / 120);
+                                        let condensing_offset = (speed / 120) * this.condensing_scale;
+                                        let evaporating_offset = (speed / 120) * this.evaporating_scale;
 
                                         var T_condensing = T_flow + condensing_offset;
                                         var T_evaporating = T_ambient + evaporating_offset;
 
                                         var carnot_cop = (T_condensing + 273.15) / (T_condensing - T_evaporating);
-                                        var practical_cop = carnot_cop * 0.52;
+                                        var practical_cop = carnot_cop * this.practical_cop_factor;
 
                                         // Calculate error
                                         var error = Math.abs(practical_cop - flow_temp_data.cop[i][j]);
