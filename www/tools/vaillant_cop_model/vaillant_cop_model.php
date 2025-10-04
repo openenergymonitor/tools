@@ -1,5 +1,5 @@
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
-<script src="<?php echo $path_lib;?>vaillant5.js?v=<?php echo time(); ?>"></script>
+<script src="<?php echo $path_lib;?>vaillant5.js?v=10"></script>
 
 <?php $title = "Vaillant COP model"; ?>
 
