@@ -40,6 +40,12 @@
             </table>
         </div>
     </div>
+
+    <div class="row mt-3" v-if="mean_abs_error !== null">
+        <div class="col">
+            <p>Mean absolute error between model and datasheet: <b>{{ mean_abs_error.toFixed(2) }} COP</b> across all data points</p>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -48,7 +54,8 @@
         data: {
             flow_temperature: 35,
             data: vaillant_data,
-            active_flow_temp: '35C'
+            active_flow_temp: '35C',
+            mean_abs_error: null
         },
         computed: {
             flow_temps: function() {
@@ -96,6 +103,11 @@
                                         var carnot_cop = (T_condensing + 273.15) / (T_condensing - T_evaporating);
                                         var practical_cop = carnot_cop * 0.52;
 
+                                        // Calculate error
+                                        var error = Math.abs(practical_cop - flow_temp_data.cop[i][j]);
+                                        total_error += error;
+                                        count += 1;
+
                                         this.$set(flow_temp_data.sim_cop[i], j, practical_cop.toFixed(1));
                                     } else {
                                         this.$set(flow_temp_data.sim_cop[i], j, null);
@@ -104,6 +116,8 @@
                             }
                         }
                     }
+
+                    this.mean_abs_error = total_error / count;
                 }
             },
             getCopColor: function(cop) {
