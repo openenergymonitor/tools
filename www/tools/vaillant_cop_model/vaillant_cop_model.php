@@ -57,6 +57,26 @@
     <div class="row mt-3">
 
         <div class="col">
+            <label class="form-label">COP model type</label>
+            <select class="form-select" v-model="cop_model" @change="update()">
+                <option value="carnot-fixed-offset">Carnot with fixed offsets</option>
+                <option value="carnot-variable-offset">Carnot with variable offsets (scaled by speed)</option>
+                <option value="vaillant-datasheet">Vaillant datasheet interpolation (validation only)</option>
+            </select>
+        </div>
+
+        <div class="col" v-if="cop_model === 'carnot-variable-offset' || cop_model === 'carnot-fixed-offset'">
+            <label class="form-label">Practical COP factor</label>
+            <div class="input-group mb-3">
+                <input type="text" class="form-control" v-model.number="practical_cop_factor" @change="update()">
+                <span class="input-group-text">× Carnot COP</span>
+            </div>
+        </div>
+
+    </div>
+    <div class="row mt-3">
+
+        <div class="col" v-if="cop_model === 'carnot-variable-offset'">
             <label class="form-label">Condensing temp scale (°C at 120 rps)</label>
             <div class="input-group mb-3">
                 <input type="text" class="form-control" v-model.number="condensing_scale" @change="update()">
@@ -64,7 +84,7 @@
             </div>
         </div>
 
-        <div class="col">
+        <div class="col" v-if="cop_model === 'carnot-variable-offset'">
             <label class="form-label">Evaporating temp scale (°C at 120 rps)</label>
             <div class="input-group mb-3">
                 <input type="text" class="form-control" v-model.number="evaporating_scale" @change="update()">
@@ -72,13 +92,23 @@
             </div>
         </div>
 
-        <div class="col">
-            <label class="form-label">Practical COP factor</label>
+        <div class="col" v-if="cop_model === 'carnot-fixed-offset'">
+            <label class="form-label">Fixed condensing temp offset</label>
             <div class="input-group mb-3">
-                <input type="text" class="form-control" v-model.number="practical_cop_factor" @change="update()">
-                <span class="input-group-text">× Carnot COP</span>
+                <input type="text" class="form-control" v-model.number="condensing_fixed_offset" @change="update()">
+                <span class="input-group-text">°C</span>
             </div>
         </div>
+
+        <div class="col" v-if="cop_model === 'carnot-fixed-offset'">
+            <label class="form-label">Fixed evaporating temp offset</label>
+            <div class="input-group mb-3">
+                <input type="text" class="form-control" v-model.number="evaporating_fixed_offset" @change="update()">
+                <span class="input-group-text">°C</span>
+            </div>
+        </div>
+
+
     </div>
 </div>
 
@@ -90,8 +120,15 @@
             data: vaillant_data,
             active_flow_temp: '35C',
             mean_abs_error: null,
+            // cop model
+            cop_model: 'carnot-fixed-offset',
+            // fixed offsets at all speeds
+            condensing_fixed_offset: 2,
+            evaporating_fixed_offset: -6,
+            // variable offsets scaled by speed
             condensing_scale: 3,
             evaporating_scale: -7,
+            // multiplier to get practical COP from Carnot COP
             practical_cop_factor: 0.45
         },
         computed: {
@@ -102,6 +139,26 @@
         methods: {
             update: function () {
                 this.model();
+            },
+            carnot_fixed_offset: function(T_flow, T_ambient) {
+                let condensing_offset = this.condensing_fixed_offset;
+                let evaporating_offset = this.evaporating_fixed_offset;
+
+                let T_condensing = T_flow + condensing_offset;
+                let T_evaporating = T_ambient + evaporating_offset;
+
+                let carnot_cop = (T_condensing + 273.15) / (T_condensing - T_evaporating);
+                return practical_cop = carnot_cop * this.practical_cop_factor;
+            },
+            carnot_variable_offset: function(T_flow, T_ambient, speed) {
+                let condensing_offset = (speed / 120) * this.condensing_scale;
+                let evaporating_offset = (speed / 120) * this.evaporating_scale;
+
+                let T_condensing = T_flow + condensing_offset;
+                let T_evaporating = T_ambient + evaporating_offset;
+
+                let carnot_cop = (T_condensing + 273.15) / (T_condensing - T_evaporating);
+                return practical_cop = carnot_cop * this.practical_cop_factor;
             },
             model: function() {
                 // Generate modelled COP using carnot COP equation
@@ -130,16 +187,20 @@
                                 for (var j = 0; j < model_data.speed.length; j++) {
                                     if (flow_temp_data.cop[i][j] !== null) {
 
-                                        let speed = model_data.speed[j];
-                                        let condensing_offset = (speed / 120) * this.condensing_scale;
-                                        let evaporating_offset = (speed / 120) * this.evaporating_scale;
+                                        let practical_cop = null;
 
-                                        var T_condensing = T_flow + condensing_offset;
-                                        var T_evaporating = T_ambient + evaporating_offset;
+                                        // Calculate modelled COP based on selected model
 
-                                        var carnot_cop = (T_condensing + 273.15) / (T_condensing - T_evaporating);
-                                        var practical_cop = carnot_cop * this.practical_cop_factor;
-
+                                        if (this.cop_model === 'carnot-fixed-offset') {
+                                            practical_cop = this.carnot_fixed_offset(T_flow, T_ambient);
+                                        } else if (this.cop_model === 'carnot-variable-offset') {
+                                            let speed = model_data.speed[j];
+                                            practical_cop = this.carnot_variable_offset(T_flow, T_ambient, speed);
+                                        } else if (this.cop_model === 'vaillant-datasheet') {
+                                            let output = flow_temp_data.output[i][j];
+                                            practical_cop = getCOP(vaillant_data, T_flow, T_ambient, output);
+                                        }
+                                        
                                         // Calculate error
                                         var error = Math.abs(practical_cop - flow_temp_data.cop[i][j]);
                                         total_error += error;
