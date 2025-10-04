@@ -47,11 +47,31 @@
         </div>
     </div>
 
+    <div class="row mt-3" v-if="cop_model.startsWith('carnot-')">
+        <div class="col">
+            <h4>Model Equations</h4>
+            <div v-if="cop_model === 'carnot-fixed-offset'">
+                <p>Fixed offset Carnot model:</p>
+                <p>T<sub>condensing</sub> = T<sub>flow</sub> + {{ condensing_fixed_offset }}°C</p>
+                <p>T<sub>evaporating</sub> = T<sub>ambient</sub> + {{ evaporating_fixed_offset }}°C</p>
+                <p>COP = {{ practical_cop_factor }} × (T<sub>condensing</sub> + 273.15) / (T<sub>condensing</sub> - T<sub>evaporating</sub>)</p>
+            </div>
+            <div v-if="cop_model === 'carnot-variable-offset'">
+                <p>Variable offset Carnot model (speed dependent):</p>
+                <p>T<sub>condensing</sub> = T<sub>flow</sub> + (speed/120) × {{ condensing_scale }}°C</p>
+                <p>T<sub>evaporating</sub> = T<sub>ambient</sub> + (speed/120) × {{ evaporating_scale }}°C</p>
+                <p>COP = {{ practical_cop_factor }} × (T<sub>condensing</sub> + 273.15) / (T<sub>condensing</sub> - T<sub>evaporating</sub>)</p>
+            </div>
+        </div>
+    </div>
+
 
     <div class="row">
         <div class="col">
             <h3>Model parameters</h3>
             <p>The model uses the Carnot COP equation with some practical adjustments to better fit the real-world data. You can adjust these parameters to see how they affect the model fit.</p>
+
+            
         </div>
     </div>
     <div class="row mt-3">
