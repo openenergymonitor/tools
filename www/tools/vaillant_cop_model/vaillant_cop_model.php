@@ -200,13 +200,19 @@
                                             let output = flow_temp_data.output[i][j];
                                             practical_cop = getCOP(vaillant_data, T_flow, T_ambient, output);
                                         }
-                                        
-                                        // Calculate error
-                                        var error = Math.abs(practical_cop - flow_temp_data.cop[i][j]);
-                                        total_error += error;
-                                        count += 1;
 
-                                        this.$set(flow_temp_data.sim_cop[i], j, practical_cop.toFixed(1));
+                                        if (practical_cop !== null) {
+                                            // Calculate error
+                                            var error = Math.abs(practical_cop - flow_temp_data.cop[i][j]);
+                                            total_error += error;
+                                            count += 1;
+
+                                            this.$set(flow_temp_data.sim_cop[i], j, practical_cop.toFixed(1));
+                                        } else {
+                                            this.$set(flow_temp_data.sim_cop[i], j, null);
+                                        }
+                                        
+
                                     } else {
                                         this.$set(flow_temp_data.sim_cop[i], j, null);
                                     }

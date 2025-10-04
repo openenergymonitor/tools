@@ -223,16 +223,20 @@ function getCOP(data, targetFlowTemp, targetAmbientTemp, targetOutput) {
     // Handle interpolation within the range (original logic)
     } else {
         for (let i = 0; i < flowTemps.length - 1; i++) {
-            if (targetFlowTemp >= flowTemps[i] && targetFlowTemp <= flowTemps[i + 1]) {
+            if (targetFlowTemp === flowTemps[i]) {
+                flow1_temp = flow2_temp = flowTemps[i];
+                break;
+            }
+            else if (targetFlowTemp > flowTemps[i] && targetFlowTemp < flowTemps[i + 1]) {
                 flow1_temp = flowTemps[i];
                 flow2_temp = flowTemps[i + 1];
                 break;
             }
+            else if (targetFlowTemp === flowTemps[i + 1]) {
+                flow1_temp = flow2_temp = flowTemps[i + 1];
+                break;
+            }
         }
-    }
-    // If the target is an exact match on the boundary, prevent issues
-    if (targetFlowTemp === flowTemps[0] || targetFlowTemp === flowTemps[flowTemps.length - 1]) {
-        flow2_temp = flow1_temp;
     }
 
     // --- 2. Find bracketing Ambient Temperatures ---
@@ -243,9 +247,15 @@ function getCOP(data, targetFlowTemp, targetAmbientTemp, targetOutput) {
         ambient1_idx = ambient2_idx = ambientTemps.length - 1;
     } else {
         for (let i = 0; i < ambientTemps.length - 1; i++) {
-            if (targetAmbientTemp >= ambientTemps[i] && targetAmbientTemp <= ambientTemps[i + 1]) {
+            if (targetAmbientTemp === ambientTemps[i]) {
+                ambient1_idx = ambient2_idx = i;
+                break;
+            } else if (targetAmbientTemp > ambientTemps[i] && targetAmbientTemp < ambientTemps[i + 1]) {
                 ambient1_idx = i;
                 ambient2_idx = i + 1;
+                break;
+            } else if (targetAmbientTemp === ambientTemps[i + 1]) {
+                ambient1_idx = ambient2_idx = i + 1;
                 break;
             }
         }
@@ -257,6 +267,8 @@ function getCOP(data, targetFlowTemp, targetAmbientTemp, targetOutput) {
     const flow1_data = modelData[`${flow1_temp}C`];
     const cop_a1_f1 = interpolateForOutput(flow1_data, ambient1_idx, targetOutput);
     const cop_a2_f1 = interpolateForOutput(flow1_data, ambient2_idx, targetOutput);
+
+    console.log(ambient1_idx, cop_a1_f1, cop_a2_f1);
     
     if (cop_a1_f1 === null || cop_a2_f1 === null) return null; // Cannot interpolate this slice
     
