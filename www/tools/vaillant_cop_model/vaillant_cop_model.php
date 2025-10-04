@@ -6,23 +6,18 @@
 <div class="container mt-3" style="max-width:1000px" id="app">
     <div class="row">
         <div class="col">
-            <h3>Vaillant COP model</h3>
+            <h3>Vaillant Arotherm+ datasheet vs model</h3>
+            <p>This tool compares the 5kW Vaillant Arotherm+ datasheet performance tables with a simple Carnot-based model to see how well the model fits real-world data.</p>
         </div>
     </div>
-    <hr>
-    <div class="row">
+
+    <ul class="nav nav-tabs">
+        <li class="nav-item" v-for="flow_temp_key in flow_temps">
+            <a class="nav-link" :class="{ active: active_flow_temp == flow_temp_key }" href="#" @click.prevent="active_flow_temp = flow_temp_key">{{ flow_temp_key }}</a>
+        </li>
+    </ul>
+    <div class="row mt-3">
         <div class="col">
-            <label class="form-label">Flow temperature</label>
-            <div class="input-group mb-3">
-                <input type="text" class="form-control" v-model.number="flow_temperature" @change="update">
-                <span class="input-group-text">°C</span>
-            </div>  
-        </div>
-    </div>
-    <hr>
-    <div class="row">
-        <div class="col">
-            <h4>5kW 35C</h4>
             <table class="table table-bordered table-sm text-center">
                 <thead>
                     <tr>
@@ -33,11 +28,11 @@
                 <tbody>
                     <tr v-for="(ambient_temp, amb_index) in data['5kW'].ambient">
                         <td><b>{{ ambient_temp }}</b></td>
-                        <td v-for="(speed, speed_index) in data['5kW'].speed" :style="{backgroundColor: getCopColor(data['5kW']['35C'].cop[amb_index][speed_index])}">
-                            <div v-if="data['5kW']['35C'].cop[amb_index][speed_index] !== null">
-                                <b>{{ data['5kW']['35C'].cop[amb_index][speed_index] }}</b> 
-                                <small>({{ data['5kW']['35C'].sim_cop[amb_index][speed_index] }})</small><br>
-                                <small>{{ data['5kW']['35C'].output[amb_index][speed_index] }} kW</small>
+                        <td v-for="(speed, speed_index) in data['5kW'].speed" :style="{backgroundColor: getCopColor(data['5kW'][active_flow_temp].cop[amb_index][speed_index])}">
+                            <div v-if="data['5kW'][active_flow_temp].cop[amb_index][speed_index] !== null">
+                                <b>{{ data['5kW'][active_flow_temp].cop[amb_index][speed_index] }}</b> 
+                                <small v-if="data['5kW'][active_flow_temp].sim_cop">({{ data['5kW'][active_flow_temp].sim_cop[amb_index][speed_index] }})</small><br>
+                                <small>{{ data['5kW'][active_flow_temp].output[amb_index][speed_index] }} kW</small>
                             </div>
                         </td>
                     </tr>
@@ -52,7 +47,13 @@
         el: '#app',
         data: {
             flow_temperature: 35,
-            data: vaillant_data
+            data: vaillant_data,
+            active_flow_temp: '35C'
+        },
+        computed: {
+            flow_temps: function() {
+                return Object.keys(this.data['5kW']).filter(k => k.endsWith('C'));
+            }
         },
         methods: {
             update: function () {

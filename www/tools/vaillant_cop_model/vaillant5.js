@@ -6,6 +6,7 @@ var vaillant_data = {
         "ambient": [-20, -15, -12, -7, -2, 0, 2, 7, 10, 12, 15, 20],
     
         "35C": { // 35-30
+            "label": "35-30C",
             "cop": [
                 [2.2, 2.2, 2.5, 2.5, 2.5, 2.4, 2.6, 2.5, null, null], 
                 [2.4, 2.4, 2.7, 2.7, 2.8, 2.8, 3.0, 3.1, null, null],
@@ -36,6 +37,7 @@ var vaillant_data = {
             ]
         },
         "45C": { // 45-40
+            "label": "45-40C",
             "cop": [
                 [1.8, 1.8, 1.9, 2.0, 2.1, 2.0, 2.1, 1.9, null, null],
                 [2.0, 2.0, 2.2, 2.3, 2.4, 2.3, 2.5, 2.6, null, null],
@@ -66,6 +68,7 @@ var vaillant_data = {
             ]
         },
         "55C": { // 55-47
+            "label": "55-47C",
             "cop": [
                 [1.5, 1.4, 1.5, 1.4, 1.4, 1.3, 1.2, null, null, null],
                 [1.7, 1.7, 1.8, 1.8, 1.8, 1.8, 1.8, 1.5, null, null],
@@ -96,6 +99,7 @@ var vaillant_data = {
             ]
         },
         "65C": { // 65-57
+            "label": "65-57C",
             "cop": [
                 [null, null, null, null, null, null, null, null, null, null],
                 [null, null, null, null, null, null, null, null, null, null],        
