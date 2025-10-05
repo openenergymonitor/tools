@@ -89,7 +89,8 @@
                 <option value="carnot-fixed-offset">Carnot with fixed offsets</option>
                 <option value="carnot-variable-offset">Carnot with variable offsets (scaled by speed)</option>
                 <option value="carnot-variable-offset-output">Carnot with variable offsets (scaled by output)</option>
-                <option value="coolprop-vapour-compression">CoolProp vapour compression model</option>
+                <option value="coolprop-vapour-compression-v1">CoolProp vapour compression model v1</option>
+                <option value="coolprop-vapour-compression-v2">CoolProp vapour compression model v2</option>
                 <option value="vaillant-datasheet">Vaillant datasheet interpolation (validation only)</option>
             </select>
         </div>
@@ -102,7 +103,7 @@
             </div>
         </div>
 
-        <div class="col" v-if="cop_model === 'coolprop-vapour-compression'">
+        <div class="col" v-if="cop_model === 'coolprop-vapour-compression-v1' || cop_model === 'coolprop-vapour-compression-v2'">
             <label class="form-label">Refrigerant</label>
             <select class="form-select" v-model="refrigerant" @change="update()">
                 <option value="R290">R290</option>
@@ -111,7 +112,7 @@
             </select>
         </div>
 
-        <div class="col" v-if="cop_model === 'coolprop-vapour-compression'">
+        <div class="col" v-if="cop_model === 'coolprop-vapour-compression-v1' || cop_model === 'coolprop-vapour-compression-v2'">
             <label class="form-label">Compressor isentropic efficiency</label>
             <div class="input-group mb-3">
                 <input type="text" class="form-control" v-model.number="eta_isentropic" @change="update()">
@@ -139,7 +140,7 @@
             </div>
         </div>
 
-        <div class="col" v-if="cop_model === 'carnot-variable-offset-output' || cop_model === 'coolprop-vapour-compression'">
+        <div class="col" v-if="cop_model === 'carnot-variable-offset-output' || cop_model === 'coolprop-vapour-compression-v1' || cop_model === 'coolprop-vapour-compression-v2'">
             <label class="form-label">Condensing temp scale (°C at max output)</label>
             <div class="input-group mb-3">
                 <input type="text" class="form-control" v-model.number="condensing_scale" @change="update()">
@@ -147,7 +148,7 @@
             </div>
         </div>
 
-        <div class="col" v-if="cop_model === 'carnot-variable-offset-output' || cop_model === 'coolprop-vapour-compression'">
+        <div class="col" v-if="cop_model === 'carnot-variable-offset-output' || cop_model === 'coolprop-vapour-compression-v1' || cop_model === 'coolprop-vapour-compression-v2'">
             <label class="form-label">Evaporating temp scale (°C at max output)</label>
             <div class="input-group mb-3">
                 <input type="text" class="form-control" v-model.number="evaporating_scale" @change="update()">
@@ -155,7 +156,7 @@
             </div>
         </div>
 
-        <div class="col" v-if="cop_model === 'carnot-variable-offset-output' || cop_model === 'coolprop-vapour-compression'">
+        <div class="col" v-if="cop_model === 'carnot-variable-offset-output' || cop_model === 'coolprop-vapour-compression-v1' || cop_model === 'coolprop-vapour-compression-v2'">
             <label class="form-label">Max heat output for scaling</label>
             <div class="input-group mb-3">
                 <input type="text" class="form-control" v-model.number="max_output" @change="update()">
@@ -243,7 +244,8 @@
                 let carnot_cop = (T_condensing + 273.15) / (T_condensing - T_evaporating);
                 return practical_cop = carnot_cop * this.practical_cop_factor;
             },
-            coolprop_vapour_compression_cop: function(T_flow, T_ambient, output) {
+
+            coolprop_vapour_compression_cop_v1: function(T_flow, T_ambient, output) {
 
                 let condensing_offset = (output / this.max_output) * this.condensing_scale;
                 let evaporating_offset = (output / this.max_output) * this.evaporating_scale;
@@ -299,6 +301,86 @@
 
                 return cop;
             },
+            
+            /**
+             * Calculates the COP of a vapour compression cycle with superheating and subcooling.
+             * @param {object} inputs - The operating conditions.
+             * @param {number} inputs.T_flow - Desired outlet water temperature (°C).
+             * @param {number} inputs.T_ambient - Heat source ambient air temperature (°C).
+             * @param {number} inputs.output - Current thermal output of the heat pump (W).
+             * @param {object} params - The parameters defining the heat pump.
+             * @param {string} params.refrigerant - Refrigerant name (e.g., 'R290').
+             * @param {number} params.max_output - Maximum thermal output (W).
+             * @param {number} params.condensing_scale - Temperature offset scale for condenser (°C).
+             * @param {number} params.evaporating_scale - Temperature offset scale for evaporator (°C).
+             * @param {number} params.superheat_K - Superheat at compressor inlet (K).
+             * @param {number} params.subcooling_K - Subcooling at condenser outlet (K).
+             * @returns {object} An object containing the thermodynamic COP and other cycle data.
+             */
+            coolprop_vapour_compression_cop_v2: function(inputs, params) {
+                const { T_flow, T_ambient, output } = inputs;
+                const { refrigerant, max_output, condensing_scale, evaporating_scale, superheat_K, subcooling_K } = params;
+
+                const load_fraction = output / max_output;
+                let condensing_offset = load_fraction * condensing_scale;
+                let evaporating_offset = load_fraction * evaporating_scale;
+
+                // --- 1. Define Cycle Temperatures (K) ---
+                const T_cond_sat_K = (T_flow + condensing_offset) + 273.15;
+                const T_evap_sat_K = (T_ambient + evaporating_offset) + 273.15;
+
+                const CoolProp = Module;
+
+                // --- 2. Determine Pressures ---
+                let p_condensing = CoolProp.PropsSI('P', 'T', T_cond_sat_K, 'Q', 0, refrigerant);
+                let p_evaporating = CoolProp.PropsSI('P', 'T', T_evap_sat_K, 'Q', 1, refrigerant);
+
+                // --- 3. Cycle Point Enthalpies (J/kg) ---
+
+                // State 1 (Compressor Inlet) - Saturated Vapor + Superheat
+                const T1_K = T_evap_sat_K + superheat_K;
+                let h1 = CoolProp.PropsSI('H', 'P', p_evaporating, 'T', T1_K, refrigerant);
+                let s1 = CoolProp.PropsSI('S', 'P', p_evaporating, 'T', T1_K, refrigerant);
+
+                // State 3 (Condenser Outlet) - Saturated Liquid + Subcooling
+                const T3_K = T_cond_sat_K - subcooling_K;
+                let h3 = CoolProp.PropsSI('H', 'P', p_condensing, 'T', T3_K, refrigerant);
+
+                // State 4 (Evaporator Inlet) - Isenthalpic Expansion
+                let h4 = h3;
+
+                // --- 4. Isentropic and Actual Compression (h2) ---
+                // Calculate pressure ratio for variable efficiency model
+                const pressure_ratio = p_condensing / p_evaporating;
+                
+                // Example: A simple quadratic model for isentropic efficiency
+                // These coefficients (a, b, c) would be determined from manufacturer data
+                let eta_isentropic = -0.01 * Math.pow(pressure_ratio, 2) + 0.05 * pressure_ratio + 0.50; // Placeholder function
+                eta_isentropic = this.eta_isentropic;
+
+                // h2s (Isentropic State 2)
+                let h2s = CoolProp.PropsSI('H', 'P', p_condensing, 'S', s1, refrigerant);
+
+                // h2 (Actual State 2)
+                let h2 = h1 + (h2s - h1) / eta_isentropic;
+
+                // --- 5. COP Calculation ---
+                const heat_rejected = h2 - h3;    // Heat released in condenser
+                const work_done = h2 - h1;        // Work input to compressor
+                
+                if (work_done <= 0) {
+                    return { cop: Infinity, pressure_ratio: pressure_ratio }; // Avoid division by zero
+                }
+                
+                const cop_thermo = heat_rejected / work_done;
+
+                return { 
+                    cop: cop_thermo, 
+                    pressure_ratio: pressure_ratio, 
+                    eta_isentropic: eta_isentropic 
+                };
+            },
+
 
             model: function() {
                 // Generate modelled COP using carnot COP equation
@@ -342,9 +424,22 @@
                                         } else if (this.cop_model === 'vaillant-datasheet') {
                                             let output = flow_temp_data.output[i][j];
                                             practical_cop = getCOP(vaillant_data, T_flow, T_ambient, output);
-                                        } else if (this.cop_model === 'coolprop-vapour-compression') {
+                                        } else if (this.cop_model === 'coolprop-vapour-compression-v1') {
                                             let output = flow_temp_data.output[i][j];
-                                            practical_cop = this.coolprop_vapour_compression_cop(T_flow, T_ambient, output);
+                                            practical_cop = this.coolprop_vapour_compression_cop_v1(T_flow, T_ambient, output);
+                                        } else if (this.cop_model === 'coolprop-vapour-compression-v2') {
+                                            let output = flow_temp_data.output[i][j];
+                                            practical_cop = this.coolprop_vapour_compression_cop_v2(
+                                                { T_flow: T_flow, T_ambient: T_ambient, output: output * 1000 }, // Convert kW to W
+                                                { 
+                                                    refrigerant: this.refrigerant, 
+                                                    max_output: this.max_output * 1000, // Convert kW to W
+                                                    condensing_scale: this.condensing_scale, 
+                                                    evaporating_scale: this.evaporating_scale, 
+                                                    superheat_K: 5, // Fixed superheat
+                                                    subcooling_K: 3, // Fixed subcooling
+                                                }
+                                            ).cop;
                                         }
 
                                         if (practical_cop !== null) {
