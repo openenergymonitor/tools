@@ -112,7 +112,7 @@
             </select>
         </div>
 
-        <div class="col" v-if="cop_model === 'coolprop-vapour-compression-v1' || cop_model === 'coolprop-vapour-compression-v2'">
+        <div class="col" v-if="cop_model === 'coolprop-vapour-compression-v1'">
             <label class="form-label">Compressor isentropic efficiency</label>
             <div class="input-group mb-3">
                 <input type="text" class="form-control" v-model.number="eta_isentropic" @change="update()">
@@ -355,8 +355,27 @@
                 
                 // Example: A simple quadratic model for isentropic efficiency
                 // These coefficients (a, b, c) would be determined from manufacturer data
-                let eta_isentropic = -0.01 * Math.pow(pressure_ratio, 2) + 0.05 * pressure_ratio + 0.50; // Placeholder function
-                eta_isentropic = this.eta_isentropic;
+                // let eta_isentropic = -0.01 * Math.pow(pressure_ratio, 2) + 0.05 * pressure_ratio + 0.50; // Placeholder function
+                // let eta_isentropic = -0.02 * Math.pow(pressure_ratio, 2) + 0.1 * pressure_ratio + 0.45; // Fitted quadratic
+
+
+                // Model isentropic efficiency degradation with pressure ratio and part load
+                // Typical range: 0.60-0.75 for scroll compressors
+                let eta_isentropic_base = 0.51; // Base efficiency at nominal conditions
+                let eta_isentropic = eta_isentropic_base;
+
+                // Optional: Add pressure ratio penalty (efficiency drops at high PR)
+                const pr_penalty = Math.max(0, 1 - 0.02 * (pressure_ratio - 3));
+
+                // Optional: Add part-load penalty (efficiency drops at low load)
+                const load_penalty = 0.75 + 0.25 * load_fraction;
+
+                eta_isentropic = eta_isentropic * pr_penalty * load_penalty;
+
+                // Clamp to realistic range
+                eta_isentropic = Math.max(0.45, Math.min(0.80, eta_isentropic));
+
+                // eta_isentropic = this.eta_isentropic;
 
                 // h2s (Isentropic State 2)
                 let h2s = CoolProp.PropsSI('H', 'P', p_condensing, 'S', s1, refrigerant);
@@ -443,6 +462,21 @@
                                         }
 
                                         if (practical_cop !== null) {
+
+                                            // Calculate electric input from output and COP
+                                            // let output = flow_temp_data.output[i][j];
+                                            // let electric_input = output / practical_cop;
+
+                                            // Add fan power
+                                            // let base_fan_power = 20;
+                                            // let var_fan_power = 40;
+                                            // let fan_power_exponent = 0.65;
+                                            // let load_fraction = output / this.max_output;
+                                            // let ambient_factor = 1;
+                                            // let fan_power = base_fan_power + var_fan_power * Math.pow(load_fraction, fan_power_exponent) * ambient_factor;
+
+                                            // practical_cop = output / (electric_input + (fan_power * 0.001));
+
                                             // Calculate error
                                             var error = Math.abs(practical_cop - flow_temp_data.cop[i][j]);
                                             total_error += error;
