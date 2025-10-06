@@ -398,8 +398,6 @@ function getCOP(modelData, targetFlowTemp, targetAmbientTemp, targetOutput) {
     const flow1_data = modelData[`${flow1_temp}C`];
     const cop_a1_f1 = interpolateForOutput(flow1_data, ambient1_idx, targetOutput);
     const cop_a2_f1 = interpolateForOutput(flow1_data, ambient2_idx, targetOutput);
-
-    console.log(ambient1_idx, cop_a1_f1, cop_a2_f1);
     
     if (cop_a1_f1 === null || cop_a2_f1 === null) return null; // Cannot interpolate this slice
     

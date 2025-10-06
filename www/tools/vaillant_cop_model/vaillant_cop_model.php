@@ -476,7 +476,10 @@
                                         practical_cop = this.carnot_variable_offset_output(T_flow, T_ambient, output);
                                     } else if (this.cop_model === 'vaillant-datasheet') {
                                         let output = flow_temp_data.output[i][j];
-                                        practical_cop = getCOP(vaillant_data, T_flow, T_ambient, output);
+                                        practical_cop = getCOP(vaillant_data[this.selected_model], T_flow, T_ambient, output);
+                                    } else if (this.cop_model === 'vaillant-datasheet') {
+                                        let output = flow_temp_data.output[i][j];
+                                        practical_cop = getCOP(vaillant_data[this.selected_model], T_flow, T_ambient, output);
                                     } else if (this.cop_model === 'coolprop-vapour-compression-v1') {
                                         let output = flow_temp_data.output[i][j];
                                         practical_cop = this.coolprop_vapour_compression_cop_v1(T_flow, T_ambient, output);
@@ -511,12 +514,12 @@
 
                                         // practical_cop = output / (electric_input + (fan_power * 0.001));
 
-                    if (practical_cop>=0 && practical_cop<20) {
+                                        if (practical_cop>=0 && practical_cop<20) {
 
-                                        // Calculate error
-                                        var error = Math.abs(practical_cop - flow_temp_data.cop[i][j]);
-                                        total_error += error;
-                                        count += 1;
+                                            // Calculate error
+                                            var error = Math.abs(practical_cop - flow_temp_data.cop[i][j]);
+                                            total_error += error;
+                                            count += 1;
                                             this.$set(flow_temp_data.sim_cop[i], j, practical_cop.toFixed(1));
                                         } else {
                                             this.$set(flow_temp_data.sim_cop[i], j, '');
