@@ -1,5 +1,5 @@
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
-<script src="<?php echo $path_lib;?>vaillant5.js?v=10"></script>
+<script src="<?php echo $path_lib;?>vaillant.js?v=10"></script>
 
 
 <?php $title = "Vaillant COP model"; ?>
@@ -8,7 +8,16 @@
     <div class="row">
         <div class="col">
             <h3>Vaillant Arotherm+ datasheet vs model</h3>
-            <p>This tool compares the 5kW Vaillant Arotherm+ datasheet performance tables with a simple Carnot-based model to see how well the model fits real-world data.</p>
+            <p>This tool compares Vaillant Arotherm+ datasheet performance tables with a simple Carnot-based model to see how well the model fits real-world data.</p>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <select class="form-select" v-model="selected_model" @change="change_model()">
+                <option value="5kW">5kW Model</option>
+                <option value="12kW">12kW Model</option>
+            </select>
         </div>
     </div>
 
@@ -23,17 +32,17 @@
                 <thead>
                     <tr>
                         <th class="fs-6">Ambient °C</th>
-                        <th class="fs-6" v-for="speed in data['5kW'].speed">{{ speed }} rps</th>
+                        <th class="fs-6" v-for="speed in data[selected_model].speed">{{ speed }} rps</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="(ambient_temp, amb_index) in data['5kW'].ambient">
+                    <tr v-for="(ambient_temp, amb_index) in data[selected_model].ambient">
                         <td><b class="fs-6">{{ ambient_temp }}</b></td>
-                        <td v-for="(speed, speed_index) in data['5kW'].speed" :style="{backgroundColor: getCopColor(data['5kW'][active_flow_temp].cop[amb_index][speed_index])}">
-                            <div v-if="data['5kW'][active_flow_temp].cop[amb_index][speed_index] !== null">
-                                <b class="fs-6">{{ data['5kW'][active_flow_temp].cop[amb_index][speed_index] }}</b> 
-                                <small class="fs-7" v-if="data['5kW'][active_flow_temp].sim_cop">({{ data['5kW'][active_flow_temp].sim_cop[amb_index][speed_index] }})</small>
-                                <small class="d-block fs-7">{{ data['5kW'][active_flow_temp].output[amb_index][speed_index] }} kW</small>
+                        <td v-for="(speed, speed_index) in data[selected_model].speed" :style="{backgroundColor: getCopColor(data[selected_model][active_flow_temp].cop[amb_index][speed_index])}">
+                            <div v-if="data[selected_model][active_flow_temp].cop[amb_index][speed_index] !== null">
+                                <b class="fs-6">{{ data[selected_model][active_flow_temp].cop[amb_index][speed_index] }}</b> 
+                                <small class="fs-7" v-if="data[selected_model][active_flow_temp].sim_cop">({{ data[selected_model][active_flow_temp].sim_cop[amb_index][speed_index] }})</small>
+                                <small class="d-block fs-7">{{ data[selected_model][active_flow_temp].output[amb_index][speed_index] }} kW</small>
                             </div>
                         </td>
                     </tr>
@@ -188,6 +197,7 @@
         data: {
             flow_temperature: 35,
             data: vaillant_data,
+            selected_model: '5kW',
             active_flow_temp: '35C',
             mean_abs_error: null,
             // cop model
@@ -207,12 +217,21 @@
         },
         computed: {
             flow_temps: function() {
-                return Object.keys(this.data['5kW']).filter(k => k.endsWith('C'));
+                return Object.keys(this.data[this.selected_model]).filter(k => k.endsWith('C'));
             }
         },
         methods: {
             update: function () {
                 this.model();
+            },
+            change_model: function() {
+                this.mean_abs_error = null;
+                if (this.selected_model === '5kW') {
+                    this.max_output = 8.5;
+                } else if (this.selected_model === '12kW') {
+                    this.max_output = 17.9;
+                }
+                this.update();
             },
             carnot_fixed_offset: function(T_flow, T_ambient) {
                 let condensing_offset = this.condensing_fixed_offset;
@@ -419,101 +438,105 @@
 
             model: function() {
                 // Generate modelled COP using carnot COP equation
-                for (var model in this.data) {
 
-                    var total_error = 0;
-                    var count = 0;
-                    
-                    var model_data = this.data[model];
+                var total_error = 0;
+                var count = 0;
+                
+                var model_data = this.data[this.selected_model];
 
-                    for (var flow_temp_str in model_data) {
-                        if (flow_temp_str.endsWith('C')) {
-                            var flow_temp_data = model_data[flow_temp_str];
-                            var T_flow = parseFloat(flow_temp_str);
+                for (var flow_temp_str in model_data) {
+                    if (flow_temp_str.endsWith('C')) {
+                        var flow_temp_data = model_data[flow_temp_str];
+                        var T_flow = parseFloat(flow_temp_str);
 
-                            if (!flow_temp_data.sim_cop) {
-                                this.$set(flow_temp_data, 'sim_cop', []);
+                        if (!flow_temp_data.sim_cop) {
+                            this.$set(flow_temp_data, 'sim_cop', []);
+                        }
+
+                        for (var i = 0; i < model_data.ambient.length; i++) {
+                            if (!flow_temp_data.sim_cop[i]) {
+                                this.$set(flow_temp_data.sim_cop, i, []);
                             }
+                            var T_ambient = model_data.ambient[i];
 
-                            for (var i = 0; i < model_data.ambient.length; i++) {
-                                if (!flow_temp_data.sim_cop[i]) {
-                                    this.$set(flow_temp_data.sim_cop, i, []);
-                                }
-                                var T_ambient = model_data.ambient[i];
+                            for (var j = 0; j < model_data.speed.length; j++) {
+                                if (flow_temp_data.cop[i][j] !== null) {
 
-                                for (var j = 0; j < model_data.speed.length; j++) {
-                                    if (flow_temp_data.cop[i][j] !== null) {
+                                    let practical_cop = null;
 
-                                        let practical_cop = null;
+                                    // Calculate modelled COP based on selected model
 
-                                        // Calculate modelled COP based on selected model
+                                    if (this.cop_model === 'carnot-fixed-offset') {
+                                        practical_cop = this.carnot_fixed_offset(T_flow, T_ambient);
+                                    } else if (this.cop_model === 'carnot-variable-offset') {
+                                        let speed = model_data.speed[j];
+                                        practical_cop = this.carnot_variable_offset(T_flow, T_ambient, speed);
+                                    } else if (this.cop_model === 'carnot-variable-offset-output') {
+                                        let output = flow_temp_data.output[i][j];
+                                        practical_cop = this.carnot_variable_offset_output(T_flow, T_ambient, output);
+                                    } else if (this.cop_model === 'vaillant-datasheet') {
+                                        let output = flow_temp_data.output[i][j];
+                                        practical_cop = getCOP(vaillant_data, T_flow, T_ambient, output);
+                                    } else if (this.cop_model === 'coolprop-vapour-compression-v1') {
+                                        let output = flow_temp_data.output[i][j];
+                                        practical_cop = this.coolprop_vapour_compression_cop_v1(T_flow, T_ambient, output);
+                                    } else if (this.cop_model === 'coolprop-vapour-compression-v2') {
+                                        let output = flow_temp_data.output[i][j];
+                                        practical_cop = this.coolprop_vapour_compression_cop_v2(
+                                            { T_flow: T_flow, T_ambient: T_ambient, output: output * 1000 }, // Convert kW to W
+                                            { 
+                                                refrigerant: this.refrigerant, 
+                                                max_output: this.max_output * 1000, // Convert kW to W
+                                                condensing_scale: this.condensing_scale, 
+                                                evaporating_scale: this.evaporating_scale, 
+                                                superheat_K: 5, // Fixed superheat
+                                                subcooling_K: 3, // Fixed subcooling
+                                            }
+                                        ).cop;
+                                    }
 
-                                        if (this.cop_model === 'carnot-fixed-offset') {
-                                            practical_cop = this.carnot_fixed_offset(T_flow, T_ambient);
-                                        } else if (this.cop_model === 'carnot-variable-offset') {
-                                            let speed = model_data.speed[j];
-                                            practical_cop = this.carnot_variable_offset(T_flow, T_ambient, speed);
-                                        } else if (this.cop_model === 'carnot-variable-offset-output') {
-                                            let output = flow_temp_data.output[i][j];
-                                            practical_cop = this.carnot_variable_offset_output(T_flow, T_ambient, output);
-                                        } else if (this.cop_model === 'vaillant-datasheet') {
-                                            let output = flow_temp_data.output[i][j];
-                                            practical_cop = getCOP(vaillant_data, T_flow, T_ambient, output);
-                                        } else if (this.cop_model === 'coolprop-vapour-compression-v1') {
-                                            let output = flow_temp_data.output[i][j];
-                                            practical_cop = this.coolprop_vapour_compression_cop_v1(T_flow, T_ambient, output);
-                                        } else if (this.cop_model === 'coolprop-vapour-compression-v2') {
-                                            let output = flow_temp_data.output[i][j];
-                                            practical_cop = this.coolprop_vapour_compression_cop_v2(
-                                                { T_flow: T_flow, T_ambient: T_ambient, output: output * 1000 }, // Convert kW to W
-                                                { 
-                                                    refrigerant: this.refrigerant, 
-                                                    max_output: this.max_output * 1000, // Convert kW to W
-                                                    condensing_scale: this.condensing_scale, 
-                                                    evaporating_scale: this.evaporating_scale, 
-                                                    superheat_K: 5, // Fixed superheat
-                                                    subcooling_K: 3, // Fixed subcooling
-                                                }
-                                            ).cop;
-                                        }
+                                    if (practical_cop !== null) {
 
-                                        if (practical_cop !== null) {
+                                        // Calculate electric input from output and COP
+                                        // let output = flow_temp_data.output[i][j];
+                                        // let electric_input = output / practical_cop;
 
-                                            // Calculate electric input from output and COP
-                                            // let output = flow_temp_data.output[i][j];
-                                            // let electric_input = output / practical_cop;
+                                        // Add fan power
+                                        // let base_fan_power = 20;
+                                        // let var_fan_power = 40;
+                                        // let fan_power_exponent = 0.65;
+                                        // let load_fraction = output / this.max_output;
+                                        // let ambient_factor = 1;
+                                        // let fan_power = base_fan_power + var_fan_power * Math.pow(load_fraction, fan_power_exponent) * ambient_factor;
 
-                                            // Add fan power
-                                            // let base_fan_power = 20;
-                                            // let var_fan_power = 40;
-                                            // let fan_power_exponent = 0.65;
-                                            // let load_fraction = output / this.max_output;
-                                            // let ambient_factor = 1;
-                                            // let fan_power = base_fan_power + var_fan_power * Math.pow(load_fraction, fan_power_exponent) * ambient_factor;
+                                        // practical_cop = output / (electric_input + (fan_power * 0.001));
 
-                                            // practical_cop = output / (electric_input + (fan_power * 0.001));
+                    if (practical_cop>=0 && practical_cop<20) {
 
-                                            // Calculate error
-                                            var error = Math.abs(practical_cop - flow_temp_data.cop[i][j]);
-                                            total_error += error;
-                                            count += 1;
-
+                                        // Calculate error
+                                        var error = Math.abs(practical_cop - flow_temp_data.cop[i][j]);
+                                        total_error += error;
+                                        count += 1;
                                             this.$set(flow_temp_data.sim_cop[i], j, practical_cop.toFixed(1));
                                         } else {
-                                            this.$set(flow_temp_data.sim_cop[i], j, null);
+                                            this.$set(flow_temp_data.sim_cop[i], j, '');
                                         }
-                                        
+
 
                                     } else {
                                         this.$set(flow_temp_data.sim_cop[i], j, null);
                                     }
+                                    
+
+                                } else {
+                                    this.$set(flow_temp_data.sim_cop[i], j, null);
                                 }
                             }
                         }
                     }
-
-                    this.mean_abs_error = total_error / count;
                 }
+
+                this.mean_abs_error = total_error / count;
             },
             getCopColor: function(cop) {
                 if (cop === null) return '#f8f9fa';

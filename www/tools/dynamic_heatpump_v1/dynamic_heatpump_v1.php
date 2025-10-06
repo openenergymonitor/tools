@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/fontawesome.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/solid.min.css">
 <script src="<?php echo $path_lib;?>ecodan.js?v=1"></script>
-<script src="<?php echo $path_lib;?>vaillant5.js?v=10"></script>
+<script src="<?php echo $path_lib;?>vaillant.js?v=11"></script>
 <div class="container" style="max-width:1200px" id="app">
     <div class="row">
         <div class="col">
@@ -371,7 +371,7 @@
                         <div class="col">
                             <label class="form-label">Heat pump capacity</label>
                             <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="heatpump.capacity"
+                                <input type="text" class="form-control" v-model.number="heatpump.capacity" :disabled="heatpump.cop_model=='vaillant5' || heatpump.cop_model == 'vaillant12'"
                                     @change="simulate" />
                                 <span class="input-group-text">W</span>
                             </div>
@@ -436,12 +436,13 @@
                                     <option value="carnot_fixed">Carnot (fixed offsets flow+2, outside-6)</option>
                                     <option value="carnot_variable">Carnot (variable offsets proportional to heat)</option>
                                     <option value="ecodan">Ecodan datasheet</option>
-                                    <option value="vaillant5">Vaillant datasheet</option>           
+                                    <option value="vaillant5">Vaillant datasheet 5kW</option>
+                                    <option value="vaillant12">Vaillant datasheet 12kW</option>
                                 </select>
                             </div>
                         </dic>
 
-                        <div class="col" v-if="heatpump.cop_model!='ecodan' && heatpump.cop_model!='vaillant5'">
+                        <div class="col" v-if="heatpump.cop_model!='ecodan' && heatpump.cop_model!='vaillant5' && heatpump.cop_model!='vaillant12'">
                             <label class="form-label">Practical COP factor</label>
                             <div class="input-group mb-3">
                                 <input type="text" class="form-control" v-model.number="heatpump.prc_carnot"

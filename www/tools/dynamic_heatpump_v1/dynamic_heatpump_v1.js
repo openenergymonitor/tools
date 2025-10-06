@@ -107,6 +107,15 @@ var app = new Vue({
         simulate: function () {
             console.log("Simulating");
 
+            // if vaillant cop model selected, set capacity
+            if (app.heatpump.cop_model == "vaillant5") {
+                // top end max capacity 5kW model
+                app.heatpump.capacity = 8500;
+            } else if (app.heatpump.cop_model == "vaillant12") {
+                // top end max capacity 12kW model
+                app.heatpump.capacity = 17900;
+            }
+
             // These only need to be calculated once
             // Calculate heat loss coefficient
 
@@ -606,7 +615,9 @@ function sim(conf) {
         } else if (app.heatpump.cop_model == "ecodan") {
             PracticalCOP = get_ecodan_cop(flow_temperature, outside, heatpump_heat / app.heatpump.capacity);
         } else if (app.heatpump.cop_model == "vaillant5") {
-            PracticalCOP = getCOP(vaillant_data, flow_temperature, outside, app.heatpump.capacity*0.001*(heatpump_heat / app.heatpump.capacity));
+            PracticalCOP = getCOP(vaillant_data['5kW'], flow_temperature, outside, 0.001*heatpump_heat);
+        } else if (app.heatpump.cop_model == "vaillant12") {
+            PracticalCOP = getCOP(vaillant_data['12kW'], flow_temperature, outside, 0.001*heatpump_heat);
         }
 
         if (PracticalCOP > 0) {
