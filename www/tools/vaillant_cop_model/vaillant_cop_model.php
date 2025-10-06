@@ -321,9 +321,16 @@
                 const { T_flow, T_ambient, output } = inputs;
                 const { refrigerant, max_output, condensing_scale, evaporating_scale, superheat_K, subcooling_K } = params;
 
+                // The following model has been generated via a number of cross-checking AI prompts across a number 
+                // of different services Gemini, Claude, GROK. Expert review is recommended to ensure accuracy.
+                // Especially: isentropic efficiency model, pressure drops, HX effectiveness assumptions.
+                // Overall accuracy seems reasonable when compared against the Vaillant datasheet.
+                // However performance is not significantly better than a simpler Carnot-based model.
+
                 const load_fraction = output / max_output;
-                let condensing_offset = load_fraction * condensing_scale;
-                let evaporating_offset = load_fraction * evaporating_scale;
+                // increase sub-linearly due to HX pinch points, though 0.9 is perhaps too high
+                let condensing_offset = condensing_scale * Math.pow(load_fraction, 0.9);
+                let evaporating_offset = evaporating_scale * Math.pow(load_fraction, 0.9);
 
                 // --- 1. Define Cycle Temperatures (K) ---
                 const T_cond_sat_K = (T_flow + condensing_offset) + 273.15;
@@ -342,9 +349,18 @@
                 let h1 = CoolProp.PropsSI('H', 'P', p_evaporating, 'T', T1_K, refrigerant);
                 let s1 = CoolProp.PropsSI('S', 'P', p_evaporating, 'T', T1_K, refrigerant);
 
+                // Pressure drop across the condenser
+                const delta_P_cond = 20000 * Math.pow(load_fraction, 2); // Pa, quadratic with flow
+                const p_cond_exit = p_condensing - delta_P_cond;
+
+                // Estimate actual condenser outlet temperature with effectiveness
+                let condenser_effectiveness = 0.85; // doesnt seem to make a huge difference 0.8-0.9
+                const T_water_out = T_flow + 273.15;
+                const T3_actual_K = T_cond_sat_K - condenser_effectiveness * (T_cond_sat_K - T_water_out);
+
                 // State 3 (Condenser Outlet) - Saturated Liquid + Subcooling
                 const T3_K = T_cond_sat_K - subcooling_K;
-                let h3 = CoolProp.PropsSI('H', 'P', p_condensing, 'T', T3_K, refrigerant);
+                let h3 = CoolProp.PropsSI('H', 'P', p_cond_exit, 'T', T3_actual_K, refrigerant);
 
                 // State 4 (Evaporator Inlet) - Isenthalpic Expansion
                 let h4 = h3;
