@@ -25,9 +25,8 @@
                 <button class="btn btn-secondary btn-sm" @click="zoom_in">+</button>
                 <button class="btn btn-secondary btn-sm" @click="zoom_out">-</button>
 
-                <button class="btn btn-secondary btn-sm" @click="pan_left">
-                    << /button>
-                        <button class="btn btn-secondary btn-sm" @click="pan_right">></button>
+                <button class="btn btn-secondary btn-sm" @click="pan_left"><</button>
+                <button class="btn btn-secondary btn-sm" @click="pan_right">></button>
             </div>
 
             <!-- Select form: Demand, Generation, Battery store, LDES -->
@@ -324,4 +323,4 @@
 
 </div>
 
-<script src="<?php echo $path; ?>ukgridsim.js?v=1"></script>
+<script src="<?php echo $path; ?>ukgridsim.js?v=2"></script>
