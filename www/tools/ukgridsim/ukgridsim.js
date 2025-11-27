@@ -24,6 +24,8 @@ var app = new Vue({
     el: '#app',
     data: {
 
+        loading: true,
+
         // demand
         standard_demand_TWh: 0,
         heatpump_households: 30,
@@ -72,6 +74,7 @@ var app = new Vue({
         },
 
         store2: {
+            enabled: false,
             charge_max: 30.0,
             charge_efficiency: 80,
             discharge_max: 70,
@@ -282,50 +285,52 @@ var app = new Vue({
                 let store2_discharge = 0;
 
                 // Store 2 (hydrogen, e-methanol LDES)
-                if (balance > 0) {
-                    // Charge store
-                    let charge = balance;
-                    if (charge > app.store2.charge_max) {
-                        charge = app.store2.charge_max;
-                    }
-                    let charge_after_loss = charge * store2_charge_efficiency;
-                    let soc_inc = charge_after_loss * power_to_GWh;
-                    // Limit charge to store capacity
-                    if (store2_soc + soc_inc > app.store2.capacity) {
-                        soc_inc = app.store2.capacity - store2_soc;
-                        charge_after_loss = soc_inc * (1 / power_to_GWh);
-                        charge = charge_after_loss / store2_charge_efficiency;
-                    }
-                    if (charge > store2_max_charge) {
-                        store2_max_charge = charge;
-                    }
-                    store2_soc += soc_inc;
-                    balance -= charge;
-                    store2_charge_GWh += charge * power_to_GWh;
-                    store2_charge = charge;
-                } else {
-                    // Discharge store
-                    let discharge = -balance;
-                    if (discharge > app.store2.discharge_max) {
-                        discharge = app.store2.discharge_max;
-                    }
-                    // peak_shaving_balance -= (-balance - app.store2.discharge_max) * power_to_GWh;
+                if (app.store2.enabled) {
+                    if (balance > 0) {
+                        // Charge store
+                        let charge = balance;
+                        if (charge > app.store2.charge_max) {
+                            charge = app.store2.charge_max;
+                        }
+                        let charge_after_loss = charge * store2_charge_efficiency;
+                        let soc_inc = charge_after_loss * power_to_GWh;
+                        // Limit charge to store capacity
+                        if (store2_soc + soc_inc > app.store2.capacity) {
+                            soc_inc = app.store2.capacity - store2_soc;
+                            charge_after_loss = soc_inc * (1 / power_to_GWh);
+                            charge = charge_after_loss / store2_charge_efficiency;
+                        }
+                        if (charge > store2_max_charge) {
+                            store2_max_charge = charge;
+                        }
+                        store2_soc += soc_inc;
+                        balance -= charge;
+                        store2_charge_GWh += charge * power_to_GWh;
+                        store2_charge = charge;
+                    } else {
+                        // Discharge store
+                        let discharge = -balance;
+                        if (discharge > app.store2.discharge_max) {
+                            discharge = app.store2.discharge_max;
+                        }
+                        // peak_shaving_balance -= (-balance - app.store2.discharge_max) * power_to_GWh;
 
-                    let discharge_before_loss = discharge / store2_discharge_efficiency;
-                    let soc_dec = discharge_before_loss * power_to_GWh;
-                    // Limit discharge to store SOC
-                    if (store2_soc - soc_dec < 0) {
-                        soc_dec = store2_soc;
-                        discharge_before_loss = soc_dec * (1 / power_to_GWh);
-                        discharge = discharge_before_loss * store2_discharge_efficiency;
+                        let discharge_before_loss = discharge / store2_discharge_efficiency;
+                        let soc_dec = discharge_before_loss * power_to_GWh;
+                        // Limit discharge to store SOC
+                        if (store2_soc - soc_dec < 0) {
+                            soc_dec = store2_soc;
+                            discharge_before_loss = soc_dec * (1 / power_to_GWh);
+                            discharge = discharge_before_loss * store2_discharge_efficiency;
+                        }
+                        if (discharge > store2_max_discharge) {
+                            store2_max_discharge = discharge;
+                        }
+                        store2_soc -= soc_dec;
+                        balance += discharge;
+                        store2_discharge_GWh += discharge * power_to_GWh;
+                        store2_discharge = discharge;
                     }
-                    if (discharge > store2_max_discharge) {
-                        store2_max_discharge = discharge;
-                    }
-                    store2_soc -= soc_dec;
-                    balance += discharge;
-                    store2_discharge_GWh += discharge * power_to_GWh;
-                    store2_discharge = discharge;
                 }
 
                 // Record max and min store level
@@ -457,52 +462,69 @@ var app = new Vue({
 
             app.view = "power";
 
-            var plot_series = [
-                {
+            var plot_series = [];
+
+            if (app.store2.enabled) {
+                plot_series.push({
                     data: timeseries(demand_plus_store_charge_data),
                     label: "Store 2 charge",
                     color: "#000",
                     lines: { show: true, fill: 0.8, lineWidth: 0 },
                     stack: false
-                }, {
-                    data: timeseries(demand_data),
-                    label: "Demand", // orange red
-                    color: "#ff4500",
-                    lines: { show: true, fill: 1.0, lineWidth: 0 },
-                    stack: false
-                }, {
-                    data: timeseries(trad_demand_data),
-                    label: "Trad demand",
-                    color: "#0699fa",
-                    lines: { show: true, fill: 1.0, lineWidth: 0 },
-                    stack: false
-                }, {
-                    data: timeseries(nuclear_data),
-                    label: "Nuclear",
-                    color: "#ff69b4",
-                    lines: { show: true, fill: 0.8, lineWidth: 0 },
-                    stack: true
-                }, {
-                    data: timeseries(wind_data),
-                    label: "Wind",
-                    color: "green",
-                    lines: { show: true, fill: 0.8, lineWidth: 0 },
-                    stack: true
-                }, {
-                    data: timeseries(solar_data),
-                    label: "Solar",
-                    color: "#dccc1f",
-                    lines: { show: true, fill: 0.8, lineWidth: 0 },
-                    stack: true
-                }, {
+                });
+            }
+
+
+            plot_series.push({
+                data: timeseries(demand_data),
+                label: "Demand", // orange red
+                color: "#ff4500",
+                lines: { show: true, fill: 1.0, lineWidth: 0 },
+                stack: false
+            });
+
+            plot_series.push({
+                data: timeseries(trad_demand_data),
+                label: "Trad demand",
+                color: "#0699fa",
+                lines: { show: true, fill: 1.0, lineWidth: 0 },
+                stack: false
+            });
+            
+            plot_series.push({
+                data: timeseries(nuclear_data),
+                label: "Nuclear",
+                color: "#ff69b4",
+                lines: { show: true, fill: 0.8, lineWidth: 0 },
+                stack: true
+            });
+            
+            plot_series.push({
+                data: timeseries(wind_data),
+                label: "Wind",
+                color: "green",
+                lines: { show: true, fill: 0.8, lineWidth: 0 },
+                stack: true
+            });
+            
+            plot_series.push({
+                data: timeseries(solar_data),
+                label: "Solar",
+                color: "#dccc1f",
+                lines: { show: true, fill: 0.8, lineWidth: 0 },
+                stack: true
+            });
+
+            if (app.store2.enabled) {
+                plot_series.push({
                     data: timeseries(store2_discharge_data),
                     label: "Store 2 discharge",
                     // orange
                     color: "#ff8c00",
                     lines: { show: true, fill: 0.3, lineWidth: 0 },
                     stack: true
-                }
-            ];
+                });
+            }
 
             if (app.store1.capacity > 0) {
                 plot_series.push({
@@ -514,7 +536,7 @@ var app = new Vue({
                 });
             }
 
-            if (app.store2.capacity > 0) {
+            if (app.store2.capacity > 0 && app.store2.enabled) {
                 plot_series.push({
                     data: timeseries(store2_soc_data),
                     label: "Store 2",
@@ -573,6 +595,7 @@ var app = new Vue({
     },
     mounted: function () {
         // feeds: demand, wind, solar, heatpump
+        this.loading = true;
         feed.getdata("477241,480172,480862,476422", "2024-06-01T00:00:00Z", "2025-06-01T00:00:00Z", this.interval, 1, function (result) {
             series = result;
 
@@ -582,6 +605,7 @@ var app = new Vue({
 
             app.normalise();
             app.update();
+            app.loading = false;
         });
     }
 });

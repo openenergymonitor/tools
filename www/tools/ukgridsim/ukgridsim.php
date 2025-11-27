@@ -10,6 +10,36 @@
 <script src="<?php echo $path_lib; ?>feed.js?v=1"></script>
 <script src="<?php echo $path_lib; ?>vis.helper.js?v=1"></script>
 
+<style>
+.graph-container {
+    position: relative;
+}
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
+
 <div class="container-fluid" id="app">
     <div class="row" style="background-color: #f0f0f0">
         <div class="col mt-3">
@@ -30,6 +60,7 @@
             </div>
 
             <!-- Select form: Demand, Generation, Battery store, LDES -->
+            <!--
             <div class="btn-group" role="group" aria-label="Select view" style="float:right; margin-right:20px">
                 <input type="radio" class="btn-check" name="btnradio" id="radio-demand" autocomplete="off" checked>
                 <label class="btn btn-outline-primary btn-sm" for="radio-demand">Demand</label>
@@ -42,12 +73,17 @@
 
                 <input type="radio" class="btn-check" name="btnradio" id="radio-store2" autocomplete="off">
                 <label class="btn btn-outline-primary btn-sm" for="radio-store2">LDES</label>
-            </div>
+            </div>-->
 
             <p><b>Power view (GW):</b></p>
 
             <!-- A simple flot graph -->
-            <div id="graph" style="width:100%;height:350px;"></div>
+            <div class="graph-container">
+                <div id="graph" style="width:100%;height:350px;"></div>
+                <div class="loading-overlay" v-show="loading">
+                    <div class="spinner"></div>
+                </div>
+            </div>
         </div>
 
         <div class="col mt-3">
@@ -83,7 +119,7 @@
                     <td>Balance after battery storage</td>
                     <td>{{ balance.after_store1*100 | toFixed(0)}} %</td>
                 </tr>
-                <tr>
+                <tr v-if="store2.enabled">
                     <td>Balance after LDES</td>
                     <td>{{ balance.after_store2*100 | toFixed(3)}} %</td>
                 </tr>
@@ -263,12 +299,12 @@
             </div>
         </div>
         <div class="col-lg-2">
-            <p class="mt-3"><b>Long duration energy store</b></p>
+            <p class="mt-3"><b>Long duration energy store</b> <input type="checkbox" v-model="store2.enabled" @change="update"></p>
             <div class="row">
                 <label class="form-label col-sm-6 col-form-label">Capacity</label>
                 <div class="col-sm-6">
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control" v-model.number="store2.capacity" @change="update">
+                        <input type="text" class="form-control" v-model.number="store2.capacity" @change="update" :disabled="!store2.enabled">
                         <span class="input-group-text">GWh</span>
                     </div>
                 </div>
@@ -277,7 +313,7 @@
                 <label class="form-label col-sm-6 col-form-label">Charge efficiency</label>
                 <div class="col-sm-6">
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control" v-model.number="store2.charge_efficiency" @change="update">
+                        <input type="text" class="form-control" v-model.number="store2.charge_efficiency" @change="update" :disabled="!store2.enabled">
                         <span class="input-group-text">%</span>
                     </div>
                 </div>
@@ -286,7 +322,7 @@
                 <label class="form-label col-sm-6 col-form-label">Discharge efficiency</label>
                 <div class="col-sm-6">
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control" v-model.number="store2.discharge_efficiency" @change="update">
+                        <input type="text" class="form-control" v-model.number="store2.discharge_efficiency" @change="update" :disabled="!store2.enabled">
                         <span class="input-group-text">%</span>
                     </div>
                 </div>
@@ -295,7 +331,7 @@
                 <label class="form-label col-sm-6 col-form-label">Max charge rate</label>
                 <div class="col-sm-6">
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control" v-model.number="store2.charge_max" @change="update">
+                        <input type="text" class="form-control" v-model.number="store2.charge_max" @change="update" :disabled="!store2.enabled">
                         <span class="input-group-text">GW</span>
                     </div>
                 </div>
@@ -304,7 +340,7 @@
                 <label class="form-label col-sm-6 col-form-label">Max discharge rate</label>
                 <div class="col-sm-6">
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control" v-model.number="store2.discharge_max" @change="update">
+                        <input type="text" class="form-control" v-model.number="store2.discharge_max" @change="update" :disabled="!store2.enabled">
                         <span class="input-group-text">GW</span>
                     </div>
                 </div>
@@ -317,10 +353,10 @@
                     </div>
                 </div>
             </div>
-            <p><i>E.g Hydrogen, e-Methanol e-Methane</i></p>
+            <p><i>E.g Hydrogen, e-Methanol e-Methane. (This technology does not yet exist as scale - enable to include)</i></p>
         </div>
     </div>
 
 </div>
 
-<script src="<?php echo $path; ?>ukgridsim.js?v=3"></script>
+<script src="<?php echo $path; ?>ukgridsim.js?v=4"></script>
