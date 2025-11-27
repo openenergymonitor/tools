@@ -26,22 +26,22 @@ var app = new Vue({
 
         // demand
         standard_demand_TWh: 0,
-        heatpump_households: 0,
+        heatpump_households: 30,
 
         // solar generation
-        solar_prc_of_demand: 15,
+        solar_prc_of_demand: 10,
         solar_GWh_per_GWp: 870,
         solar_GWp: 0,
         solar_GWh: 0,
 
         // wind generation
-        wind_prc_of_demand: 95,
+        wind_prc_of_demand: 100,
         wind_cap_factor: 40,
         wind_GWp: 0,
         wind_GWh: 0,
 
         // nuclear generation
-        nuclear_prc_of_demand: 10,
+        nuclear_prc_of_demand: 20,
         nuclear_cap_factor: 90,
         nuclear_GWp: 0,
         nuclear_GWh: 0,
@@ -72,12 +72,12 @@ var app = new Vue({
         },
 
         store2: {
-            charge_max: 20.0,
+            charge_max: 30.0,
             charge_efficiency: 80,
-            discharge_max: 38,
+            discharge_max: 70,
             discharge_efficiency: 50,
-            capacity: 8000,
-            starting_soc: 8000,
+            capacity: 44000,
+            starting_soc: 12000,
             charge_GWh: 0,
             discharge_GWh: 0,
             cycles: 0,
@@ -499,7 +499,7 @@ var app = new Vue({
                     label: "Store 2 discharge",
                     // orange
                     color: "#ff8c00",
-                    lines: { show: true, fill: 0.8, lineWidth: 0 },
+                    lines: { show: true, fill: 0.3, lineWidth: 0 },
                     stack: true
                 }
             ];
@@ -573,7 +573,7 @@ var app = new Vue({
     },
     mounted: function () {
         // feeds: demand, wind, solar, heatpump
-        feed.getdata("477241,480172,480862,476422", "2023-04-01T00:00:00Z", "2024-04-01T00:00:00Z", this.interval, 1, function (result) {
+        feed.getdata("477241,480172,480862,476422", "2024-06-01T00:00:00Z", "2025-06-01T00:00:00Z", this.interval, 1, function (result) {
             series = result;
 
             view.start = series[0].data[0][0];

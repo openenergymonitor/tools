@@ -13,7 +13,7 @@
 <div class="container-fluid" id="app">
     <div class="row" style="background-color: #f0f0f0">
         <div class="col mt-3">
-            <p><b>UK Grid Sim</b> Can you match supply and demand on the UK grid? <i>Real demand and generation data April 2023 to April 2024</i></p>
+            <p><b>UK Grid Sim</b> Can you match supply and demand on the UK grid? <i>Real demand and generation data June 2024 to June 2025</i></p>
         </div>
     </div>
 
@@ -323,4 +323,4 @@
 
 </div>
 
-<script src="<?php echo $path; ?>ukgridsim.js?v=2"></script>
+<script src="<?php echo $path; ?>ukgridsim.js?v=3"></script>
