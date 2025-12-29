@@ -16,10 +16,16 @@ var cosy_examples_schedule = [
     { start: "22:00", set_point: 19, price: 13.23 }
 ];
 
+// Object to hold time series data for plotting
+var series = [];
+
 var app = new Vue({
     el: '#app',
     data: {
-        days: 4,
+        // These are days not included in results, to allow system to stabilise
+        days_pre_sim: 4,
+        // These are days to simulate and include in results
+        days: 30,
         building: {
             heat_loss: 4200,
             internal_gains: 390,
@@ -92,7 +98,6 @@ var app = new Vue({
             flowT_minus_outsideT_weighted: 0
         },
         baseline_enabled: false,
-        refinements: 3,
         max_room_temp: 0,
     },
     methods: {
@@ -144,21 +149,8 @@ var app = new Vue({
             var outside_max_time = time_str_to_hour(app.external.max_time);
             app.external.max_time = hour_to_time_str(outside_max_time);
 
-
-            // With user entered schedule
-            // First runs without recording time series data
-            for (var i = 0; i < (app.refinements-1); i++) {
-                sim({
-                    record_timeseries: false,
-                    outside_min_time: outside_min_time,
-                    outside_max_time: outside_max_time,
-                    schedule: app.schedule
-                });
-            }
-
-            // Record the time series data for the final run
+            // Run simulation
             var result = sim({
-                record_timeseries: true,
                 outside_min_time: outside_min_time,
                 outside_max_time: outside_max_time,
                 schedule: app.schedule
@@ -358,9 +350,7 @@ flow_temperature = room;
 return_temperature = room;
 MWT = room;
 
-app.refinements = 5;
 app.simulate();
-app.refinements = 3;
 
 app.baseline = JSON.parse(JSON.stringify(app.results));
 app.baseline_enabled = false;
@@ -373,14 +363,12 @@ function update_fabric_starting_temperatures() {
 
 function sim(conf) {
 
-    if (conf.record_timeseries) {
-        roomT_data = [];
-        outsideT_data = [];
-        flowT_data = [];
-        returnT_data = [];
-        elec_data = [];
-        heat_data = [];
-    }
+    roomT_data = [];
+    outsideT_data = [];
+    flowT_data = [];
+    returnT_data = [];
+    elec_data = [];
+    heat_data = [];
 
     if (app.control.fixed_compressor_speed>100) app.control.fixed_compressor_speed = 100;
     if (app.control.fixed_compressor_speed<app.heatpump.minimum_modulation) app.control.fixed_compressor_speed = app.heatpump.minimum_modulation;
@@ -400,8 +388,9 @@ function sim(conf) {
     var k3 = 3600000 * app.building.fabric[2].kWhK;
 
     var timestep = 30;
-    var itterations = 3600 * 24 * app.days / timestep;
-    var start_of_last_day = 3600 * 24 * (app.days-1) / timestep;
+    var total_days = app.days + app.days_pre_sim;
+    var itterations = 3600 * 24 * total_days / timestep;
+    var start_index = 3600 * 24 * app.days_pre_sim / timestep;
 
     var elec_kwh = 0;
     var heat_kwh = 0;
@@ -649,14 +638,16 @@ function sim(conf) {
         }
 
         // Populate time series data arrays for plotting
-        if (conf.record_timeseries && i > start_of_last_day) {
-            let timems = time*1000;
-            roomT_data.push([timems, room]);
-            outsideT_data.push([timems, outside]);
-            flowT_data.push([timems, flow_temperature]);
-            returnT_data.push([timems, return_temperature]);
-            elec_data.push([timems, heatpump_elec]);
-            heat_data.push([timems, heatpump_heat]);
+        if (i >= start_index) {
+
+            // we will add timestamps to data at the point the data is plotted
+            // record here as fixed interval timeseries
+            roomT_data.push(room);
+            outsideT_data.push(outside);
+            flowT_data.push(flow_temperature);
+            returnT_data.push(return_temperature);
+            elec_data.push(heatpump_elec);
+            heat_data.push(heatpump_heat);
 
             // Calculate stats
 
@@ -714,13 +705,14 @@ function sim(conf) {
 }
 
 function plot() {
-    var series = [
-        { label: "Heat", data: heat_data, color: 0, yaxis: 3, lines: { show: true, fill: true } },
-        { label: "Elec", data: elec_data, color: 1, yaxis: 3, lines: { show: true, fill: true } },
-        { label: "FlowT", data: flowT_data, color: 2, yaxis: 2, lines: { show: true, fill: false } },
-        { label: "ReturnT", data: returnT_data, color: 3, yaxis: 2, lines: { show: true, fill: false } },
-        { label: "RoomT", data: roomT_data, color: "#000", yaxis: 1, lines: { show: true, fill: false } },
-        { label: "OutsideT", data: outsideT_data, color: "#0000cc", yaxis: 1, lines: { show: true, fill: false } }
+    
+    series = [
+        { label: "Heat", data: timeseries(heat_data), color: 0, yaxis: 3, lines: { show: true, fill: true } },
+        { label: "Elec", data: timeseries(elec_data), color: 1, yaxis: 3, lines: { show: true, fill: true } },
+        { label: "FlowT", data: timeseries(flowT_data), color: 2, yaxis: 2, lines: { show: true, fill: false } },
+        { label: "ReturnT", data: timeseries(returnT_data), color: 3, yaxis: 2, lines: { show: true, fill: false } },
+        { label: "RoomT", data: timeseries(roomT_data), color: "#000", yaxis: 1, lines: { show: true, fill: false } },
+        { label: "OutsideT", data: timeseries(outsideT_data), color: "#0000cc", yaxis: 1, lines: { show: true, fill: false } }
     ];
 
     var options = {
@@ -731,6 +723,19 @@ function plot() {
     };
 
     var plot = $.plot($('#graph'), series, options);
+}
+
+function timeseries(data_array) {
+    var result = [];
+    var timestep = 30; // seconds
+
+    var start_time = 3600 * 24 * app.days_pre_sim / timestep;
+
+    for (var i = 0; i < data_array.length; i++) {
+        var time = start_time + i * timestep * 1000;
+        result.push([time, data_array[i]]);
+    }
+    return result;
 }
 
 var previousPoint = false;
@@ -749,17 +754,17 @@ $('#graph').bind("plothover", function (event, pos, item) {
             // Add time to tooltip
             tooltipstr += new Date(item.datapoint[0]).toISOString().slice(11, 16) + "<br>";
             // Add elec_data
-            tooltipstr += "Elec: " + (elec_data[z][1]).toFixed(0) + "W<br>";
+            tooltipstr += "Elec: " + (series[1].data[z][1]).toFixed(0) + "W<br>";
             // Add heat_data
-            tooltipstr += "Heat: " + (heat_data[z][1]).toFixed(0) + "W<br>";
+            tooltipstr += "Heat: " + (series[0].data[z][1]).toFixed(0) + "W<br>";
             // Add flowT_data
-            tooltipstr += "FlowT: " + (flowT_data[z][1]).toFixed(1) + "°C<br>";
+            tooltipstr += "FlowT: " + (series[2].data[z][1]).toFixed(1) + "°C<br>";
             // Add returnT_data
-            tooltipstr += "ReturnT: " + (returnT_data[z][1]).toFixed(1) + "°C<br>";
+            tooltipstr += "ReturnT: " + (series[3].data[z][1]).toFixed(1) + "°C<br>";
             // Add roomT_data
-            tooltipstr += "RoomT: " + (roomT_data[z][1]).toFixed(1) + "°C<br>";
+            tooltipstr += "RoomT: " + (series[4].data[z][1]).toFixed(1) + "°C<br>";
             // Add outsideT_data
-            tooltipstr += "OutsideT: " + (outsideT_data[z][1]).toFixed(1) + "°C<br>";
+            tooltipstr += "OutsideT: " + (series[5].data[z][1]).toFixed(1) + "°C<br>";
 
             tooltip(item.pageX, item.pageY, tooltipstr, "#fff", "#000");
 
