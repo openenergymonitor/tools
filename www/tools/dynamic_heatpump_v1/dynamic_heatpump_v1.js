@@ -970,18 +970,19 @@ function sim(conf) {
 function plot() {
     
     series = [
-        { label: "Agile Price", data: timeseries(agile_data), color: "#aaa", yaxis: 4, lines: { show: true, fill: false } },
         { label: "Heat", data: timeseries(heat_data), color: 0, yaxis: 3, lines: { show: true, fill: true } },
         { label: "Elec", data: timeseries(elec_data), color: 1, yaxis: 3, lines: { show: true, fill: true } },
         { label: "FlowT", data: timeseries(flowT_data), color: 2, yaxis: 2, lines: { show: true, fill: false } },
         { label: "ReturnT", data: timeseries(returnT_data), color: 3, yaxis: 2, lines: { show: true, fill: false } },
         { label: "RoomT", data: timeseries(roomT_data), color: "#000", yaxis: 1, lines: { show: true, fill: false } },
-        { label: "OutsideT", data: timeseries(outsideT_data), color: "#0000cc", yaxis: 1, lines: { show: true, fill: false } }
+        { label: "OutsideT", data: timeseries(outsideT_data), color: "#0000cc", yaxis: 1, lines: { show: true, fill: false } },
+        { label: "Agile Price", data: timeseries(agile_data), color: "#aaa", yaxis: 4, lines: { show: true, fill: false } }
+
     ];
 
     if (app.mode != "year") {
         // hide agile price in day mode
-        series[0].lines.show = false;
+        series[6].lines.show = false;
     }
 
     var options = {
