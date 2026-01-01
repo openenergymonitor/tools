@@ -1,7 +1,7 @@
-
 var AUTO_ADAPT = 0;
 var WEATHER_COMP_CURVE = 1;
 var FIXED_SPEED = 3;
+var DEGREE_MINUTES_WC = 4;
 
 
 
@@ -19,16 +19,32 @@ var cosy_examples_schedule = [
 // Object to hold time series data for plotting
 var series = [];
 
+// View parameters for plotting
+var view = {
+    start: 0,
+    end: 0
+};
+
+// Initialize degree minutes accumulator before sim() function (around line 430):
+var degree_minutes = 0;
+var last_outside = null;
+
+// Array to hold loaded outside temperature data
+var outside_temperature_data = [];
+var outside_temperature_loaded = false;
+var outside_temperature_start_timestamp = 0;
+
 var app = new Vue({
     el: '#app',
     data: {
         // These are days not included in results, to allow system to stabilise
-        days_pre_sim: 4,
+        days_pre_sim: 0,
         // These are days to simulate and include in results
-        days: 30,
+        days: 365,
         building: {
-            heat_loss: 4200,
+            heat_loss: 3400,
             internal_gains: 390,
+            solar_scale: 1.6,
             fabric: [
                 { proportion: 52, WK: 0, kWhK: 12, T: 16 },
                 { proportion: 28, WK: 0, kWhK: 6, T: 17 },
@@ -40,10 +56,11 @@ var app = new Vue({
             mid: 4,
             swing: 2,
             min_time: "06:00",
-            max_time: "14:00"
+            max_time: "14:00",
+            use_csv: true
         },
         heatpump: {
-            capacity: 7500,
+            capacity: 5000,
             system_water_volume: 120, // Litres
             flow_rate: 12, // Litres per minute
             system_DT: 5,
@@ -53,13 +70,13 @@ var app = new Vue({
             cop_model: "carnot_variable",
             standby: 11,
             pumps: 15,
-            minimum_modulation: 32
+            minimum_modulation: 40
         },
         control: {
             mode: AUTO_ADAPT,
             wc_use_outside_mean: 1,
             
-            Kp: 2500,
+            Kp: 3500,
             Ki: 0.2,
             Kd: 0.0,
 
@@ -68,16 +85,27 @@ var app = new Vue({
             wc_Kd: 0.0,
 
             curve: 1.0,
-            limit_by_roomT: false,
+            limit_by_roomT: true,
             roomT_hysteresis: 0.5,
 
-            fixed_compressor_speed: 100
+            fixed_compressor_speed: 45,
+
+            // Degree minutes control parameters
+            dm_threshold_on: 30,      // Degree minutes to turn on (accumulated deficit)
+            dm_threshold_off: -30,    // Degree minutes to turn off (accumulated excess)
+            dm_decay: 0.95,          // Decay factor for historical accumulation (prevents runaway)
+            
+            // Room influence on weather compensation
+            room_influence: 0.3,      // 0-1: how much room error affects flow temp target
+            anticipation: 1.0,        // Multiplier for predictive adjustment based on outdoor trend
+
+
         },
         schedule: [
-            { start: "00:00", set_point: 17, price: price_cap },
-            { start: "06:00", set_point: 18, price: price_cap },
-            { start: "15:00", set_point: 19, price: price_cap },
-            { start: "22:00", set_point: 17, price: price_cap }
+            { start: "00:00", set_point: 20, price: price_cap },
+            { start: "06:00", set_point: 20, price: price_cap },
+            { start: "15:00", set_point: 20, price: price_cap },
+            { start: "22:00", set_point: 20, price: price_cap }
         ],
         results: {
             elec_kwh: 0,
@@ -104,6 +132,61 @@ var app = new Vue({
         load_octopus_cosy: function () {
             this.schedule = JSON.parse(JSON.stringify(cosy_examples_schedule));
             this.simulate();
+        },
+        load_csv_data: function() {
+            fetch('tools/dynamic_heatpump_v1/llanberis2024.csv')
+                .then(response => response.text())
+                .then(csv => {
+                    this.parse_csv(csv);
+
+                    app.simulate();
+                })
+                .catch(error => {
+                    console.error('Error loading CSV:', error);
+                    alert('Failed to load outside_temperature.csv');
+                });
+        },
+        parse_csv: function(csv) {
+            const lines = csv.split('\n');
+            outside_temperature_data = [];
+            solar_pv_data = []; // used for solar gains
+
+            console.log(`Parsing CSV with ${lines.length} lines`);
+            
+            // Skip header row
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line === '') continue;
+                
+                const columns = line.split(',');
+                if (columns.length >= 3) {
+                    const temperature = parseFloat(columns[1]);
+                    const humidity = parseFloat(columns[2]);
+                    const solar = parseFloat(columns[3]);
+                    const agile = parseFloat(columns[4]);
+                    
+                    if (!isNaN(temperature)) {
+                        outside_temperature_data.push(temperature*1);
+                    }
+
+                    if (!isNaN(solar)) {
+                        solar_pv_data.push(solar*1);
+                    }
+                }
+            }
+            
+            if (outside_temperature_data.length > 0) {
+                outside_temperature_loaded = true;
+                // Set start timestamp to Jan 1st 00:00 of current year
+                const currentYear = new Date().getFullYear();
+                outside_temperature_start_timestamp = new Date(currentYear, 0, 1, 0, 0, 0).getTime() / 1000;
+                
+                console.log(`Loaded ${outside_temperature_data.length} half hourly temperature readings`);
+                // alert(`Successfully loaded ${outside_temperature_data.length} hourly temperature readings from outside_temperature.csv`);
+                this.simulate();
+            } else {
+                alert('No valid data found in CSV file');
+            }
         },
         save_baseline: function () {
             this.baseline = JSON.parse(JSON.stringify(this.results));
@@ -182,30 +265,83 @@ var app = new Vue({
             this.schedule.splice(index, 1);
             this.simulate();
         },
+
         zoom_out: function () {
-            view.zoomout();
-            view.calc_interval(2400, 30, 1);
+            var range = view.end - view.start;
+            var center = (view.start + view.end) / 2;
+            
+            // Zoom out by 2x
+            var new_range = range * 2;
+            view.start = center - new_range / 2;
+            view.end = center + new_range / 2;
+            
+            // Clamp to simulation bounds (0 to total simulation time)
+            var max_time = app.days * 24 * 3600;
+            if (view.start < 0) view.start = 0;
+            if (view.end > max_time) view.end = max_time;
+            
+            view_calc_interval();
             plot();
         },
         zoom_in: function () {
-            view.zoomin();
-            view.calc_interval(2400, 30, 1);
+            var range = view.end - view.start;
+            var center = (view.start + view.end) / 2;
+            
+            // Zoom in by 2x
+            var new_range = range / 2;
+            view.start = center - new_range / 2;
+            view.end = center + new_range / 2;
+            
+            // Minimum range of 1 hour
+            if (view.end - view.start < 3600) {
+                view.start = center - 1800;
+                view.end = center + 1800;
+            }
+            
+            view_calc_interval();
             plot();
         },
         pan_left: function () {
-            view.panleft();
+            var range = view.end - view.start;
+            var shift = range * 0.25; // Pan by 25% of current view
+            
+            view.start -= shift;
+            view.end -= shift;
+            
+            // Clamp to simulation bounds
+            if (view.start < 0) {
+                view.end = view.end - view.start;
+                view.start = 0;
+            }
+            
+            view_calc_interval();
             plot();
         },
         pan_right: function () {
-            view.panright();
+            var range = view.end - view.start;
+            var shift = range * 0.25; // Pan by 25% of current view
+            var max_time = app.days * 24 * 3600;
+            
+            view.start += shift;
+            view.end += shift;
+            
+            // Clamp to simulation bounds
+            if (view.end > max_time) {
+                view.start = max_time - range;
+                view.end = max_time;
+            }
+            
+            view_calc_interval();
             plot();
         },
         reset: function () {
-            view.start = outside_data_start;
-            view.end = outside_data_end;
-            view.calc_interval(2400, 30, 1);
+            // Reset to full simulation view
+            view.start = 0;
+            view.end = app.days * 24 * 3600;
+            view_calc_interval();
             plot();
         },
+
         export_config: function () {
             // Create exportable config object with all user-settable parameters
             var config = {
@@ -345,12 +481,15 @@ heat_data = [];
 ITerm = 0
 error = 0
 
+
 update_fabric_starting_temperatures();
 flow_temperature = room;
 return_temperature = room;
 MWT = room;
 
-app.simulate();
+app.load_csv_data();
+
+// app.simulate();
 
 app.baseline = JSON.parse(JSON.stringify(app.results));
 app.baseline_enabled = false;
@@ -361,14 +500,37 @@ function update_fabric_starting_temperatures() {
     room = app.building.fabric[2].T;
 }
 
+function get_outside_temperature_from_csv(time_seconds) {
+    if (!outside_temperature_loaded || outside_temperature_data.length === 0) {
+        return null;
+    }
+    
+    // Calculate hours since start of year
+    const hours_since_start = Math.floor(time_seconds / 1800);
+    
+    // Get index in hourly array (wrapping around if beyond one year)
+    const index = hours_since_start % outside_temperature_data.length;
+    
+    if (index >= 0 && index < outside_temperature_data.length) {
+        return {
+            temperature: outside_temperature_data[index],
+            solar: solar_pv_data[index]
+        }
+    }
+    
+    return null;
+}
+
 function sim(conf) {
 
-    roomT_data = [];
-    outsideT_data = [];
-    flowT_data = [];
-    returnT_data = [];
-    elec_data = [];
-    heat_data = [];
+    roomT_data = new Float32Array(1051200);
+    outsideT_data = new Float32Array(1051200);
+    flowT_data =  new Float32Array(1051200);
+    returnT_data = new Float32Array(1051200);
+    elec_data = new Float32Array(1051200);
+    heat_data = new Float32Array(1051200);
+    
+    var heatpump_off_duration = 0;
 
     if (app.control.fixed_compressor_speed>100) app.control.fixed_compressor_speed = 100;
     if (app.control.fixed_compressor_speed<app.heatpump.minimum_modulation) app.control.fixed_compressor_speed = app.heatpump.minimum_modulation;
@@ -391,6 +553,14 @@ function sim(conf) {
     var total_days = app.days + app.days_pre_sim;
     var itterations = 3600 * 24 * total_days / timestep;
     var start_index = 3600 * 24 * app.days_pre_sim / timestep;
+
+    // Set view if not already set
+    if (view.start == 0 && view.end == 0) {
+        view.start = 0;
+        view.end = itterations * timestep;
+        view_calc_interval();
+    }
+
 
     var elec_kwh = 0;
     var heat_kwh = 0;
@@ -428,22 +598,43 @@ function sim(conf) {
     let kwh_elec_running = 0;
     let kwh_heat_running = 0;
 
+    let outside = 0;
+    let solar = 0;
+
     for (var i = 0; i < itterations; i++) {
         let time = i * timestep;
         let hour = time / 3600;
         hour = hour % 24;
         
-        // Outside temperature model
-        if (hour>=outside_min_time && hour<outside_max_time) {
-            A = (hour-outside_min_time-(6*ramp_up/12)) / (ramp_up*2)
+        
+        if (app.external.use_csv && outside_temperature_loaded) {
+            // Use CSV data - time is in seconds from start of simulation
+            let dataset = get_outside_temperature_from_csv(time);
+            let csv_temp = dataset ? dataset.temperature : null;
+            let csv_solar = dataset ? dataset.solar : 0;
+            
+            if (csv_temp !== null) {
+                outside = csv_temp;
+            }
+
+            if (csv_solar !== null) {
+                solar = csv_solar;
+                if (solar < 0) solar = 0; // Ensure no negative solar gains
+            }
         } else {
-            let hour_mod = hour;
-            if (hour<outside_min_time) hour_mod = 24 + hour;
-            A = (hour_mod-outside_max_time+(6*ramp_down/12)) / (ramp_down*2)
+            // Use synthetic temperature model
+            if (hour>=outside_min_time && hour<outside_max_time) {
+                A = (hour-outside_min_time-(6*ramp_up/12)) / (ramp_up*2)
+            } else {
+                let hour_mod = hour;
+                if (hour<outside_min_time) hour_mod = 24 + hour;
+                A = (hour_mod-outside_max_time+(6*ramp_down/12)) / (ramp_down*2)
+            }
+            radians = 2 * Math.PI * A
+            outside = app.external.mid + Math.sin(radians) * app.external.swing * 0.5;
         }
-        radians = 2 * Math.PI * A
-        outside = app.external.mid + Math.sin(radians) * app.external.swing * 0.5;   
-    
+
+        // if (outside > 19.9) outside = 19.9;
 
         last_setpoint = setpoint;
 
@@ -475,6 +666,9 @@ function sim(conf) {
             DTerm = delta_error / timestep
 
             heatpump_heat = PTerm + (app.control.Ki * ITerm) + (app.control.Kd * DTerm)
+            if (heatpump_heat == NaN) heatpump_heat = 0;
+            // if infinite, set to zero
+            if (!isFinite(heatpump_heat)) heatpump_heat = 0;
             
         } else if (app.control.mode==WEATHER_COMP_CURVE) {
             
@@ -517,6 +711,87 @@ function sim(conf) {
                 heatpump_heat = 0;
             }
 
+        } else if (app.control.mode==DEGREE_MINUTES_WC) {
+            // Hybrid: Degree Minutes Cycling with Room-Influenced Weather Compensation
+            
+            // 1. Calculate base flow temperature target using weather compensation
+            if (app.control.wc_use_outside_mean) {
+                used_outside = app.external.mid
+            } else {
+                used_outside = outside 
+            }
+            
+            let base_flowT_target = setpoint + 2.55 * Math.pow(app.control.curve*(setpoint - used_outside), 0.78);
+            
+            // 2. Calculate room temperature error and add room influence
+            let room_error = setpoint - room;
+            let room_adjustment = room_error * app.control.room_influence * 3.0; // Scale factor for effect
+            
+            // 3. Add anticipation based on outdoor temperature trend
+            let outdoor_trend = 0;
+            if (last_outside !== null) {
+                outdoor_trend = (last_outside - outside) / (timestep / 3600); // degrees per hour
+            }
+            last_outside = outside;
+            
+            // If getting colder, increase flow temp target; if warming, decrease
+            let anticipation_adjustment = outdoor_trend * app.control.anticipation * 0.5;
+            
+            // 4. Combined flow temperature target
+            flowT_target = base_flowT_target + room_adjustment + anticipation_adjustment;
+            
+            // Clamp flow temp to reasonable bounds
+            if (flowT_target < setpoint) flowT_target = setpoint;
+            if (flowT_target > 55) flowT_target = 55;
+            
+            // 5. Degree minutes accumulation
+            // Accumulate the deficit/excess (in degree-minutes)
+            degree_minutes += room_error * (timestep / 60);
+            
+            // Apply decay to prevent infinite accumulation
+            degree_minutes *= app.control.dm_decay;
+            
+            // Clamp degree minutes to prevent extreme values
+            if (degree_minutes > 200) degree_minutes = 200;
+            if (degree_minutes < -200) degree_minutes = -200;
+            
+            // 6. Cycling control based on degree minutes
+            if (heatpump_state == 0) {
+                // Heat pump is off - check if we should turn on
+                if (degree_minutes > app.control.dm_threshold_on) {
+                    heatpump_state = 1;
+                }
+            } else {
+                // Heat pump is on - check if we should turn off
+                if (degree_minutes < app.control.dm_threshold_off) {
+                    heatpump_state = 0;
+                }
+            }
+            
+            // 7. Calculate heat output using PI control to track flow temp target
+            if (heatpump_state == 1) {
+                last_error = error;
+                error = flowT_target - flow_temperature;
+                delta_error = error - last_error;
+                
+                PTerm = app.control.wc_Kp * error;
+                ITerm += error * timestep;
+                DTerm = delta_error / timestep;
+                
+                heatpump_heat = PTerm + (app.control.wc_Ki * ITerm) + (app.control.wc_Kd * DTerm);
+                
+                // Ensure minimum modulation when on
+                let min_heat = app.heatpump.capacity * app.heatpump.minimum_modulation * 0.01;
+                if (heatpump_heat < min_heat && heatpump_heat > 0) {
+                    heatpump_heat = min_heat;
+                }
+            } else {
+                heatpump_heat = 0;
+                // Reset integral term when off to prevent windup
+                ITerm = 0;
+            }
+            
+
         } else if (app.control.mode==FIXED_SPEED) {
             heatpump_heat = app.heatpump.capacity;
 
@@ -546,21 +821,39 @@ function sim(conf) {
         }
         
         // Minimum modulation cycling control
-        
-        // if heat pump is off and demand for heat is more than minimum modulation turn heat pump on
-        if (heatpump_state==0 && heatpump_heat>=(app.heatpump.capacity*app.heatpump.minimum_modulation*0.01) && MWT<(MWT_off-3)) {
-            heatpump_state = 1;
-        }
-            
-        // If we are below minimum modulation turn heat pump off
-        if (heatpump_heat<(app.heatpump.capacity*app.heatpump.minimum_modulation*0.01) && heatpump_state==1) {
-            MWT_off = MWT;
-            heatpump_state = 0;
+        if (app.control.mode != DEGREE_MINUTES_WC) {
+
+            // if heat pump is off and demand for heat is more than minimum modulation turn heat pump on
+            if (heatpump_state==0 && heatpump_heat>=(app.heatpump.capacity*app.heatpump.minimum_modulation*0.01) && MWT<(MWT_off-3)) {
+                heatpump_state = 1;
+            }
+                
+            // If we are below minimum modulation turn heat pump off
+            if (heatpump_heat<(app.heatpump.capacity*app.heatpump.minimum_modulation*0.01) && heatpump_state==1) {
+                MWT_off = MWT;
+                heatpump_state = 0;
+            }
+
+            // Set heat pump heat to zero if state is off
+            if (heatpump_state==0) {
+                heatpump_heat = 0;
+            }
+
         }
 
-        // Set heat pump heat to zero if state is off
-        if (heatpump_state==0) {
+        if (outside>15) {
+            heatpump_state = 0;
             heatpump_heat = 0;
+        }
+
+        // clear itrem if heat pump has been off for more than 12 hours
+        if (heatpump_state==0) {
+            heatpump_off_duration += timestep;
+            if (heatpump_off_duration > 43200) { // 12 hours in seconds
+                ITerm = 0;
+            }
+        } else {
+            heatpump_off_duration = 0;
         }
 
         // Implementation includes system volume
@@ -577,6 +870,7 @@ function sim(conf) {
 
         // 2. Calculate radiator output based on Room temp and MWT
         Delta_T = MWT - room;
+        if (Delta_T < 0) Delta_T = 0;
         radiator_heat = app.heatpump.radiatorRatedOutput * Math.pow(Delta_T / app.heatpump.radiatorRatedDT, 1.3);
 
         // 3. Subtract this heat output from MWT
@@ -621,10 +915,8 @@ function sim(conf) {
         }
         heatpump_elec += app.heatpump.standby;
 
-        // Building fabric model
-
         // 1. Calculate heat fluxes
-        h3 = (app.building.internal_gains + radiator_heat) - (u3 * (room - t2));
+        h3 = (app.building.internal_gains + radiator_heat + solar*app.building.solar_scale) - (u3 * (room - t2));
         h2 = u3 * (room - t2) - u2 * (t2 - t1);
         h1 = u2 * (t2 - t1) - u1 * (t1 - outside);
         
@@ -642,12 +934,20 @@ function sim(conf) {
 
             // we will add timestamps to data at the point the data is plotted
             // record here as fixed interval timeseries
-            roomT_data.push(room);
-            outsideT_data.push(outside);
-            flowT_data.push(flow_temperature);
-            returnT_data.push(return_temperature);
-            elec_data.push(heatpump_elec);
-            heat_data.push(heatpump_heat);
+
+            if (room == NaN) return;
+            if (outside == NaN) return;
+            if (flow_temperature == NaN) return;
+            if (return_temperature == NaN) return;
+            if (heatpump_elec == NaN) return;
+            if (heatpump_heat == NaN) return;
+
+            roomT_data[i] = room;
+            outsideT_data[i] = outside;
+            flowT_data[i] = flow_temperature;
+            returnT_data[i] = return_temperature
+            elec_data[i] = heatpump_elec;
+            heat_data[i] = heatpump_heat;
 
             // Calculate stats
 
@@ -717,24 +1017,65 @@ function plot() {
 
     var options = {
         grid: { show: true, hoverable: true },
-        xaxis: { mode: 'time' },
+        xaxis: { 
+            mode: 'time',
+            min: view.start*1000,
+            max: view.end*1000
+        },
         yaxes: [{}, { min: 1.5 }],
-        selection: { mode: "xy" }
+        selection: { mode: "x" }
     };
 
     var plot = $.plot($('#graph'), series, options);
 }
 
+function view_calc_interval() {
+    var range_seconds = view.end - view.start;
+    
+    // Target ~6000-9000 data points on screen for optimal performance
+    var ideal_interval = range_seconds / 6000;
+    
+    // Available downsample intervals (in seconds)
+    var intervals = [3600, 1800, 900, 600, 300, 60, 30];
+    
+    // Select the smallest interval that meets or exceeds the ideal
+    view.interval = intervals.find(function(interval) {
+        return ideal_interval >= interval;
+    }) || 30;
+}
+
 function timeseries(data_array) {
     var result = [];
     var timestep = 30; // seconds
-
     var start_time = 3600 * 24 * app.days_pre_sim / timestep;
 
-    for (var i = 0; i < data_array.length; i++) {
+    // Calculate how many original data points fit in each downsampled interval
+    var points_per_interval = Math.floor(view.interval / timestep);
+    
+    // Limit to view range
+    var view_start_index = Math.floor(view.start / timestep);
+    var view_end_index = Math.ceil(view.end / timestep);
+
+    // Clamp to data array bounds
+    if (view_start_index < 0) view_start_index = 0;
+    if (view_end_index > data_array.length) view_end_index = data_array.length;
+
+    // Group and average data
+    for (var i = view_start_index; i < view_end_index; i += points_per_interval) {
+        var sum = 0;
+        var count = 0;
+        
+        // Average all points in this interval
+        for (var j = 0; j < points_per_interval && (i + j) < data_array.length; j++) {
+            sum += data_array[i + j];
+            count++;
+        }
+        
+        var avg = count > 0 ? sum / count : 0;
         var time = start_time + i * timestep * 1000;
-        result.push([time, data_array[i]]);
+        result.push([time, avg]);
     }
+    
     return result;
 }
 
@@ -770,6 +1111,25 @@ $('#graph').bind("plothover", function (event, pos, item) {
 
         }
     } else $("#tooltip").remove();
+});
+
+// plot selection to zoom
+$('#graph').bind("plotselected", function (event, ranges) {
+    // Zooming
+    view.start = ranges.xaxis.from*0.001;
+    view.end = ranges.xaxis.to*0.001;
+
+    // round to nearest hour
+    view.start = Math.floor(view.start / 3600) * 3600;
+    view.end = Math.ceil(view.end / 3600) * 3600;
+
+    // if view range is less than 1 hour, set to 1 hour
+    if (view.end - view.start < 3600) {
+        view.end = view.start + 3600;
+    }
+
+    view_calc_interval();
+    plot();
 });
 
 function tooltip(x, y, contents, bgColour, borderColour = "rgb(255, 221, 221)") {

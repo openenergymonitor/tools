@@ -4,6 +4,7 @@
 <script src="https://code.jquery.com/jquery-3.6.3.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/flot/0.8.3/jquery.flot.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/flot/0.8.3/jquery.flot.time.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/flot/0.8.3/jquery.flot.selection.min.js"></script>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/fontawesome.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/solid.min.css">
@@ -17,7 +18,7 @@
             <p>Explore continuous vs intermittent heating, temperature set-backs and schedules.</p>
             <div class="alert alert-warning"><i class="fa-solid fa-person-digging"></i> Please help improve this <b>open source</b> heat pump simulator, see source code below.</div>
 
-            <!--
+            
             <div class="btn-group" role="group" style="width: 250px; float:right">
                 <button type="button" class="btn btn-outline-secondary" @click="zoom_in">+</button>
                 <button type="button" class="btn btn-outline-secondary" @click="zoom_out">-</button>
@@ -25,7 +26,7 @@
                 <button type="button" class="btn btn-outline-secondary" @click="pan_right">></button>
                 <button type="button" class="btn btn-outline-secondary" @click="reset">RESET</button>
             </div>
-            -->
+            
         </div>
     </div>
 
@@ -515,6 +516,15 @@
                         <input type="text" class="form-control" v-model.number="building.internal_gains" @change="simulate" />
                         <span class="input-group-text">W</span>
                     </div>
+
+                    <p><b>Solar gains:</b></p>
+                    <p>Scale PV output</p>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" v-model.number="building.solar_scale" @change="simulate" />
+                        <span class="input-group-text">x</span>
+                    </div>
+
+
                 </div>
             </div>
             <!--
