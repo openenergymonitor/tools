@@ -423,7 +423,12 @@ var app = new Vue({
                     // Validate that the config has the expected structure
                     if (this.validate_config(config)) {
                         // Apply the imported configuration
-                        if (config.days !== undefined) this.days = config.days;
+                        if (config.days !== undefined) {
+                            if (config.days == 4) {
+                                config.days = 1;
+                            }
+                            this.days = config.days;
+                        }
                         if (config.building) {
                             Object.assign(this.building, config.building);
                         }
