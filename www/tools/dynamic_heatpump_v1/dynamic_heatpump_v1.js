@@ -39,7 +39,7 @@ var app = new Vue({
     data: {
         mode: "day",
         // These are days not included in results, to allow system to stabilise
-        days_pre_sim: 0,
+        days_pre_sim: 5,
         // These are days to simulate and include in results
         days: 1,
         building: {
@@ -239,11 +239,25 @@ var app = new Vue({
             var outside_max_time = time_str_to_hour(app.external.max_time);
             app.external.max_time = hour_to_time_str(outside_max_time);
 
+            // Pre-simulation days to stabilise system
+            if (this.days_pre_sim > 0) {
+                var pre_sim_result = sim({
+                    outside_min_time: outside_min_time,
+                    outside_max_time: outside_max_time,
+                    schedule: app.schedule,
+                    days: app.days_pre_sim
+                });
+                // reset view
+                view.start = 0;
+                view.end = 0;
+            }
+
             // Run simulation
             var result = sim({
                 outside_min_time: outside_min_time,
                 outside_max_time: outside_max_time,
-                schedule: app.schedule
+                schedule: app.schedule,
+                days: app.days
             });
             app.max_room_temp = result.max_room_temp;
 
@@ -252,6 +266,10 @@ var app = new Vue({
             app.results.mean_room_temp = result.mean_room_temp;
             app.results.max_room_temp = result.max_room_temp;
             app.results.total_cost = result.total_cost;
+            app.stats.flowT_weighted = result.flowT_weighted;
+            app.stats.outsideT_weighted = result.outsideT_weighted;
+            app.stats.flowT_minus_outsideT_weighted = result.flowT_minus_outsideT_weighted;
+            app.stats.wa_prc_carnot = result.wa_prc_carnot;
 
             plot();
         },
@@ -547,8 +565,7 @@ function sim(conf) {
     var k3 = 3600000 * app.building.fabric[2].kWhK;
 
     var timestep = 30;
-    var itterations = 3600 * 24 * app.days / timestep;
-    var start_index = 0;
+    var itterations = 3600 * 24 * conf.days / timestep;
 
     // Set view if not already set
     if (view.start == 0 && view.end == 0) {
@@ -844,67 +861,58 @@ function sim(conf) {
             max_room_temp = room;
         }
 
-        // Populate time series data arrays for plotting
-        if (i >= start_index) {
+        // we will add timestamps to data at the point the data is plotted
+        // record here as fixed interval timeseries
 
-            // we will add timestamps to data at the point the data is plotted
-            // record here as fixed interval timeseries
+        // Exit if any data is NaN
+        if (room == NaN) return;
+        if (outside == NaN) return;
+        if (flow_temperature == NaN) return;
+        if (return_temperature == NaN) return;
+        if (heatpump_elec == NaN) return;
+        if (heatpump_heat == NaN) return;
 
-            if (room == NaN) return;
-            if (outside == NaN) return;
-            if (flow_temperature == NaN) return;
-            if (return_temperature == NaN) return;
-            if (heatpump_elec == NaN) return;
-            if (heatpump_heat == NaN) return;
+        // Store data for plotting
+        roomT_data[i] = room;
+        outsideT_data[i] = outside;
+        flowT_data[i] = flow_temperature;
+        returnT_data[i] = return_temperature
+        elec_data[i] = heatpump_elec;
+        heat_data[i] = heatpump_heat;
 
-            roomT_data[i] = room;
-            outsideT_data[i] = outside;
-            flowT_data[i] = flow_temperature;
-            returnT_data[i] = return_temperature
-            elec_data[i] = heatpump_elec;
-            heat_data[i] = heatpump_heat;
+        // Calculate stats
 
-            // Calculate stats
-
-            // Calculate ideal carnot efficiency
-            let condensor = flow_temperature + 2 + 273.15;
-            let evaporator = outside - 6 + 273.15;
-            let carnot_dt = condensor - evaporator;
-            let ideal_carnot = 0;
-            if (carnot_dt>0) {
-                ideal_carnot = condensor / carnot_dt;
-            }
-
-            if (system_DT>1 && heatpump_heat>0 && ideal_carnot>0) {
-                // Calulate predicted elec consumption based on carnot efficiency
-                kwh_carnot_elec += (heatpump_heat / ideal_carnot) * power_to_kwh;
-                kwh_elec_running += heatpump_elec * power_to_kwh;
-                kwh_heat_running += heatpump_heat * power_to_kwh;
-            }
-
-            room_temp_sum += room;
-            elec_kwh += heatpump_elec * power_to_kwh;
-            heat_kwh += heatpump_heat * power_to_kwh;
-            total_cost += heatpump_elec * power_to_kwh * price * 0.01;
-            flowT_weighted_sum += flow_temperature * heatpump_heat * power_to_kwh;
-            outsideT_weighted_sum += outside * heatpump_heat * power_to_kwh;
-            flowT_minus_outsideT_weighted_sum += heatpump_heat * (flow_temperature-outside) * power_to_kwh;
-
-
-            stats_count++;
+        // Calculate ideal carnot efficiency
+        let condensor = flow_temperature + 2 + 273.15;
+        let evaporator = outside - 6 + 273.15;
+        let carnot_dt = condensor - evaporator;
+        let ideal_carnot = 0;
+        if (carnot_dt>0) {
+            ideal_carnot = condensor / carnot_dt;
         }
+
+        if (system_DT>1 && heatpump_heat>0 && ideal_carnot>0) {
+            // Calulate predicted elec consumption based on carnot efficiency
+            kwh_carnot_elec += (heatpump_heat / ideal_carnot) * power_to_kwh;
+            kwh_elec_running += heatpump_elec * power_to_kwh;
+            kwh_heat_running += heatpump_heat * power_to_kwh;
+        }
+
+        room_temp_sum += room;
+        elec_kwh += heatpump_elec * power_to_kwh;
+        heat_kwh += heatpump_heat * power_to_kwh;
+        total_cost += heatpump_elec * power_to_kwh * price * 0.01;
+        flowT_weighted_sum += flow_temperature * heatpump_heat * power_to_kwh;
+        outsideT_weighted_sum += outside * heatpump_heat * power_to_kwh;
+        flowT_minus_outsideT_weighted_sum += heatpump_heat * (flow_temperature-outside) * power_to_kwh;
+
+
+        stats_count++;
     }
 
-    if (stats_count) {
-        app.stats.flowT_weighted = flowT_weighted_sum / heat_kwh;
-        app.stats.outsideT_weighted = outsideT_weighted_sum / heat_kwh;
-        app.stats.flowT_minus_outsideT_weighted = flowT_minus_outsideT_weighted_sum / heat_kwh;
-
-        app.stats.wa_prc_carnot = 0;
-        if (kwh_elec_running>0 && kwh_carnot_elec>0) {
-            app.stats.wa_prc_carnot = (kwh_heat_running / kwh_elec_running) / (kwh_heat_running / kwh_carnot_elec)
-        }
-
+    let wa_prc_carnot = 0;
+    if (kwh_elec_running>0 && kwh_carnot_elec>0) {
+        wa_prc_carnot = (kwh_heat_running / kwh_elec_running) / (kwh_heat_running / kwh_carnot_elec)
     }
 
     return {
@@ -912,7 +920,11 @@ function sim(conf) {
         heat_kwh: heat_kwh,
         max_room_temp: max_room_temp,
         mean_room_temp: room_temp_sum / stats_count,
-        total_cost: total_cost
+        total_cost: total_cost,
+        flowT_weighted: flowT_weighted_sum / heat_kwh,
+        outsideT_weighted: outsideT_weighted_sum / heat_kwh,
+        flowT_minus_outsideT_weighted: flowT_minus_outsideT_weighted_sum / heat_kwh,
+        wa_prc_carnot: wa_prc_carnot
     }
     
     // Automatic refinement, disabled for now, running simulation 3 times instead.
