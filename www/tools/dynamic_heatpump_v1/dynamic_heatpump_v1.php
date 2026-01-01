@@ -85,6 +85,7 @@
                             <th>Heat</th>
                             <th>COP</th>
                             <th>Cost</th>
+                            <th v-if="mode=='year'">Agile (2024)</th>
                         </tr>
                         <tr v-if="baseline_enabled" style="background-color:#f0f0f0">
                             <td>Baseline</td>
@@ -94,6 +95,7 @@
                             <td>{{ baseline.heat_kwh | toFixed(3) }} kWh</td>
                             <td>{{ (baseline.heat_kwh/baseline.elec_kwh) | toFixed(2) }}</td>
                             <td>£{{ baseline.total_cost | toFixed(2) }}</td>
+                            <td v-if="mode=='year'">£{{ baseline.agile_cost | toFixed(2) }}</td>
                         </tr>
                         <tr class="table-success">
                             <td>Current</td>
@@ -103,6 +105,7 @@
                             <td>{{ results.heat_kwh | toFixed(3) }} kWh</td>
                             <td>{{ (results.heat_kwh/results.elec_kwh) | toFixed(2) }}</td>
                             <td>£{{ results.total_cost | toFixed(2) }}</td>
+                            <td v-if="mode=='year'">£{{ results.agile_cost | toFixed(2) }}</td>
                         </tr>
                         <tr v-if="baseline_enabled" class="table-info">
                             <td>Saving</td>
@@ -112,6 +115,7 @@
                             <td>{{ (results.heat_kwh-baseline.heat_kwh)*-1 | toFixed(3) }} kWh ({{ ((results.heat_kwh-baseline.heat_kwh)/baseline.heat_kwh*-100) | toFixed(1) }}%)</td>
                             <td>{{ ((results.heat_kwh/results.elec_kwh)-(baseline.heat_kwh/baseline.elec_kwh)) | toFixed(2) }}</td>
                             <td>£{{ (results.total_cost-baseline.total_cost)*-1 | toFixed(2) }}</td>
+                            <td v-if="mode=='year'">£{{ (results.agile_cost-baseline.agile_cost)*-1 | toFixed(2) }}</td>
 
                         </tr>
                     </table>

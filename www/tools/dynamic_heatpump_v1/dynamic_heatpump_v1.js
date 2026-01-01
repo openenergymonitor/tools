@@ -102,14 +102,16 @@ var app = new Vue({
             heat_kwh: 0,
             mean_room_temp: 0,
             max_room_temp: 0,
-            total_cost: 0
+            total_cost: 0,
+            agile_cost: 0
         },
         baseline: {
             elec_kwh: 0,
             heat_kwh: 0,
             mean_room_temp: 0,
             max_room_temp: 0,
-            total_cost: 0
+            total_cost: 0,
+            agile_cost: 0
         },
         stats: {
             flowT_weighted: 0,
@@ -165,6 +167,7 @@ var app = new Vue({
             const lines = csv.split('\n');
             annual_dataset_outsideT = [];
             annual_dataset_solar = []; // used for solar gains
+            annual_dataset_agile = []; // used for agile pricing
 
             console.log(`Parsing CSV with ${lines.length} lines`);
             
@@ -180,13 +183,9 @@ var app = new Vue({
                     const solar = parseFloat(columns[3]);
                     const agile = parseFloat(columns[4]);
                     
-                    if (!isNaN(temperature)) {
-                        annual_dataset_outsideT.push(temperature*1);
-                    }
-
-                    if (!isNaN(solar)) {
-                        annual_dataset_solar.push(solar*1);
-                    }
+                    annual_dataset_outsideT.push(temperature*1);
+                    annual_dataset_solar.push(solar*1);
+                    annual_dataset_agile.push(agile*1);
                 }
             }
             
@@ -279,6 +278,7 @@ var app = new Vue({
                 app.results.mean_room_temp = result.mean_room_temp;
                 app.results.max_room_temp = result.max_room_temp;
                 app.results.total_cost = result.total_cost;
+                app.results.agile_cost = result.agile_cost;
                 app.stats.flowT_weighted = result.flowT_weighted;
                 app.stats.outsideT_weighted = result.outsideT_weighted;
                 app.stats.flowT_minus_outsideT_weighted = result.flowT_minus_outsideT_weighted;
@@ -550,7 +550,8 @@ function get_from_annual_dataset(time_seconds) {
     if (index >= 0 && index < annual_dataset_outsideT.length) {
         return {
             temperature: annual_dataset_outsideT[index],
-            solar: annual_dataset_solar[index]
+            solar: annual_dataset_solar[index],
+            agile: annual_dataset_agile[index]
         }
     }
     
@@ -565,6 +566,7 @@ function sim(conf) {
     returnT_data = [];
     elec_data = [];
     heat_data = [];
+    agile_data = [];
     
     var heatpump_off_duration = 0;
 
@@ -622,6 +624,7 @@ function sim(conf) {
     var room_temp_sum = 0;
 
     var total_cost = 0;
+    var agile_cost = 0;
     var price = 0;
     
     let stats_count = 0;
@@ -634,6 +637,7 @@ function sim(conf) {
 
     let outside = 0;
     let solar = 0;
+    let agile_price = 0;
 
     for (var i = 0; i < itterations; i++) {
         let time = i * timestep;
@@ -646,6 +650,7 @@ function sim(conf) {
             let dataset = get_from_annual_dataset(time);
             let csv_temp = dataset ? dataset.temperature : null;
             let csv_solar = dataset ? dataset.solar : 0;
+            let csv_agile = dataset ? dataset.agile : 0;
             
             if (csv_temp !== null) {
                 outside = csv_temp;
@@ -655,6 +660,11 @@ function sim(conf) {
                 solar = csv_solar;
                 if (solar < 0) solar = 0; // Ensure no negative solar gains
             }
+
+            if (csv_agile !== null) {
+                agile_price = csv_agile;
+            }
+
         } else {
             // Use synthetic temperature model
             if (hour>=outside_min_time && hour<outside_max_time) {
@@ -900,6 +910,7 @@ function sim(conf) {
         returnT_data[i] = return_temperature
         elec_data[i] = heatpump_elec;
         heat_data[i] = heatpump_heat;
+        agile_data[i] = agile_price;
 
         // Calculate stats
 
@@ -923,10 +934,10 @@ function sim(conf) {
         elec_kwh += heatpump_elec * power_to_kwh;
         heat_kwh += heatpump_heat * power_to_kwh;
         total_cost += heatpump_elec * power_to_kwh * price * 0.01;
+        agile_cost += heatpump_elec * power_to_kwh * agile_price * 0.01 * 1.05; // 5% VAT
         flowT_weighted_sum += flow_temperature * heatpump_heat * power_to_kwh;
         outsideT_weighted_sum += outside * heatpump_heat * power_to_kwh;
         flowT_minus_outsideT_weighted_sum += heatpump_heat * (flow_temperature-outside) * power_to_kwh;
-
 
         stats_count++;
     }
@@ -936,12 +947,16 @@ function sim(conf) {
         wa_prc_carnot = (kwh_heat_running / kwh_elec_running) / (kwh_heat_running / kwh_carnot_elec)
     }
 
+
+
+
     return {
         elec_kwh: elec_kwh,
         heat_kwh: heat_kwh,
         max_room_temp: max_room_temp,
         mean_room_temp: room_temp_sum / stats_count,
         total_cost: total_cost,
+        agile_cost: agile_cost,
         flowT_weighted: flowT_weighted_sum / heat_kwh,
         outsideT_weighted: outsideT_weighted_sum / heat_kwh,
         flowT_minus_outsideT_weighted: flowT_minus_outsideT_weighted_sum / heat_kwh,
@@ -955,6 +970,7 @@ function sim(conf) {
 function plot() {
     
     series = [
+        { label: "Agile Price", data: timeseries(agile_data), color: "#aaa", yaxis: 4, lines: { show: true, fill: false } },
         { label: "Heat", data: timeseries(heat_data), color: 0, yaxis: 3, lines: { show: true, fill: true } },
         { label: "Elec", data: timeseries(elec_data), color: 1, yaxis: 3, lines: { show: true, fill: true } },
         { label: "FlowT", data: timeseries(flowT_data), color: 2, yaxis: 2, lines: { show: true, fill: false } },
@@ -962,6 +978,11 @@ function plot() {
         { label: "RoomT", data: timeseries(roomT_data), color: "#000", yaxis: 1, lines: { show: true, fill: false } },
         { label: "OutsideT", data: timeseries(outsideT_data), color: "#0000cc", yaxis: 1, lines: { show: true, fill: false } }
     ];
+
+    if (app.mode != "year") {
+        // hide agile price in day mode
+        series[0].lines.show = false;
+    }
 
     var options = {
         grid: { show: true, hoverable: true },
