@@ -1,4 +1,3 @@
-
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
 
 <script src="https://code.jquery.com/jquery-3.6.3.min.js"></script>
@@ -10,6 +9,35 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/solid.min.css">
 <script src="<?php echo $path_lib;?>ecodan.js?v=1"></script>
 <script src="<?php echo $path_lib;?>vaillant.js?v=11"></script>
+<style>
+    #spinner-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(255, 255, 255, 0.8);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+    #spinner-overlay.active {
+        display: flex;
+    }
+    .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
 <div class="container" style="max-width:1200px" id="app">
     <div class="row">
         <div class="col">
@@ -35,6 +63,9 @@
     <div class="row">
         <div id="graph_bound" style="width:100%; height:400px; position:relative; ">
             <div id="graph"></div>
+            <div id="spinner-overlay">
+                <div class="spinner"></div>
+            </div>
         </div>
     </div>
     <br><br>

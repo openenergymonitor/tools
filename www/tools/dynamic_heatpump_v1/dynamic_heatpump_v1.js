@@ -201,77 +201,87 @@ var app = new Vue({
         },
         simulate: function () {
             console.log("Simulating");
-
-            // if vaillant cop model selected, set capacity
-            if (app.heatpump.cop_model == "vaillant5") {
-                // top end max capacity 5kW model
-                app.heatpump.capacity = 8500;
-            } else if (app.heatpump.cop_model == "vaillant12") {
-                // top end max capacity 12kW model
-                app.heatpump.capacity = 17900;
-            }
-
-            // These only need to be calculated once
-            // Calculate heat loss coefficient
-
-
-            // Calculate fabric WK
-            app.building.fabric_WK = app.building.heat_loss / 23;
-            let fabric_WK_inv = 1 / app.building.fabric_WK;
-
-            var remaining_proportion = 100;
-            remaining_proportion -= app.building.fabric[2].proportion;
-            remaining_proportion -= app.building.fabric[1].proportion;
-            app.building.fabric[0].proportion = remaining_proportion;
             
-            var sum = 0;
-            for (var z in app.building.fabric) {
-                let WK_inv = 0.01 * app.building.fabric[z].proportion * fabric_WK_inv;
-                app.building.fabric[z].WK = 1 / WK_inv;
+            // Show loading spinner
+            show_spinner();
 
-                sum += (1 / app.building.fabric[z].WK*1);
-            }
-            app.building.fabric_WK = 1 / sum;
+            setTimeout(() => {
 
-            // Used for outside temperature waveform generation
-            var outside_min_time = time_str_to_hour(app.external.min_time);
-            app.external.min_time = hour_to_time_str(outside_min_time);
-            var outside_max_time = time_str_to_hour(app.external.max_time);
-            app.external.max_time = hour_to_time_str(outside_max_time);
+                // if vaillant cop model selected, set capacity
+                if (app.heatpump.cop_model == "vaillant5") {
+                    // top end max capacity 5kW model
+                    app.heatpump.capacity = 8500;
+                } else if (app.heatpump.cop_model == "vaillant12") {
+                    // top end max capacity 12kW model
+                    app.heatpump.capacity = 17900;
+                }
 
-            // Pre-simulation days to stabilise system
-            if (this.days_pre_sim > 0) {
-                var pre_sim_result = sim({
+                // These only need to be calculated once
+                // Calculate heat loss coefficient
+
+
+                // Calculate fabric WK
+                app.building.fabric_WK = app.building.heat_loss / 23;
+                let fabric_WK_inv = 1 / app.building.fabric_WK;
+
+                var remaining_proportion = 100;
+                remaining_proportion -= app.building.fabric[2].proportion;
+                remaining_proportion -= app.building.fabric[1].proportion;
+                app.building.fabric[0].proportion = remaining_proportion;
+                
+                var sum = 0;
+                for (var z in app.building.fabric) {
+                    let WK_inv = 0.01 * app.building.fabric[z].proportion * fabric_WK_inv;
+                    app.building.fabric[z].WK = 1 / WK_inv;
+
+                    sum += (1 / app.building.fabric[z].WK*1);
+                }
+                app.building.fabric_WK = 1 / sum;
+
+                // Used for outside temperature waveform generation
+                var outside_min_time = time_str_to_hour(app.external.min_time);
+                app.external.min_time = hour_to_time_str(outside_min_time);
+                var outside_max_time = time_str_to_hour(app.external.max_time);
+                app.external.max_time = hour_to_time_str(outside_max_time);
+
+                // Pre-simulation days to stabilise system
+                if (this.days_pre_sim > 0) {
+                    var pre_sim_result = sim({
+                        outside_min_time: outside_min_time,
+                        outside_max_time: outside_max_time,
+                        schedule: app.schedule,
+                        days: app.days_pre_sim
+                    });
+                    // reset view
+                    view.start = 0;
+                    view.end = 0;
+                }
+
+                // Run simulation
+                var result = sim({
                     outside_min_time: outside_min_time,
                     outside_max_time: outside_max_time,
                     schedule: app.schedule,
-                    days: app.days_pre_sim
+                    days: app.days
                 });
-                // reset view
-                view.start = 0;
-                view.end = 0;
-            }
+                app.max_room_temp = result.max_room_temp;
 
-            // Run simulation
-            var result = sim({
-                outside_min_time: outside_min_time,
-                outside_max_time: outside_max_time,
-                schedule: app.schedule,
-                days: app.days
-            });
-            app.max_room_temp = result.max_room_temp;
+                app.results.elec_kwh = result.elec_kwh;
+                app.results.heat_kwh = result.heat_kwh;
+                app.results.mean_room_temp = result.mean_room_temp;
+                app.results.max_room_temp = result.max_room_temp;
+                app.results.total_cost = result.total_cost;
+                app.stats.flowT_weighted = result.flowT_weighted;
+                app.stats.outsideT_weighted = result.outsideT_weighted;
+                app.stats.flowT_minus_outsideT_weighted = result.flowT_minus_outsideT_weighted;
+                app.stats.wa_prc_carnot = result.wa_prc_carnot;
 
-            app.results.elec_kwh = result.elec_kwh;
-            app.results.heat_kwh = result.heat_kwh;
-            app.results.mean_room_temp = result.mean_room_temp;
-            app.results.max_room_temp = result.max_room_temp;
-            app.results.total_cost = result.total_cost;
-            app.stats.flowT_weighted = result.flowT_weighted;
-            app.stats.outsideT_weighted = result.outsideT_weighted;
-            app.stats.flowT_minus_outsideT_weighted = result.flowT_minus_outsideT_weighted;
-            app.stats.wa_prc_carnot = result.wa_prc_carnot;
+                plot();
+                
+                // Hide loading spinner
+                hide_spinner();
 
-            plot();
+            }, 10);
         },
         add_space: function () {
             if (this.schedule.length > 0) {
@@ -1087,3 +1097,11 @@ $(window).resize(function () {
     $('#graph').width($('#graph_bound').width());
     plot();
 });
+
+function show_spinner() {
+    $('#spinner-overlay').addClass('active');
+}
+
+function hide_spinner() {
+    $('#spinner-overlay').removeClass('active');
+}
