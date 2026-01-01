@@ -5,15 +5,15 @@ var DEGREE_MINUTES_WC = 4;
 
 
 
-var price_cap = 24.86;
+var price_cap = 27.69;
 var cosy_examples_schedule = [
-    { start: "00:00", set_point: 18, price: 26.98 },
-    { start: "04:00", set_point: 21, price: 13.23 },
-    { start: "07:00", set_point: 19.5, price: 26.98 },
-    { start: "13:00", set_point: 21, price: 13.23 },
-    { start: "16:00", set_point: 19, price: 40.47 },
-    { start: "19:00", set_point: 19.5, price: 26.98 },
-    { start: "22:00", set_point: 19, price: 13.23 }
+    { start: "00:00", set_point: 18, price: 29.94 },
+    { start: "04:00", set_point: 21, price: 14.68 },
+    { start: "07:00", set_point: 19.5, price: 29.94 },
+    { start: "13:00", set_point: 21, price: 14.68 },
+    { start: "16:00", set_point: 19, price: 44.91 },
+    { start: "19:00", set_point: 19.5, price: 29.94 },
+    { start: "22:00", set_point: 19, price: 14.68 }
 ];
 
 // Object to hold time series data for plotting
@@ -30,21 +30,22 @@ var degree_minutes = 0;
 var last_outside = null;
 
 // Array to hold loaded outside temperature data
-var outside_temperature_data = [];
-var outside_temperature_loaded = false;
+var annual_dataset_outsideT = [];
+var annual_dataset_loaded = false;
 var outside_temperature_start_timestamp = 0;
 
 var app = new Vue({
     el: '#app',
     data: {
+        mode: "day",
         // These are days not included in results, to allow system to stabilise
         days_pre_sim: 0,
         // These are days to simulate and include in results
-        days: 365,
+        days: 1,
         building: {
             heat_loss: 3400,
-            internal_gains: 390,
-            solar_scale: 1.6,
+            internal_gains: 330,
+            solar_scale: 2.0,
             fabric: [
                 { proportion: 52, WK: 0, kWhK: 12, T: 16 },
                 { proportion: 28, WK: 0, kWhK: 6, T: 17 },
@@ -76,7 +77,7 @@ var app = new Vue({
             mode: AUTO_ADAPT,
             wc_use_outside_mean: 1,
             
-            Kp: 3500,
+            Kp: 2500,
             Ki: 0.2,
             Kd: 0.0,
 
@@ -88,24 +89,13 @@ var app = new Vue({
             limit_by_roomT: true,
             roomT_hysteresis: 0.5,
 
-            fixed_compressor_speed: 45,
-
-            // Degree minutes control parameters
-            dm_threshold_on: 30,      // Degree minutes to turn on (accumulated deficit)
-            dm_threshold_off: -30,    // Degree minutes to turn off (accumulated excess)
-            dm_decay: 0.95,          // Decay factor for historical accumulation (prevents runaway)
-            
-            // Room influence on weather compensation
-            room_influence: 0.3,      // 0-1: how much room error affects flow temp target
-            anticipation: 1.0,        // Multiplier for predictive adjustment based on outdoor trend
-
-
+            fixed_compressor_speed: 45
         },
         schedule: [
-            { start: "00:00", set_point: 20, price: price_cap },
-            { start: "06:00", set_point: 20, price: price_cap },
-            { start: "15:00", set_point: 20, price: price_cap },
-            { start: "22:00", set_point: 20, price: price_cap }
+            { start: "00:00", set_point: 17, price: price_cap },
+            { start: "06:00", set_point: 18, price: price_cap },
+            { start: "15:00", set_point: 19, price: price_cap },
+            { start: "22:00", set_point: 17, price: price_cap }
         ],
         results: {
             elec_kwh: 0,
@@ -129,6 +119,23 @@ var app = new Vue({
         max_room_temp: 0,
     },
     methods: {
+        change_mode: function () {
+            if (this.mode == "day") {
+                this.days = 1;
+            } else {
+                this.days = 365;
+            }
+
+            var timestep = 30;
+            var itterations = 3600 * 24 * app.days / timestep;
+
+            // Set view if not already set
+            view.start = 0;
+            view.end = itterations * timestep;
+            view_calc_interval();
+
+            this.simulate();
+        },
         load_octopus_cosy: function () {
             this.schedule = JSON.parse(JSON.stringify(cosy_examples_schedule));
             this.simulate();
@@ -148,8 +155,8 @@ var app = new Vue({
         },
         parse_csv: function(csv) {
             const lines = csv.split('\n');
-            outside_temperature_data = [];
-            solar_pv_data = []; // used for solar gains
+            annual_dataset_outsideT = [];
+            annual_dataset_solar = []; // used for solar gains
 
             console.log(`Parsing CSV with ${lines.length} lines`);
             
@@ -166,23 +173,23 @@ var app = new Vue({
                     const agile = parseFloat(columns[4]);
                     
                     if (!isNaN(temperature)) {
-                        outside_temperature_data.push(temperature*1);
+                        annual_dataset_outsideT.push(temperature*1);
                     }
 
                     if (!isNaN(solar)) {
-                        solar_pv_data.push(solar*1);
+                        annual_dataset_solar.push(solar*1);
                     }
                 }
             }
             
-            if (outside_temperature_data.length > 0) {
-                outside_temperature_loaded = true;
+            if (annual_dataset_outsideT.length > 0) {
+                annual_dataset_loaded = true;
                 // Set start timestamp to Jan 1st 00:00 of current year
                 const currentYear = new Date().getFullYear();
                 outside_temperature_start_timestamp = new Date(currentYear, 0, 1, 0, 0, 0).getTime() / 1000;
                 
-                console.log(`Loaded ${outside_temperature_data.length} half hourly temperature readings`);
-                // alert(`Successfully loaded ${outside_temperature_data.length} hourly temperature readings from outside_temperature.csv`);
+                console.log(`Loaded ${annual_dataset_outsideT.length} half hourly temperature readings`);
+                // alert(`Successfully loaded ${annual_dataset_outsideT.length} hourly temperature readings from outside_temperature.csv`);
                 this.simulate();
             } else {
                 alert('No valid data found in CSV file');
@@ -468,16 +475,6 @@ function hour_to_time_str(hour_min) {
 
 $('#graph').width($('#graph_bound').width()).height($('#graph_bound').height());
 
-// var hs = 0.1;
-/*
-roomT_data = [];
-outsideT_data = [];
-flowT_data = [];
-returnT_data = [];
-elec_data = [];
-heat_data = [];
-*/
-
 ITerm = 0
 error = 0
 
@@ -500,8 +497,8 @@ function update_fabric_starting_temperatures() {
     room = app.building.fabric[2].T;
 }
 
-function get_outside_temperature_from_csv(time_seconds) {
-    if (!outside_temperature_loaded || outside_temperature_data.length === 0) {
+function get_from_annual_dataset(time_seconds) {
+    if (!annual_dataset_loaded || annual_dataset_outsideT.length === 0) {
         return null;
     }
     
@@ -509,12 +506,12 @@ function get_outside_temperature_from_csv(time_seconds) {
     const hours_since_start = Math.floor(time_seconds / 1800);
     
     // Get index in hourly array (wrapping around if beyond one year)
-    const index = hours_since_start % outside_temperature_data.length;
+    const index = hours_since_start % annual_dataset_outsideT.length;
     
-    if (index >= 0 && index < outside_temperature_data.length) {
+    if (index >= 0 && index < annual_dataset_outsideT.length) {
         return {
-            temperature: outside_temperature_data[index],
-            solar: solar_pv_data[index]
+            temperature: annual_dataset_outsideT[index],
+            solar: annual_dataset_solar[index]
         }
     }
     
@@ -523,12 +520,12 @@ function get_outside_temperature_from_csv(time_seconds) {
 
 function sim(conf) {
 
-    roomT_data = new Float32Array(1051200);
-    outsideT_data = new Float32Array(1051200);
-    flowT_data =  new Float32Array(1051200);
-    returnT_data = new Float32Array(1051200);
-    elec_data = new Float32Array(1051200);
-    heat_data = new Float32Array(1051200);
+    roomT_data = [];
+    outsideT_data = [];
+    flowT_data = [];
+    returnT_data = [];
+    elec_data = [];
+    heat_data = [];
     
     var heatpump_off_duration = 0;
 
@@ -550,9 +547,8 @@ function sim(conf) {
     var k3 = 3600000 * app.building.fabric[2].kWhK;
 
     var timestep = 30;
-    var total_days = app.days + app.days_pre_sim;
-    var itterations = 3600 * 24 * total_days / timestep;
-    var start_index = 3600 * 24 * app.days_pre_sim / timestep;
+    var itterations = 3600 * 24 * app.days / timestep;
+    var start_index = 0;
 
     // Set view if not already set
     if (view.start == 0 && view.end == 0) {
@@ -607,9 +603,9 @@ function sim(conf) {
         hour = hour % 24;
         
         
-        if (app.external.use_csv && outside_temperature_loaded) {
+        if (app.external.use_csv && annual_dataset_loaded) {
             // Use CSV data - time is in seconds from start of simulation
-            let dataset = get_outside_temperature_from_csv(time);
+            let dataset = get_from_annual_dataset(time);
             let csv_temp = dataset ? dataset.temperature : null;
             let csv_solar = dataset ? dataset.solar : 0;
             
@@ -710,87 +706,6 @@ function sim(conf) {
             } else {
                 heatpump_heat = 0;
             }
-
-        } else if (app.control.mode==DEGREE_MINUTES_WC) {
-            // Hybrid: Degree Minutes Cycling with Room-Influenced Weather Compensation
-            
-            // 1. Calculate base flow temperature target using weather compensation
-            if (app.control.wc_use_outside_mean) {
-                used_outside = app.external.mid
-            } else {
-                used_outside = outside 
-            }
-            
-            let base_flowT_target = setpoint + 2.55 * Math.pow(app.control.curve*(setpoint - used_outside), 0.78);
-            
-            // 2. Calculate room temperature error and add room influence
-            let room_error = setpoint - room;
-            let room_adjustment = room_error * app.control.room_influence * 3.0; // Scale factor for effect
-            
-            // 3. Add anticipation based on outdoor temperature trend
-            let outdoor_trend = 0;
-            if (last_outside !== null) {
-                outdoor_trend = (last_outside - outside) / (timestep / 3600); // degrees per hour
-            }
-            last_outside = outside;
-            
-            // If getting colder, increase flow temp target; if warming, decrease
-            let anticipation_adjustment = outdoor_trend * app.control.anticipation * 0.5;
-            
-            // 4. Combined flow temperature target
-            flowT_target = base_flowT_target + room_adjustment + anticipation_adjustment;
-            
-            // Clamp flow temp to reasonable bounds
-            if (flowT_target < setpoint) flowT_target = setpoint;
-            if (flowT_target > 55) flowT_target = 55;
-            
-            // 5. Degree minutes accumulation
-            // Accumulate the deficit/excess (in degree-minutes)
-            degree_minutes += room_error * (timestep / 60);
-            
-            // Apply decay to prevent infinite accumulation
-            degree_minutes *= app.control.dm_decay;
-            
-            // Clamp degree minutes to prevent extreme values
-            if (degree_minutes > 200) degree_minutes = 200;
-            if (degree_minutes < -200) degree_minutes = -200;
-            
-            // 6. Cycling control based on degree minutes
-            if (heatpump_state == 0) {
-                // Heat pump is off - check if we should turn on
-                if (degree_minutes > app.control.dm_threshold_on) {
-                    heatpump_state = 1;
-                }
-            } else {
-                // Heat pump is on - check if we should turn off
-                if (degree_minutes < app.control.dm_threshold_off) {
-                    heatpump_state = 0;
-                }
-            }
-            
-            // 7. Calculate heat output using PI control to track flow temp target
-            if (heatpump_state == 1) {
-                last_error = error;
-                error = flowT_target - flow_temperature;
-                delta_error = error - last_error;
-                
-                PTerm = app.control.wc_Kp * error;
-                ITerm += error * timestep;
-                DTerm = delta_error / timestep;
-                
-                heatpump_heat = PTerm + (app.control.wc_Ki * ITerm) + (app.control.wc_Kd * DTerm);
-                
-                // Ensure minimum modulation when on
-                let min_heat = app.heatpump.capacity * app.heatpump.minimum_modulation * 0.01;
-                if (heatpump_heat < min_heat && heatpump_heat > 0) {
-                    heatpump_heat = min_heat;
-                }
-            } else {
-                heatpump_heat = 0;
-                // Reset integral term when off to prevent windup
-                ITerm = 0;
-            }
-            
 
         } else if (app.control.mode==FIXED_SPEED) {
             heatpump_heat = app.heatpump.capacity;
@@ -1047,7 +962,7 @@ function view_calc_interval() {
 function timeseries(data_array) {
     var result = [];
     var timestep = 30; // seconds
-    var start_time = 3600 * 24 * app.days_pre_sim / timestep;
+    var start_time = 0;
 
     // Calculate how many original data points fit in each downsampled interval
     var points_per_interval = Math.floor(view.interval / timestep);

@@ -111,7 +111,6 @@
             </table>
         </div>
     </div>
-
     <br>
     <div class="row">
         <div class="col">
@@ -208,6 +207,18 @@
             </div>
         </div>
         <div class="col">
+          
+            <div class="card" style="background-color: #f8f9fa;">
+                <div class="card-body">
+                    <label class="form-label">Simulate:</label>
+                    <select class="form-control" v-model="mode" @change="change_mode">
+                        <option value="day">Single day</option>
+                        <option value="year">Full year</option>
+                    </select>
+                </div>
+            </div>
+            <br>
+
             <div class="card">
                 <div class="card-body">
 
@@ -475,7 +486,7 @@
                 </div>
             </div>
             <br>
-            <div class="card">
+            <div class="card" v-if="mode=='day'">
                 <div class="card-body">
                     <div class="row">
                         <div class="col">
@@ -517,14 +528,14 @@
                         <span class="input-group-text">W</span>
                     </div>
 
-                    <p><b>Solar gains:</b></p>
-                    <p>Scale PV output</p>
-                    <div class="input-group mb-3">
-                        <input type="text" class="form-control" v-model.number="building.solar_scale" @change="simulate" />
-                        <span class="input-group-text">x</span>
+                    <div v-if="mode=='year'">
+                        <p><b>Solar gains:</b></p>
+                        <p>Scale PV output</p>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" v-model.number="building.solar_scale" @change="simulate" />
+                            <span class="input-group-text">x</span>
+                        </div>
                     </div>
-
-
                 </div>
             </div>
             <!--
