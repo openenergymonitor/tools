@@ -58,7 +58,7 @@ var app = new Vue({
             swing: 2,
             min_time: "06:00",
             max_time: "14:00",
-            use_csv: true
+            use_csv: false
         },
         heatpump: {
             capacity: 5000,
@@ -120,6 +120,7 @@ var app = new Vue({
     },
     methods: {
         change_mode: function () {
+            
             if (this.mode == "day") {
                 this.days = 1;
             } else {
@@ -134,6 +135,14 @@ var app = new Vue({
             view.end = itterations * timestep;
             view_calc_interval();
 
+            if (this.days == 365) {
+                if (!annual_dataset_loaded) {
+                    this.external.use_csv = true;
+                    this.load_csv_data();
+                    return;
+                }
+            }
+
             this.simulate();
         },
         load_octopus_cosy: function () {
@@ -145,7 +154,6 @@ var app = new Vue({
                 .then(response => response.text())
                 .then(csv => {
                     this.parse_csv(csv);
-
                     app.simulate();
                 })
                 .catch(error => {
@@ -512,9 +520,7 @@ flow_temperature = room;
 return_temperature = room;
 MWT = room;
 
-app.load_csv_data();
-
-// app.simulate();
+app.simulate();
 
 app.baseline = JSON.parse(JSON.stringify(app.results));
 app.baseline_enabled = false;
