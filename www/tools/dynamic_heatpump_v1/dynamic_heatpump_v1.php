@@ -132,16 +132,25 @@
         <div class="col">
             <table class="table">
                 <tr>
+                    <th></th>
                     <th>Weighted flow temperature</th>
                     <th>Weighted outside temperature</th>
                     <th>Weighted (flowT - outsideT)</th>
                     <th>Weighted average % carnot</th>
                 </tr>
                 <tr>
+                    <td>Full simulation</td>
                     <td>{{ stats.flowT_weighted | toFixed(2) }} °C</td>
                     <td>{{ stats.outsideT_weighted | toFixed(2) }} °C</td>
                     <td>{{ stats.flowT_minus_outsideT_weighted | toFixed(2) }} °C</td>
                     <td>{{ stats.wa_prc_carnot*100 | toFixed(1) }} %</td>
+                </tr>
+                <tr>
+                    <td>Selected window only</td>
+                    <td>{{ stats.window_flowT_weighted | toFixed(2) }} °C</td>
+                    <td>{{ stats.window_outsideT_weighted| toFixed(2) }} °C</td>
+                    <td>{{ stats.window_flowT_minus_outsideT_weighted | toFixed(2) }} °C</td>
+                    <td></td>
                 </tr>
             </table>
         </div>
@@ -189,6 +198,39 @@
                 </div>
             </div>
             <br>
+            <div class="card">
+                <div class="card-body">
+                    <h4>DHW Schedule</h4>
+                    <p>DHW not implemented yet, this just blocks out hot water period to see impact on room temperatures. Increase duration to enable.</p>
+                    <table class="table">
+                        <tr>
+                            <th>Time</th>
+                            <th>Set point</th>
+                            <th>Duration</th>
+                        </tr>
+                        <tr v-for="(item,index) in dhw_schedule">
+                            <td><input type="text" class="form-control" v-model="item.start" @change="simulate"
+                                    style="width:75px" /></td>
+                            <td>
+                                <div class="input-group mb-3">
+                                    <input type="text" class="form-control" v-model.number="item.set_point"
+                                        @change="simulate" style="width:30px" />
+                                    <span class="input-group-text">°C</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="input-group mb-3">
+                                    <input type="text" class="form-control" v-model.number="item.duration"
+                                        @change="simulate" style="width:30px" />
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            <br>
+
+
             <div class="card">
                 <div class="card-body">
                     <h4>Building fabric</h4>
@@ -554,6 +596,29 @@
                 </div>
             </div>
             <br>
+            <!-- card to show 99.6% and 99.0% outside temperature -->
+            <div class="card" v-if="mode!='day'">
+                <div class="card-body">
+                    <h4>Outside temperature percentiles</h4>
+                    <p>Use the following design temperatures when choosing design flow temperature for heat emitters.</p>
+                    <table class="table">
+                        <tr>
+                            <th>Percentile</th>
+                            <th>Outside Temperature (°C)</th>
+                        </tr>
+                        <tr>
+                            <td>99.6%</td>
+                            <td>{{ outsideT_996.toFixed(1) }} °C</td>
+                        </tr>
+                        <tr>
+                            <td>99.0%</td>
+                            <td>{{ outsideT_990.toFixed(1) }} °C</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            <br>
+
             <div class="card">
                 <div class="card-body">
                     <p><b>Internal gains:</b></p>

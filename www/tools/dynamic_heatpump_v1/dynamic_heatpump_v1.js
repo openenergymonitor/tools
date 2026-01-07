@@ -97,6 +97,10 @@ var app = new Vue({
             { start: "15:00", set_point: 19, price: price_cap },
             { start: "22:00", set_point: 17, price: price_cap }
         ],
+        dhw_schedule: [
+            { start: "02:00", set_point: 45, duration: 0 },
+            { start: "14:00", set_point: 45, duration: 0 },
+        ],
         results: {
             elec_kwh: 0,
             heat_kwh: 0,
@@ -115,10 +119,20 @@ var app = new Vue({
         },
         stats: {
             flowT_weighted: 0,
-            flowT_minus_outsideT_weighted: 0
+            outsideT_weighted: 0,
+            flowT_minus_outsideT_weighted: 0,
+            wa_prc_carnot: 0,
+            // Windowed versions
+            window_flowT_weighted: 0,
+            window_outsideT_weighted: 0,
+            window_flowT_minus_outsideT_weighted: 0,
+            window_wa_prc_carnot: 0
+            
         },
         baseline_enabled: false,
         max_room_temp: 0,
+        outsideT_996: 0,
+        outsideT_990: 0
     },
     methods: {
         change_mode: function () {
@@ -260,8 +274,8 @@ var app = new Vue({
                         days: app.days_pre_sim
                     });
                     // reset view
-                    view.start = 0;
-                    view.end = 0;
+                    // view.start = 0;
+                    // view.end = 0;
                 }
 
                 // Run simulation
@@ -283,6 +297,17 @@ var app = new Vue({
                 app.stats.outsideT_weighted = result.outsideT_weighted;
                 app.stats.flowT_minus_outsideT_weighted = result.flowT_minus_outsideT_weighted;
                 app.stats.wa_prc_carnot = result.wa_prc_carnot;
+
+                // Set view if not already set
+                if (view.start == 0 && view.end == 0) {
+                    view.start = 0;
+                                    
+                    var timestep = 30;
+                    var itterations = 3600 * 24 * app.days / timestep;
+
+                    view.end = itterations * timestep;
+                    view_calc_interval();
+                }
 
                 plot();
                 
@@ -590,13 +615,6 @@ function sim(conf) {
     var timestep = 30;
     var itterations = 3600 * 24 * conf.days / timestep;
 
-    // Set view if not already set
-    if (view.start == 0 && view.end == 0) {
-        view.start = 0;
-        view.end = itterations * timestep;
-        view_calc_interval();
-    }
-
 
     var elec_kwh = 0;
     var heat_kwh = 0;
@@ -638,6 +656,10 @@ function sim(conf) {
     let outside = 0;
     let solar = 0;
     let agile_price = 0;
+
+    let DHW_active = false;
+
+    let outsideT_histogram = {};
 
     for (var i = 0; i < itterations; i++) {
         let time = i * timestep;
@@ -689,6 +711,18 @@ function sim(conf) {
                 setpoint = parseFloat(schedule[j].set_point);
                 price = parseFloat(schedule[j].price);
                 // max_flowT = parseFloat(schedule[j].flowT);
+            }
+        }
+
+        DHW_active = false;
+
+        // Load DHW schedule
+        for (let j = 0; j < app.dhw_schedule.length; j++) {
+            let start = time_str_to_hour(app.dhw_schedule[j].start);
+            let duration_hours = app.dhw_schedule[j].duration / 3600;
+            if (hour >= start && hour < (start + duration_hours)) {
+                DHW_active = true;
+                break;
             }
         }
         
@@ -805,6 +839,11 @@ function sim(conf) {
         }
 
         if (outside>15) {
+            heatpump_state = 0;
+            heatpump_heat = 0;
+        }
+
+        if (DHW_active) {
             heatpump_state = 0;
             heatpump_heat = 0;
         }
@@ -940,7 +979,19 @@ function sim(conf) {
         flowT_minus_outsideT_weighted_sum += heatpump_heat * (flow_temperature-outside) * power_to_kwh;
 
         stats_count++;
+
+        // Outside temperature histogram
+        // buckets to the closest 0.1 degree
+        let outside_bucket = Math.round(outside * 10) / 10;
+        // convert to string for object key
+        outside_bucket = outside_bucket.toFixed(1);
+        if (outsideT_histogram[outside_bucket] === undefined) {
+            outsideT_histogram[outside_bucket] = 0;
+        }
+        outsideT_histogram[outside_bucket] += timestep;
     }
+
+    calculate_outside_design_temperatures(outsideT_histogram);
 
     let wa_prc_carnot = 0;
     if (kwh_elec_running>0 && kwh_carnot_elec>0) {
@@ -967,16 +1018,91 @@ function sim(conf) {
     // if (Math.abs(start_t1 - t1) > hs * 1.0) sim();
 }
 
+function calculate_outside_design_temperatures(outsideT_histogram) {
+
+    // Sort outside temperature histogram by temperature ascending
+    let sorted_outsideT_histogram = {};
+    Object.keys(outsideT_histogram).sort((a, b) => parseFloat(a) - parseFloat(b)).forEach(key => {
+        sorted_outsideT_histogram[key] = outsideT_histogram[key];
+    });
+
+    let total_hours = 24 * app.days;
+
+    let prc_996 = null;
+    let prc_990 = null;
+
+    let sum_hours = 0;
+    for (let temperature in sorted_outsideT_histogram) {
+        let hours = sorted_outsideT_histogram[temperature] / 3600;
+        
+        sum_hours += hours;
+        let prc = 100 * (1.0 - (sum_hours / total_hours));
+
+        if (prc_996 === null && prc <= 99.6) {
+            prc_996 = parseFloat(temperature);
+        }
+
+        if (prc_990 === null && prc <= 99.0) {
+            prc_990 = parseFloat(temperature);
+        }
+    }
+
+    app.outsideT_996 = prc_996;
+    app.outsideT_990 = prc_990;
+}
+
+
 function plot() {
+
+    var window = {};
+    window.elec_data = timeseries(elec_data);
+    window.heat_data = timeseries(heat_data);
+    window.flowT_data = timeseries(flowT_data);
+    window.returnT_data = timeseries(returnT_data);
+    window.roomT_data = timeseries(roomT_data);
+    window.outsideT_data = timeseries(outsideT_data);
+    window.agile_data = timeseries(agile_data);
+
+    let power_to_kwh = view.interval / 3600000;
+
+    // Reset windowed stats
+    app.stats.window_flowT_weighted_sum = 0;
+    app.stats.window_outsideT_weighted_sum = 0;
+    app.stats.window_flowT_minus_outsideT_weighted_sum = 0;
+    app.stats.window_heat_kwh = 0;
+
+    // Weighted average stats in window
+    for (var i = 0; i < window.elec_data.length; i++) {
+        var heat = window.heat_data[i][1];
+        var flowT = window.flowT_data[i][1];
+        var outsideT = window.outsideT_data[i][1];
+
+        app.stats.window_flowT_weighted_sum += flowT * heat * power_to_kwh;
+        app.stats.window_outsideT_weighted_sum += outsideT * heat * power_to_kwh;
+        app.stats.window_flowT_minus_outsideT_weighted_sum += heat * (flowT - outsideT) * power_to_kwh;
+        app.stats.window_heat_kwh += heat * power_to_kwh;
+    }
+
+    // Final weighted averages
+    if (app.stats.window_heat_kwh > 0) {
+        app.stats.window_flowT_weighted = app.stats.window_flowT_weighted_sum / app.stats.window_heat_kwh;
+        app.stats.window_outsideT_weighted = app.stats.window_outsideT_weighted_sum / app.stats.window_heat_kwh;
+        app.stats.window_flowT_minus_outsideT_weighted = app.stats.window_flowT_minus_outsideT_weighted_sum / app.stats.window_heat_kwh;
+    } else {
+        app.stats.window_flowT_weighted = 0;
+        app.stats.window_outsideT_weighted = 0;
+        app.stats.window_flowT_minus_outsideT_weighted = 0;
+    }
+
     
     series = [
-        { label: "Heat", data: timeseries(heat_data), color: 0, yaxis: 3, lines: { show: true, fill: true } },
-        { label: "Elec", data: timeseries(elec_data), color: 1, yaxis: 3, lines: { show: true, fill: true } },
-        { label: "FlowT", data: timeseries(flowT_data), color: 2, yaxis: 2, lines: { show: true, fill: false } },
-        { label: "ReturnT", data: timeseries(returnT_data), color: 3, yaxis: 2, lines: { show: true, fill: false } },
-        { label: "RoomT", data: timeseries(roomT_data), color: "#000", yaxis: 1, lines: { show: true, fill: false } },
-        { label: "OutsideT", data: timeseries(outsideT_data), color: "#0000cc", yaxis: 1, lines: { show: true, fill: false } },
-        { label: "Agile Price", data: timeseries(agile_data), color: "#aaa", yaxis: 4, lines: { show: true, fill: false } }
+        { label: "Heat", data: window.heat_data, color: 0, yaxis: 3, lines: { show: true, fill: true } },
+        { label: "Elec", data: window.elec_data, color: 1, yaxis: 3, lines: { show: true, fill: true } },
+        { label: "FlowT", data: window.flowT_data, color: 2, yaxis: 2, lines: { show: true, fill: false } },
+        { label: "ReturnT", data: window.returnT_data, color: 3, yaxis: 2, lines: { show: true, fill: false } },
+        { label: "RoomT", data: window.roomT_data, color: "#000", yaxis: 1, lines: { show: true, fill: false } },
+        { label: "OutsideT", data: window.outsideT_data, color: "#0000cc", yaxis: 1, lines: { show: true, fill: false } },
+        { label: "Agile Price", data: window.agile_data, color: "#aaa", yaxis: 4, lines: { show: true, fill: false } }
 
     ];
 
