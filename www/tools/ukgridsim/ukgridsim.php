@@ -257,6 +257,42 @@
                         </div>
                     </td>
                 </tr>
+                <tr>
+                    <th></th>
+                    <th>Margin</th>
+                    <th>Annual demand</th>
+                    <th>Capacity factor</th>
+                    <th>Capacity</th>
+                </tr>
+                <tr>
+                    <td>
+                        <div style="margin-top:5px">Backup</div>
+                    </td>
+                    <td>
+                        <div class="input-group">
+                            <input type="text" class="form-control" v-model.number="backup.margin" @change="update">
+                            <span class="input-group-text">%</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="input-group">
+                            <input type="text" class="form-control" :value="backup.demand_GWh*0.001 | toFixed(1)" disabled>
+                            <span class="input-group-text">TWh</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="input-group">
+                            <input type="text" class="form-control" :value="backup.CF*100 | toFixed(2)" disabled>
+                            <span class="input-group-text">%</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="input-group">
+                            <input type="text" class="form-control" :value="backup.capacity | toFixed(1)" disabled>
+                            <span class="input-group-text">GW</span>
+                        </div>
+                    </td>
+                </tr>
             </table>
         </div>
 
@@ -359,4 +395,4 @@
 
 </div>
 
-<script src="<?php echo $path; ?>ukgridsim.js?v=4"></script>
+<script src="<?php echo $path; ?>ukgridsim.js?v=7"></script>

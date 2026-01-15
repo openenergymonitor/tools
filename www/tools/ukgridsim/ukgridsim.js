@@ -17,6 +17,7 @@ var demand_data = [];
 var store1_soc_data = [];
 var store2_soc_data = [];
 var store2_discharge_data = [];
+var backup_demand_data = [];
 
 var month_timestamps = [];
 
@@ -88,6 +89,14 @@ var app = new Vue({
             max_discharge: 0
         },
 
+        backup: {
+            CF: 0,
+            max: 0,
+            margin: 10,
+            capacity: 0,
+            demand_GWh: 0
+        },
+
         auto_optimise: false,
         show_peak_shaving_balance: false,
         max_peak_shaving_deficit: 0,
@@ -109,7 +118,7 @@ var app = new Vue({
             let standard_demand_scaler = app.standard_demand_TWh / (input_demand_data_GWh * 0.001);
 
             // Demand
-            app.demand_GWh = (input_demand_data_GWh * standard_demand_scaler) + input_heatpump_data_GWh;
+            app.demand_GWh = (input_demand_data_GWh * standard_demand_scaler) + (input_heatpump_data_GWh * app.heatpump_households);
 
             // Solar generation
             app.solar_GWh = (app.solar_prc_of_demand / 100) * app.demand_GWh;
@@ -141,6 +150,7 @@ var app = new Vue({
             let nuclear_GWh = 0;
             let supply_GWh = 0;
             let demand_GWh = 0;
+            let backup_demand_GWh = 0;
 
             let deficit_before_store1_GWh = 0;
             let deficit_after_store1_GWh = 0;
@@ -193,6 +203,9 @@ var app = new Vue({
             // Normalisation factors
             let wind_normalisation_factor = app.wind_GWh / input_wind_data_GWh;
             let solar_normalisation_factor = app.solar_GWh_per_GWp / input_solar_data_GWh;
+
+            // Max backup demand
+            let max_backup_demand = 0;
 
             for (var i = 0; i < series[0].data.length; i++) {
 
@@ -349,10 +362,20 @@ var app = new Vue({
                     max_peak_shaving_deficit = -peak_shaving_balance;
                 }
 
+                let backup_demand = 0;
+
                 // Record deficit after store2 storage
                 if (balance < 0) {
                     let deficit_after_store2 = -balance;
                     deficit_after_store2_GWh += deficit_after_store2 * power_to_GWh;
+
+                    // unmet demand is backup demand (gas turbines)
+                    backup_demand = deficit_after_store2;
+                    backup_demand_GWh += backup_demand * power_to_GWh;
+                    if (backup_demand > max_backup_demand) {
+                        max_backup_demand = backup_demand;
+                    }
+
                 } else {
                     balance_surplus += balance * power_to_GWh;
                     if (balance > max_curtailement) {
@@ -370,7 +393,7 @@ var app = new Vue({
                 store2_soc_data.push([time, store2_soc]);
                 store2_discharge_data.push([time, store2_discharge]);
                 demand_plus_store_charge_data.push([time, demand + store2_charge]);
-
+                backup_demand_data.push([time, backup_demand]);
             }
 
             if (app.auto_optimise) {
@@ -396,6 +419,15 @@ var app = new Vue({
             app.store1.discharge_CF = store1_discharge_GWh / (app.store1.discharge_max * 24 * 365);
             app.store2.discharge_CF = store2_discharge_GWh / (app.store2.discharge_max * 24 * 365);
 
+            // backup
+            app.backup.demand_GWh = backup_demand_GWh;
+            app.backup.max = max_backup_demand;
+            app.backup.capacity = max_backup_demand * (1 + app.backup.margin * 0.01);
+            app.backup.CF = backup_demand_GWh / (app.backup.capacity * 24 * 365);
+
+
+
+
             app.balance.before_store1 = (demand_GWh - deficit_before_store1_GWh) / demand_GWh;
             app.balance.after_store1 = (demand_GWh - deficit_after_store1_GWh) / demand_GWh;
             app.balance.after_store2 = (demand_GWh - deficit_after_store2_GWh) / demand_GWh;
@@ -413,6 +445,27 @@ var app = new Vue({
             app.supply_GWh = supply_GWh;
             app.demand_GWh = demand_GWh;
 
+            // Costs
+            // cost of backup
+            // app.backup.cost_mwh = 1000 * Math.pow(app.backup.CF*100,-0.65);
+            app.backup.cost_mwh = 852 * Math.pow(app.backup.CF*100,-0.476);
+            console.log(app.backup.cost_mwh);
+
+            let backup_additional = (1.0 - app.balance.after_store1) * app.backup.cost_mwh;
+            console.log("Backup additional cost: " + backup_additional.toFixed(2) + " £/MWh");
+
+            let wind_cost = (app.wind_prc_of_demand/100) * 91;
+            console.log("Wind cost: " + wind_cost.toFixed(2) + " £/MWh");
+
+            let nuclear_cost = (app.nuclear_prc_of_demand/100) * 128;
+            console.log("Nuclear cost: " + nuclear_cost.toFixed(2) + " £/MWh");
+
+            let combined_cost = wind_cost + nuclear_cost + backup_additional;
+            console.log("Combined cost: " + combined_cost.toFixed(2) + " £/MWh");
+
+
+            let combined_cost_2 = ((app.wind_GWh * 91) + (app.nuclear_GWh * 128) + (backup_demand_GWh * app.backup.cost_mwh))/ app.demand_GWh;
+            console.log("Combined cost (method 2): " + combined_cost_2.toFixed(2) + " £/MWh");
 
 
             console.log("Run count: " + app.run_count);
@@ -447,7 +500,7 @@ var app = new Vue({
                 let demand = series[0].data[i][1] * 0.001; // MW to GW
                 let wind = series[1].data[i][1];
                 let solar = series[2].data[i][1];
-                let heatpump = series[3].data[i][1] * 0.001 * app.heatpump_households;
+                let heatpump = series[3].data[i][1] * 0.001;
 
                 input_demand_data_GWh += demand * power_to_GWh;
                 input_wind_data_GWh += wind * power_to_GWh;
