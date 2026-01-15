@@ -36,18 +36,25 @@ var app = new Vue({
         solar_GWh_per_GWp: 870,
         solar_GWp: 0,
         solar_GWh: 0,
+        solar_cost_per_mwh: 75,
 
         // wind generation
         wind_prc_of_demand: 100,
         wind_cap_factor: 40,
         wind_GWp: 0,
         wind_GWh: 0,
+        wind_cost_per_mwh: 91,
 
         // nuclear generation
         nuclear_prc_of_demand: 20,
         nuclear_cap_factor: 90,
         nuclear_GWp: 0,
         nuclear_GWh: 0,
+        nuclear_cost_per_mwh: 128,
+
+        // calculated costs
+        backup_cost_per_mwh: 0,
+        total_cost_per_mwh: 0,
 
         supply_GWh: 0,
         demand_GWh: 0,
@@ -65,7 +72,7 @@ var app = new Vue({
         max_curtailement: 0,
 
         store1: {
-            capacity: 300,
+            capacity: 0,
             soc_start: 0,
             charge_GWh: 0,
             discharge_GWh: 0,
@@ -449,23 +456,33 @@ var app = new Vue({
             // cost of backup
             // app.backup.cost_mwh = 1000 * Math.pow(app.backup.CF*100,-0.65);
             app.backup.cost_mwh = 852 * Math.pow(app.backup.CF*100,-0.476);
+            app.backup_cost_per_mwh = app.backup.cost_mwh;
             console.log(app.backup.cost_mwh);
 
             let backup_additional = (1.0 - app.balance.after_store1) * app.backup.cost_mwh;
             console.log("Backup additional cost: " + backup_additional.toFixed(2) + " £/MWh");
 
-            let wind_cost = (app.wind_prc_of_demand/100) * 91;
+            let solar_cost = (app.solar_prc_of_demand/100) * app.solar_cost_per_mwh;
+            console.log("Solar cost: " + solar_cost.toFixed(2) + " £/MWh");
+
+            let wind_cost = (app.wind_prc_of_demand/100) * app.wind_cost_per_mwh;
             console.log("Wind cost: " + wind_cost.toFixed(2) + " £/MWh");
 
-            let nuclear_cost = (app.nuclear_prc_of_demand/100) * 128;
+            let nuclear_cost = (app.nuclear_prc_of_demand/100) * app.nuclear_cost_per_mwh;
             console.log("Nuclear cost: " + nuclear_cost.toFixed(2) + " £/MWh");
 
-            let combined_cost = wind_cost + nuclear_cost + backup_additional;
+            let combined_cost = solar_cost + wind_cost + nuclear_cost + backup_additional;
             console.log("Combined cost: " + combined_cost.toFixed(2) + " £/MWh");
 
+            let total_cost = 0;
+            total_cost += app.solar_GWh * app.solar_cost_per_mwh;
+            total_cost += app.wind_GWh * app.wind_cost_per_mwh;
+            total_cost += app.nuclear_GWh * app.nuclear_cost_per_mwh;
+            total_cost += backup_demand_GWh * app.backup.cost_mwh;
 
-            let combined_cost_2 = ((app.wind_GWh * 91) + (app.nuclear_GWh * 128) + (backup_demand_GWh * app.backup.cost_mwh))/ app.demand_GWh;
+            let combined_cost_2 = total_cost / app.demand_GWh;
             console.log("Combined cost (method 2): " + combined_cost_2.toFixed(2) + " £/MWh");
+            app.total_cost_per_mwh = combined_cost_2;
 
 
             console.log("Run count: " + app.run_count);

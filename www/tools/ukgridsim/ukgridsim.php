@@ -134,7 +134,7 @@
 
     <div class="row">
 
-        <div class="col-lg-3" style="background-color: whitesmoke">
+        <div class="col-lg-2" style="background-color: whitesmoke">
             <p class="mt-3"><b>Demand:</b></p>
             <div class="row">
                 <label class="form-label col-sm-6 col-form-label">Present day grid demand</label>
@@ -167,6 +167,7 @@
                     <th>Annual generation</th>
                     <th>Capacity factor</th>
                     <th>Capacity</th>
+                    <th>Cost</th>
                 </tr>
                 <tr>
                     <td>
@@ -194,6 +195,12 @@
                         <div class="input-group">
                             <input type="text" class="form-control" :value="solar_GWp | toFixed(1)" disabled>
                             <span class="input-group-text">GWp</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="input-group">
+                            <input type="text" class="form-control" v-model.number="solar_cost_per_mwh" @change="update">
+                            <span class="input-group-text">£/MWh</span>
                         </div>
                     </td>
                 </tr>
@@ -226,6 +233,12 @@
                             <span class="input-group-text">GWp</span>
                         </div>
                     </td>
+                    <td>
+                        <div class="input-group">
+                            <input type="text" class="form-control" v-model.number="wind_cost_per_mwh" @change="update">
+                            <span class="input-group-text">£/MWh</span>
+                        </div>
+                    </td>
                 </tr>
 
                 <tr>
@@ -256,6 +269,12 @@
                             <span class="input-group-text">GWp</span>
                         </div>
                     </td>
+                    <td>
+                        <div class="input-group">
+                            <input type="text" class="form-control" v-model.number="nuclear_cost_per_mwh" @change="update">
+                            <span class="input-group-text">£/MWh</span>
+                        </div>
+                    </td>
                 </tr>
                 <tr>
                     <th></th>
@@ -263,6 +282,7 @@
                     <th>Annual demand</th>
                     <th>Capacity factor</th>
                     <th>Capacity</th>
+                    <th></th>
                 </tr>
                 <tr>
                     <td>
@@ -292,6 +312,25 @@
                             <span class="input-group-text">GW</span>
                         </div>
                     </td>
+                    <td>
+                        <div class="input-group">
+                            <input type="text" class="form-control" :value="backup_cost_per_mwh | toFixed(0)" disabled>
+                            <span class="input-group-text">£/MWh</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td><b>Total cost:</b></td>
+                    <td>
+                        <div class="input-group">
+                            <input type="text" class="form-control" :value="total_cost_per_mwh | toFixed(0)" disabled>
+                            <span class="input-group-text">£/MWh</span>
+                        </div>
+                    </td>                
                 </tr>
             </table>
         </div>
@@ -333,6 +372,8 @@
                     </div>
                 </div>
             </div>
+
+            <p><i>Not yet included in cost model</i></p>
         </div>
         <div class="col-lg-2">
             <p class="mt-3"><b>Long duration energy store</b> <input type="checkbox" v-model="store2.enabled" @change="update"></p>
@@ -389,7 +430,7 @@
                     </div>
                 </div>
             </div>
-            <p><i>E.g Hydrogen, e-Methanol e-Methane. (This technology does not yet exist as scale - enable to include)</i></p>
+            <p><i>E.g Hydrogen, e-Methanol e-Methane. (This technology does not yet exist as scale - enable to include). Not included in cost model.</i></p>
         </div>
     </div>
 
