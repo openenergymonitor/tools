@@ -333,6 +333,15 @@
                     </td>                
                 </tr>
             </table>
+
+            <!-- checkbox to include carbon cost -->
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" v-model="include_carbon_cost" @change="update" id="carbonCostCheck">
+                <label class="form-check-label" for="carbonCostCheck">
+                    Include carbon cost (£{{ carbon_cost }} per MWh of gas generation)
+                </label>
+            </div>
+
         </div>
 
         <div class="col-lg-2" style="background-color: whitesmoke">
@@ -436,4 +445,4 @@
 
 </div>
 
-<script src="<?php echo $path; ?>ukgridsim.js?v=7"></script>
+<script src="<?php echo $path; ?>ukgridsim.js?v=8"></script>
