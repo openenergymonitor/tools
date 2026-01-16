@@ -114,7 +114,8 @@ var app = new Vue({
         interval: 900,
         run_count: 0,
 
-        view: "power" // or "power"
+        view: "power", // or "power",
+        csv_output: ""
     },
     methods: {
         update: function () {
@@ -762,3 +763,41 @@ function calculateLCOE({ capex, opex, fuelCost, fuelEfficiency, monthsToBuild, l
     // Return LCOE in £/MWh
     return 1000 * annualCost / annualGeneration;
 }
+
+
+function wind_gas_comparison() {
+    // 1. Set wind percentage of demand to 0%
+    // 2. Set solar and nuclear to 0%
+    // 3. Set heatpump households to 0
+    // 4. Increase wind percentage of demand in 10% increments
+    // 5. Record backup cost per MWh at each step
+    console.log("---- Wind vs Gas Backup Cost Comparison ----");
+    app.wind_prc_of_demand = 0;
+    app.solar_prc_of_demand = 0;
+    app.nuclear_prc_of_demand = 0;
+    app.heatpump_households = 0;
+
+    let results = [];
+
+    for (let wind_perc = 0; wind_perc <= 150; wind_perc += 10) {
+        app.wind_prc_of_demand = wind_perc;
+        app.model();
+        results.push({
+            wind_perc: wind_perc*0.01,
+            wind_curtailment: app.balance.surplus/app.supply_GWh,
+            backup_demand_perc: (app.backup.demand_GWh/app.demand_GWh),
+            backup_Cf: app.backup.CF*0.01,
+            backup_cost_mwh: app.backup.cost_mwh,
+            combined_cost_mwh: app.total_cost_per_mwh
+        });
+    }
+
+    console.log("Results:", results);
+
+    // Output CSV
+    let csv_output = "Wind % of demand,Wind curtailment %,Backup demand %,Backup Capacity Factor %,Backup cost £/MWh,Combined cost £/MWh\n";
+    results.forEach(result => {
+        csv_output += result.wind_perc + "," + result.wind_curtailment.toFixed(2) + "," + result.backup_demand_perc.toFixed(2) + "," + (result.backup_Cf * 100).toFixed(2) + "," + result.backup_cost_mwh.toFixed(2) + "," + result.combined_cost_mwh.toFixed(2) + "\n";
+    });
+    app.csv_output = csv_output;
+};

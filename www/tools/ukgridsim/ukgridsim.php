@@ -342,6 +342,8 @@
                 </label>
             </div>
 
+            <pre v-if="csv_output">{{ csv_output }}</pre>
+
         </div>
 
         <div class="col-lg-2" style="background-color: whitesmoke">
@@ -445,4 +447,4 @@
 
 </div>
 
-<script src="<?php echo $path; ?>ukgridsim.js?v=8"></script>
+<script src="<?php echo $path; ?>ukgridsim.js?v=11"></script>
