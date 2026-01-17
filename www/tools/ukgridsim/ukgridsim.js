@@ -1,5 +1,6 @@
 // Start by loading hourly average outside temperature data from emoncms.org API
 // Create basic Vue outline
+
 var series = [];
 
 // Used for input data normalisation
@@ -45,21 +46,32 @@ var app = new Vue({
         solar_GWh_per_GWp: 870,
         solar_GWp: 0,
         solar_GWh: 0,
-        solar_cost_per_mwh: 75,
+        solar_cost_per_mwh: 75, // Latest AR7 auction results
 
         // wind generation
         wind_prc_of_demand: 42,
         wind_cap_factor: 35,
         wind_GWp: 0,
         wind_GWh: 0,
-        wind_cost_per_mwh: 91,
+        wind_cost_per_mwh: 91, // Latest AR7 auction results
+
+        // Renewable obligation costs 2023-2024
+        // £6.7 bn for 78.2 TWh = £85.7 / MWh + £70-80/MWh wholesale = ~£160/MWh 
+        // 1.3734 ROCs per MWh average. £62.4 per ROC
+        // 72% of all renewables generation in 2023-2024: 108.9 TWh
+        // RPI adjusted 2025: £93-99 / MWh?
+        // https://www.ofgem.gov.uk/transparency-document/renewables-obligation-ro-annual-report-scheme-year-22-april-2023-march-2024
+        // FITs: 6.5 GW, 8.3 TWh (exported 1.3 TWh), £1.86 billion ~£224/MWh
+        // https://www.ofgem.gov.uk/transparency-document/feed-tariffs-annual-report-scheme-year-14-april-2023-march-2024#:~:text=Through%20this%2C%20the%20FIT%20has,to%20new%20entrants%20in%202019.
+        // CFDs: ~22.4 TWh (approx £120/MWh https://johnewbank.co.uk/what-is-the-true-cost-of-renewables-a-cfd-analysis/)
+        // Overall estimate for renewables cost in 2025 ~£160/MWh?
 
         // nuclear generation
         nuclear_prc_of_demand: 16,
         nuclear_cap_factor: 70,
         nuclear_GWp: 0,
         nuclear_GWh: 0,
-        nuclear_cost_per_mwh: 128,
+        nuclear_cost_per_mwh: 128, // Hinkley Point C inflation adjusted estimate
 
         // calculated costs
         backup_cost_per_mwh: 0,
