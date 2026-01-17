@@ -470,4 +470,4 @@
 
 </div>
 
-<script src="<?php echo $path; ?>ukgridsim.js?v=13"></script>
+<script src="<?php echo $path; ?>ukgridsim.js?v=14"></script>
