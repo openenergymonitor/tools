@@ -251,6 +251,9 @@ var app = new Vue({
                 let trad_demand = series[0].data[i][1] * 0.001 * standard_demand_scaler; // MW to GW
                 let heatpump = series[3].data[i][1] * 0.001 * app.heatpump_households;
 
+                // ---------------------------------------------------------------------------
+                // Synthesized EV demand profile
+                // ---------------------------------------------------------------------------
                 // Calculate EV demand with seasonal efficiency variation
                 // Day of year (0-364)
                 let dayOfYear = Math.floor((series[0].data[i][0] - series[0].data[0][0]) / (24 * 3600 * 1000)) % 365;
@@ -280,6 +283,7 @@ var app = new Vue({
                 let charging_rate_factor = 1.0 + 0.4 * Math.cos(2 * Math.PI * (decimal_hour - 4) / 24);
 
                 let ev_demand = ev_daily_demand_GW * efficiency_factor * charging_rate_factor;
+                // ---------------------------------------------------------------------------
 
                 let demand = trad_demand + heatpump + ev_demand;
 
