@@ -263,7 +263,23 @@ var app = new Vue({
                 
                 // Adjust demand based on efficiency (lower efficiency = higher demand)
                 let efficiency_factor = avg_efficiency / seasonal_efficiency;
-                let ev_demand = ev_daily_demand_GW * efficiency_factor;
+                
+                // Time of day charging profile using sinusoidal function
+                // Get hour of day from timestamp
+                let date = new Date(series[0].data[i][0]);
+                let hour = date.getUTCHours();
+                let minutes = date.getUTCMinutes();
+                
+                // Convert to decimal hours for smooth sinusoidal function
+                let decimal_hour = hour + minutes / 60;
+                
+                // Sinusoidal charging profile with peak at 2am (hour 2)
+                // cos(2π * (hour - 2) / 24) peaks at hour 2
+                // Shift and scale to maintain daily average of 1.0
+                // Range from ~0.25 (minimum at 14:00) to ~1.75 (maximum at 02:00)
+                let charging_rate_factor = 1.0 + 0.4 * Math.cos(2 * Math.PI * (decimal_hour - 4) / 24);
+
+                let ev_demand = ev_daily_demand_GW * efficiency_factor * charging_rate_factor;
 
                 let demand = trad_demand + heatpump + ev_demand;
 
