@@ -466,7 +466,12 @@ var app = new Vue({
                 trad_demand_data.push([time, trad_demand]);
                 heatpump_demand_data.push([time, heatpump]);
                 ev_demand_data.push([time, ev_demand]);
-                // ...existing code...
+
+                store1_soc_data.push([time, store1_soc]);
+                store2_soc_data.push([time, store2_soc]);
+                store2_discharge_data.push([time, store2_discharge]);
+                demand_plus_store_charge_data.push([time, demand + store2_charge]);
+                backup_demand_data.push([time, backup_demand]);
             }
 
             if (app.auto_optimise) {
@@ -496,10 +501,11 @@ var app = new Vue({
             app.backup.demand_GWh = backup_demand_GWh;
             app.backup.max = max_backup_demand;
             app.backup.capacity = max_backup_demand * (1 + app.backup.margin * 0.01);
-            app.backup.CF = backup_demand_GWh / (app.backup.capacity * 24 * 365);
 
-
-
+            app.backup.CF = 0;
+            if (backup_demand_GWh>0) {
+                app.backup.CF = backup_demand_GWh / (app.backup.capacity * 24 * 365);
+            }
 
             app.balance.before_store1 = (demand_GWh - deficit_before_store1_GWh) / demand_GWh;
             app.balance.after_store1 = (demand_GWh - deficit_after_store1_GWh) / demand_GWh;
@@ -523,16 +529,19 @@ var app = new Vue({
             // app.backup.cost_mwh = 1000 * Math.pow(app.backup.CF*100,-0.65);
             // app.backup.cost_mwh = 852 * Math.pow(app.backup.CF*100,-0.476);
 
-            app.backup.cost_mwh = calculateLCOE({
-                capex: 1000,
-                opex: 25,
-                fuelCost: 30,
-                fuelEfficiency: 60,
-                monthsToBuild: 36,
-                lifespan: 20,
-                interestRate: 0.075,
-                capacityFactor: app.backup.CF * 100 // capacity factor in %
-            });
+            app.backup.cost_mwh = 0;
+            if (app.backup.CF > 0) {
+                app.backup.cost_mwh = calculateLCOE({
+                    capex: 1000,
+                    opex: 25,
+                    fuelCost: 30,
+                    fuelEfficiency: 60,
+                    monthsToBuild: 36,
+                    lifespan: 20,
+                    interestRate: 0.075,
+                    capacityFactor: app.backup.CF * 100 // capacity factor in %
+                });
+            }
 
             if (app.include_carbon_cost) {
                 app.backup.cost_mwh += app.carbon_cost;
@@ -702,7 +711,7 @@ var app = new Vue({
                     label: "Store 2 discharge",
                     color: "#ff8c00",
                     lines: { show: true, fill: 0.3, lineWidth: 0 },
-                    stack: 2
+                    stack: 2,
                 });
             }
 

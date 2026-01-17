@@ -334,6 +334,14 @@
                     <td></td>
                     <td></td>
                     <td></td>
+                    <td></td>
+                    <td></td>                
+                </tr>
+                <tr>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
                     <td><b>Energy cost:</b></td>
                     <td>
                         <div class="input-group">
@@ -415,7 +423,7 @@
                 <label class="form-label col-sm-6 col-form-label">Cycles/year</label>
                 <div class="col-sm-6">
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control" :value="store1.cycles | toFixed(0)" disabled>
+                        <input type="text" class="form-control" :value="store1.cycles | toFixed(1)" disabled>
                     </div>
                 </div>
             </div>
@@ -483,4 +491,4 @@
 
 </div>
 
-<script src="<?php echo $path; ?>ukgridsim.js?v=16"></script>
+<script src="<?php echo $path; ?>ukgridsim.js?v=17"></script>
