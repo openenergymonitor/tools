@@ -48,15 +48,15 @@ var app = new Vue({
         solar_cost_per_mwh: 75,
 
         // wind generation
-        wind_prc_of_demand: 48,
-        wind_cap_factor: 40,
+        wind_prc_of_demand: 42,
+        wind_cap_factor: 35,
         wind_GWp: 0,
         wind_GWh: 0,
         wind_cost_per_mwh: 91,
 
         // nuclear generation
-        nuclear_prc_of_demand: 14,
-        nuclear_cap_factor: 90,
+        nuclear_prc_of_demand: 16,
+        nuclear_cap_factor: 70,
         nuclear_GWp: 0,
         nuclear_GWh: 0,
         nuclear_cost_per_mwh: 128,
