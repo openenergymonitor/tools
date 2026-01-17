@@ -172,6 +172,7 @@ var app = new Vue({
             nuclear_data = [];
             demand_data = [];
             trad_demand_data = [];
+            heatpump_demand_data = [];
             ev_demand_data = [];
             store1_soc_data = [];
             store2_soc_data = [];
