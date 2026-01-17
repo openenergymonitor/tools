@@ -334,10 +334,23 @@
                     <td></td>
                     <td></td>
                     <td></td>
+                    <td><b>Energy cost:</b></td>
+                    <td>
+                        <div class="input-group">
+                            <input type="text" class="form-control" :value="energy_cost_per_mwh | toFixed(0)" disabled>
+                            <span class="input-group-text">£/MWh</span>
+                        </div>
+                    </td>                
+                </tr>
+                <tr>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
                     <td><b>Grid cost:</b></td>
                     <td>
                         <div class="input-group">
-                            <input type="text" class="form-control" :value="grid_cost_mwh | toFixed(0)" disabled>
+                            <input type="text" class="form-control" :value="grid_cost_per_mwh | toFixed(0)" disabled>
                             <span class="input-group-text">£/MWh</span>
                         </div>
                     </td>                
@@ -470,4 +483,4 @@
 
 </div>
 
-<script src="<?php echo $path; ?>ukgridsim.js?v=14"></script>
+<script src="<?php echo $path; ?>ukgridsim.js?v=16"></script>

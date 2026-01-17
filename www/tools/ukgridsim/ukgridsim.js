@@ -31,31 +31,31 @@ var app = new Vue({
 
         // demand
         standard_demand_TWh: 0,
-        heatpump_households: 30,
+        heatpump_households: 0.5,
 
         // electric vehicles
-        ev_households: 0,
+        ev_households: 1.0, // million
         ev_miles_per_household: 12000,
         ev_summer_efficiency: 4.5, // miles per kWh
         ev_winter_efficiency: 3.5, // miles per kWh
         ev_charging_efficiency: 85, // %
 
         // solar generation
-        solar_prc_of_demand: 10,
+        solar_prc_of_demand: 6,
         solar_GWh_per_GWp: 870,
         solar_GWp: 0,
         solar_GWh: 0,
         solar_cost_per_mwh: 75,
 
         // wind generation
-        wind_prc_of_demand: 100,
+        wind_prc_of_demand: 48,
         wind_cap_factor: 40,
         wind_GWp: 0,
         wind_GWh: 0,
         wind_cost_per_mwh: 91,
 
         // nuclear generation
-        nuclear_prc_of_demand: 20,
+        nuclear_prc_of_demand: 14,
         nuclear_cap_factor: 90,
         nuclear_GWp: 0,
         nuclear_GWh: 0,
@@ -63,8 +63,9 @@ var app = new Vue({
 
         // calculated costs
         backup_cost_per_mwh: 0,
+        energy_cost_per_mwh: 0,
+        grid_cost_per_mwh: 0,
         total_cost_per_mwh: 0,
-        grid_cost_mwh: 0,
 
         include_carbon_cost: true,
         carbon_cost: 41, // £/MWh of gas generation (should ideally be dynamic based on efficiency etc)
@@ -556,7 +557,7 @@ var app = new Vue({
             let demand_capacity_factor = app.demand_GWh / (max_demand * 1.1 * 24 * 365);
             console.log("Demand capacity factor: " + (demand_capacity_factor*100).toFixed(2) + " %");
 
-            app.grid_cost_mwh = calculateLCOE({
+            app.grid_cost_per_mwh = calculateLCOE({
                 capex: 2000,
                 opex: 24,
                 fuelCost: 0,
@@ -567,9 +568,10 @@ var app = new Vue({
                 capacityFactor: demand_capacity_factor * 100 // capacity factor in %
             });
 
-            console.log("Grid cost: " + app.grid_cost_mwh.toFixed(2) + " £/MWh");
+            console.log("Grid cost: " + app.grid_cost_per_mwh.toFixed(2) + " £/MWh");
 
-            let combined_cost = solar_cost + wind_cost + nuclear_cost + backup_additional + app.grid_cost_mwh;
+            app.energy_cost_per_mwh = solar_cost + wind_cost + nuclear_cost + backup_additional;
+            let combined_cost = app.energy_cost_per_mwh + app.grid_cost_per_mwh;
             console.log("Combined cost: " + combined_cost.toFixed(2) + " £/MWh");
 
             let total_cost = 0;
@@ -579,7 +581,8 @@ var app = new Vue({
             total_cost += backup_demand_GWh * app.backup.cost_mwh;
 
             let combined_cost_2 = total_cost / app.demand_GWh;
-            combined_cost_2 += app.grid_cost_mwh;
+            combined_cost_2 += app.grid_cost_per_mwh;
+
             console.log("Combined cost (method 2): " + combined_cost_2.toFixed(2) + " £/MWh");
             app.total_cost_per_mwh = combined_cost_2;
 
