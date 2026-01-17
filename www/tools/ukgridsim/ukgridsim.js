@@ -13,7 +13,9 @@ var solar_data = [];
 var wind_data = [];
 var nuclear_data = [];
 var trad_demand_data = [];
+var heatpump_demand_data = [];
 var demand_data = [];
+var ev_demand_data = [];
 var store1_soc_data = [];
 var store2_soc_data = [];
 var store2_discharge_data = [];
@@ -30,6 +32,13 @@ var app = new Vue({
         // demand
         standard_demand_TWh: 0,
         heatpump_households: 30,
+
+        // electric vehicles
+        ev_households: 0,
+        ev_miles_per_household: 12000,
+        ev_summer_efficiency: 4.5, // miles per kWh
+        ev_winter_efficiency: 3.5, // miles per kWh
+        ev_charging_efficiency: 85, // %
 
         // solar generation
         solar_prc_of_demand: 10,
@@ -131,6 +140,18 @@ var app = new Vue({
             // Demand
             app.demand_GWh = (input_demand_data_GWh * standard_demand_scaler) + (input_heatpump_data_GWh * app.heatpump_households);
 
+            // Calculate EV demand
+            // Annual miles per household converted to kWh using average efficiency
+            let avg_efficiency = (app.ev_summer_efficiency + app.ev_winter_efficiency) / 2;
+            let annual_kwh_per_household = (app.ev_miles_per_household / avg_efficiency) / (app.ev_charging_efficiency / 100);
+            let ev_demand_GWh_annual = (annual_kwh_per_household * app.ev_households * 1000000) / 1000000;
+            
+            // Daily flat demand in GW
+            let ev_daily_demand_GW = ev_demand_GWh_annual / (365 * 24);
+            
+            // Add EV demand to total
+            app.demand_GWh += ev_demand_GWh_annual;
+
             // Solar generation
             app.solar_GWh = (app.solar_prc_of_demand / 100) * app.demand_GWh;
             app.solar_GWp = app.solar_GWh / app.solar_GWh_per_GWp;
@@ -151,6 +172,7 @@ var app = new Vue({
             nuclear_data = [];
             demand_data = [];
             trad_demand_data = [];
+            ev_demand_data = [];
             store1_soc_data = [];
             store2_soc_data = [];
             demand_plus_store_charge_data = [];
@@ -229,7 +251,21 @@ var app = new Vue({
                 let trad_demand = series[0].data[i][1] * 0.001 * standard_demand_scaler; // MW to GW
                 let heatpump = series[3].data[i][1] * 0.001 * app.heatpump_households;
 
-                let demand = trad_demand + heatpump;
+                // Calculate EV demand with seasonal efficiency variation
+                // Day of year (0-364)
+                let dayOfYear = Math.floor((series[0].data[i][0] - series[0].data[0][0]) / (24 * 3600 * 1000)) % 365;
+                // Sinusoidal variation: cos(2π * day/365) 
+                // Jan 1 (day 0) = minimum efficiency (winter), July 1 (day ~182) = maximum (summer)
+                let efficiency_variation = Math.cos(2 * Math.PI * dayOfYear / 365);
+                // Map -1 to +1 range to winter to summer efficiency
+                let seasonal_efficiency = app.ev_winter_efficiency + 
+                    (app.ev_summer_efficiency - app.ev_winter_efficiency) * (efficiency_variation + 1) / 2;
+                
+                // Adjust demand based on efficiency (lower efficiency = higher demand)
+                let efficiency_factor = avg_efficiency / seasonal_efficiency;
+                let ev_demand = ev_daily_demand_GW * efficiency_factor;
+
+                let demand = trad_demand + heatpump + ev_demand;
 
                 if (demand < 0) {
                     demand = 0;
@@ -400,11 +436,9 @@ var app = new Vue({
                 nuclear_data.push([time, nuclear]);
                 demand_data.push([time, demand]);
                 trad_demand_data.push([time, trad_demand]);
-                store1_soc_data.push([time, store1_soc]);
-                store2_soc_data.push([time, store2_soc]);
-                store2_discharge_data.push([time, store2_discharge]);
-                demand_plus_store_charge_data.push([time, demand + store2_charge]);
-                backup_demand_data.push([time, backup_demand]);
+                heatpump_demand_data.push([time, heatpump]);
+                ev_demand_data.push([time, ev_demand]);
+                // ...existing code...
             }
 
             if (app.auto_optimise) {
@@ -564,29 +598,38 @@ var app = new Vue({
                 });
             }
 
-
-            plot_series.push({
-                data: timeseries(demand_data),
-                label: "Demand", // orange red
-                color: "#ff4500",
-                lines: { show: true, fill: 1.0, lineWidth: 0 },
-                stack: false
-            });
-
+            // Demand stack (stack: 1)
             plot_series.push({
                 data: timeseries(trad_demand_data),
                 label: "Trad demand",
                 color: "#0699fa",
                 lines: { show: true, fill: 1.0, lineWidth: 0 },
-                stack: false
+                stack: 1
             });
-            
+
+            plot_series.push({
+                data: timeseries(ev_demand_data),
+                label: "EV demand",
+                color: "#8b008b",
+                lines: { show: true, fill: 1.0, lineWidth: 0 },
+                stack: 1
+            });
+
+            plot_series.push({
+                data: timeseries(heatpump_demand_data),
+                label: "Heat pump demand",
+                color: "#ff4500",
+                lines: { show: true, fill: 1.0, lineWidth: 0 },
+                stack: 1
+            });
+
+            // Supply stack (stack: 2)
             plot_series.push({
                 data: timeseries(nuclear_data),
                 label: "Nuclear",
                 color: "#ff69b4",
                 lines: { show: true, fill: 0.8, lineWidth: 0 },
-                stack: true
+                stack: 2
             });
             
             plot_series.push({
@@ -594,7 +637,7 @@ var app = new Vue({
                 label: "Wind",
                 color: "green",
                 lines: { show: true, fill: 0.8, lineWidth: 0 },
-                stack: true
+                stack: 2
             });
             
             plot_series.push({
@@ -602,17 +645,16 @@ var app = new Vue({
                 label: "Solar",
                 color: "#dccc1f",
                 lines: { show: true, fill: 0.8, lineWidth: 0 },
-                stack: true
+                stack: 2
             });
 
             if (app.store2.enabled) {
                 plot_series.push({
                     data: timeseries(store2_discharge_data),
                     label: "Store 2 discharge",
-                    // orange
                     color: "#ff8c00",
                     lines: { show: true, fill: 0.3, lineWidth: 0 },
-                    stack: true
+                    stack: 2
                 });
             }
 

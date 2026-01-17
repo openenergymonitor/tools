@@ -155,6 +155,16 @@
                     </div>
                 </div>
             </div>
+
+            <div class="row">
+                <label class="form-label col-sm-6 col-form-label">EV households</label>
+                <div class="col-sm-6">
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" v-model.number="ev_households" @change="update">
+                        <span class="input-group-text">million</span>
+                    </div>
+                </div>
+            </div>
         </div>
 
 
@@ -447,4 +457,4 @@
 
 </div>
 
-<script src="<?php echo $path; ?>ukgridsim.js?v=11"></script>
+<script src="<?php echo $path; ?>ukgridsim.js?v=12"></script>
