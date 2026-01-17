@@ -334,6 +334,19 @@
                     <td></td>
                     <td></td>
                     <td></td>
+                    <td><b>Grid cost:</b></td>
+                    <td>
+                        <div class="input-group">
+                            <input type="text" class="form-control" :value="grid_cost_mwh | toFixed(0)" disabled>
+                            <span class="input-group-text">£/MWh</span>
+                        </div>
+                    </td>                
+                </tr>
+                <tr>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
                     <td><b>Total cost:</b></td>
                     <td>
                         <div class="input-group">
