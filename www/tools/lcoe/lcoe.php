@@ -329,4 +329,4 @@
 </style>
 
 <script src="<?php echo $path; ?>lcoe_lib.js?v=1"></script>
-<script src="<?php echo $path; ?>lcoe.js?v=4"></script>
+<script src="<?php echo $path; ?>lcoe.js?v=5"></script>

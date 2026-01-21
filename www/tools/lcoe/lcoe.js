@@ -7,16 +7,16 @@ const app = new Vue({
         // Presets
         presets: {
             offshore_wind: {
-                hurdle_rate: 7.6,
-                pre_development_years: 8,
-                construction_years: 2,
-                operation_years: 35,
-                net_power_output_mw: 51.6,
-                gross_load_factor: 36.4,
+                hurdle_rate: 8.9,
+                pre_development_years: 7,
+                construction_years: 3,
+                operation_years: 30,
+                net_power_output_mw: 1297,
+                gross_load_factor: 48,
                 availability: 100,
-                pre_development_costs_per_kw: 84.88,
-                construction_capital_cost_per_kw: 1570.4,
-                om_fixed_costs_per_kw_year: 39.97,
+                pre_development_costs_per_kw: 170,
+                construction_capital_cost_per_kw: 2500,
+                om_fixed_costs_per_kw_year: 138.7,
                 om_variable_costs_per_mwh: 0.0,
                 fuel_price_per_therm: 0.0,
                 mwh_per_therm: 1.0,
@@ -33,14 +33,14 @@ const app = new Vue({
                 net_power_output_mw: 1666,
                 gross_load_factor: 30,
                 availability: 93,
-                pre_development_costs_per_kw: 17.11,
-                construction_capital_cost_per_kw: 989,
-                om_fixed_costs_per_kw_year: 22.9,
-                om_variable_costs_per_mwh: 4.5,
+                pre_development_costs_per_kw: 20,
+                construction_capital_cost_per_kw: 1000,
+                om_fixed_costs_per_kw_year: 22,
+                om_variable_costs_per_mwh: 5,
                 fuel_price_per_therm: 0.73,
                 mwh_per_therm: 0.0293,
-                efficiency: 60,
-                carbon_price_per_ton: 100,
+                efficiency: 54,
+                carbon_price_per_ton: 120,
                 co2_scrubbing_prc: 0.0,
                 co2_emissions_per_therm: 5.37
             }
@@ -130,4 +130,6 @@ const app = new Vue({
 });
 
 // Calculate LCOE on initial load
+app.selectedPreset = 'offshore_wind';
+app.loadPreset();
 app.update();
