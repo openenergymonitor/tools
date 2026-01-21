@@ -80,7 +80,7 @@ var app = new Vue({
         total_cost_per_mwh: 0,
 
         include_carbon_cost: true,
-        carbon_cost: 41, // £/MWh of gas generation (should ideally be dynamic based on efficiency etc)
+        carbon_cost: 0, // £/MWh of gas generation (should ideally be dynamic based on efficiency etc)
 
         supply_GWh: 0,
         demand_GWh: 0,
@@ -543,20 +543,37 @@ var app = new Vue({
 
             app.backup.cost_mwh = 0;
             if (app.backup.CF > 0) {
-                app.backup.cost_mwh = calculateLCOE({
-                    capex: 1000,
-                    opex: 25,
-                    fuelCost: 30,
-                    fuelEfficiency: 60,
-                    monthsToBuild: 36,
-                    lifespan: 20,
-                    interestRate: 0.075,
-                    capacityFactor: app.backup.CF * 100 // capacity factor in %
-                });
-            }
 
-            if (app.include_carbon_cost) {
-                app.backup.cost_mwh += app.carbon_cost;
+                let carbon_price = 0;
+                if (app.include_carbon_cost) {
+                    // higher than gov LCOE spreadsheet?
+                    // and higher than combined ETS + UK carbon tax? ~£50-£60/tonne?
+                    carbon_price = 130;
+                }
+
+                let backup_lcoe = calculateLCOE({
+                    hurdle_rate: 8.9 * 0.01,
+                    pre_development_years: 2,
+                    construction_years: 3,
+                    operation_years: 25,
+                    net_power_output_mw: 1666,
+                    gross_load_factor: app.backup.CF,
+                    availability: 1.0,
+                    pre_development_costs_per_kw: 17.11,
+                    // increased capital cost (review)
+                    construction_capital_cost_per_kw: 989*1.2,
+                    om_fixed_costs_per_kw_year: 22.9,
+                    om_variable_costs_per_mwh: 4.5,
+                    fuel_price_per_therm: 0.73,
+                    mwh_per_therm: 0.0293,
+                    efficiency: 0.60,
+                    carbon_price_per_ton: carbon_price,
+                    co2_scrubbing_prc: 0.0,
+                    co2_emissions_per_therm: 5.37
+                });
+
+                app.backup.cost_mwh = backup_lcoe.total_lcoe;
+                app.carbon_cost = backup_lcoe.carbon_cost_per_mwh;
             }
 
             app.backup_cost_per_mwh = app.backup.cost_mwh;
@@ -579,15 +596,24 @@ var app = new Vue({
             console.log("Demand capacity factor: " + (demand_capacity_factor*100).toFixed(2) + " %");
 
             app.grid_cost_per_mwh = calculateLCOE({
-                capex: 2000,
-                opex: 24,
-                fuelCost: 0,
-                fuelEfficiency: 100,
-                monthsToBuild: 48,
-                lifespan: 45,
-                interestRate: 0.075,
-                capacityFactor: demand_capacity_factor * 100 // capacity factor in %
-            });
+                hurdle_rate: 0.075,
+                pre_development_years: 2,
+                construction_years: 4,
+                operation_years: 45,
+                net_power_output_mw: max_demand * 1.1,
+                gross_load_factor: demand_capacity_factor,
+                availability: 1.0,
+                pre_development_costs_per_kw: 50,
+                construction_capital_cost_per_kw: 2350,
+                om_fixed_costs_per_kw_year: 24,
+                om_variable_costs_per_mwh: 0.0,
+                fuel_price_per_therm: 0.0,
+                mwh_per_therm: 1.0,
+                efficiency: 1.0,
+                carbon_price_per_ton: 0.0,
+                co2_scrubbing_prc: 0.0,
+                co2_emissions_per_therm: 0.0
+            }).total_lcoe;
 
             console.log("Grid cost: " + app.grid_cost_per_mwh.toFixed(2) + " £/MWh");
 
@@ -833,48 +859,6 @@ $("#graph").bind("plotselected", function (event, ranges) {
     view.calc_interval(2400, 900);
     app.draw_power_view();
 });
-
-
-/**
- * Calculate Levelized Cost of Energy (LCOE)
- * @param {Object} params - Calculation parameters
- * @param {number} params.capex - Capital expenditure (£)
- * @param {number} params.opex - Annual operational expenditure (£)
- * @param {number} params.fuelCost - Fuel cost (£/MWh thermal energy)
- * @param {number} params.fuelEfficiency - Thermal to electrical efficiency (%)
- * @param {number} params.monthsToBuild - Construction period (months)
- * @param {number} params.lifespan - Plant operational lifespan (years)
- * @param {number} params.interestRate - Annual interest rate (decimal, e.g., 0.063 for 6.3%)
- * @param {number} params.capacityFactor - Plant capacity factor (%)
- * @returns {number} LCOE in £/MWh
- */
-function calculateLCOE({ capex, opex, fuelCost, fuelEfficiency, monthsToBuild, lifespan, interestRate, capacityFactor }) 
-{
-    // Calculate principal at commissioning with compound interest during construction
-    const principalAtCommissioning = capex * Math.pow((1 + interestRate / 12), monthsToBuild);
-
-    // Convert lifespan to months for loan calculation
-    const lifespanMonths = lifespan * 12;
-    const monthlyRate = interestRate / 12;
-
-    // Calculate monthly loan payment using annuity formula: P * r / (1 - (1 + r)^-n)
-    const monthlyPayment = monthlyRate * principalAtCommissioning / (1 - Math.pow(1 + monthlyRate, -lifespanMonths));
-    const annualLoanPayment = monthlyPayment * 12;
-
-    // Calculate annual electricity generation (MWh)
-    const annualGeneration = capacityFactor * 0.01 * 24 * 365;
-    
-    // Calculate annual fuel consumption and cost
-    const annualFuelConsumption = annualGeneration / (fuelEfficiency * 0.01); // MWh thermal energy required
-    const annualFuelCost = annualFuelConsumption * fuelCost * 0.001;
-
-    // Total annual cost
-    const annualCost = annualLoanPayment + opex + annualFuelCost;
-    
-    // Return LCOE in £/MWh
-    return 1000 * annualCost / annualGeneration;
-}
-
 
 function wind_gas_comparison() {
     // 1. Set wind percentage of demand to 0%

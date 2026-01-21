@@ -345,7 +345,7 @@
                     <td><b>Energy cost:</b></td>
                     <td>
                         <div class="input-group">
-                            <input type="text" class="form-control" :value="energy_cost_per_mwh | toFixed(0)" disabled>
+                            <input type="text" class="form-control" :value="energy_cost_per_mwh | toFixed(1)" disabled>
                             <span class="input-group-text">£/MWh</span>
                         </div>
                     </td>                
@@ -358,7 +358,7 @@
                     <td><b>Grid cost:</b></td>
                     <td>
                         <div class="input-group">
-                            <input type="text" class="form-control" :value="grid_cost_per_mwh | toFixed(0)" disabled>
+                            <input type="text" class="form-control" :value="grid_cost_per_mwh | toFixed(1)" disabled>
                             <span class="input-group-text">£/MWh</span>
                         </div>
                     </td>                
@@ -371,7 +371,7 @@
                     <td><b>Total cost:</b></td>
                     <td>
                         <div class="input-group">
-                            <input type="text" class="form-control" :value="total_cost_per_mwh | toFixed(0)" disabled>
+                            <input type="text" class="form-control" :value="total_cost_per_mwh | toFixed(1)" disabled>
                             <span class="input-group-text">£/MWh</span>
                         </div>
                     </td>                
@@ -382,7 +382,7 @@
             <div class="form-check">
                 <input class="form-check-input" type="checkbox" v-model="include_carbon_cost" @change="update" id="carbonCostCheck">
                 <label class="form-check-label" for="carbonCostCheck">
-                    Include carbon cost (£{{ carbon_cost }} per MWh of gas generation)
+                    Include carbon cost (£{{ carbon_cost | toFixed(0) }} per MWh of gas generation)
                 </label>
             </div>
 
@@ -491,4 +491,5 @@
 
 </div>
 
-<script src="<?php echo $path; ?>ukgridsim.js?v=17"></script>
+<script src="<?php echo $path; ?>lcoe_lib.js?v=1"></script>
+<script src="<?php echo $path; ?>ukgridsim.js?v=19"></script>
