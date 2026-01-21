@@ -548,7 +548,7 @@ var app = new Vue({
                 if (app.include_carbon_cost) {
                     // higher than gov LCOE spreadsheet?
                     // and higher than combined ETS + UK carbon tax? ~£50-£60/tonne?
-                    carbon_price = 130;
+                    carbon_price = 120;
                 }
 
                 let backup_lcoe = calculateLCOE({
@@ -558,15 +558,14 @@ var app = new Vue({
                     operation_years: 25,
                     net_power_output_mw: 1666,
                     gross_load_factor: app.backup.CF,
-                    availability: 1.0,
-                    pre_development_costs_per_kw: 17.11,
-                    // increased capital cost (review)
-                    construction_capital_cost_per_kw: 989*1.2,
-                    om_fixed_costs_per_kw_year: 22.9,
-                    om_variable_costs_per_mwh: 4.5,
+                    availability: 0.93,
+                    pre_development_costs_per_kw: 20,
+                    construction_capital_cost_per_kw: 1000,
+                    om_fixed_costs_per_kw_year: 22,
+                    om_variable_costs_per_mwh: 5,
                     fuel_price_per_therm: 0.73,
                     mwh_per_therm: 0.0293,
-                    efficiency: 0.60,
+                    efficiency: 0.54,
                     carbon_price_per_ton: carbon_price,
                     co2_scrubbing_prc: 0.0,
                     co2_emissions_per_therm: 5.37

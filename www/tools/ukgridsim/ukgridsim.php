@@ -492,4 +492,4 @@
 </div>
 
 <script src="<?php echo $path; ?>lcoe_lib.js?v=1"></script>
-<script src="<?php echo $path; ?>ukgridsim.js?v=19"></script>
+<script src="<?php echo $path; ?>ukgridsim.js?v=20"></script>
