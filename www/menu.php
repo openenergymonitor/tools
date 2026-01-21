@@ -127,13 +127,6 @@ $menu = array(
     "lcoe" => array(
         "case" => "LCOE",
         "title" => "LCOE",
-        "description" => "LCOE",
-        "hide" => true
-    ),
-    "lcoe_simple" => array(
-        "case" => "LCOE_Simple",
-        "title" => "LCOE Simple",
-        "description" => "LCOE ...",
-        "hide" => true
-    ),
+        "description" => "Levelised Cost of Energy Calculator"
+    )
 );

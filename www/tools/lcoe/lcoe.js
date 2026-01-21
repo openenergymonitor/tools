@@ -2,30 +2,118 @@
 const app = new Vue({
     el: '#app',
     data: {
-        capex: 1500,              // Capital expenditure (£)
-        opex: 43,                 // Annual operational expenditure (£)
-        fuel: 0,                  // Fuel cost (£/MWh thermal)
-        fuel_efficiency: 50,      // Thermal to electrical efficiency (%)
-        months_to_build: 48,      // Construction period (months)
-        lifespan: 30,             // Plant operational lifespan (years)
-        interest_rate: 6.3,       // Annual interest rate (%)
-        capacity_factor: 62,      // Plant capacity factor (%)
-        lcoe: 0,                  // Calculated LCOE (£/MWh)
-
-        project_year_start: 2018, // Project start year (unused)
+        selectedPreset: '',
+        
+        // Presets
+        presets: {
+            offshore_wind: {
+                hurdle_rate: 7.6,
+                pre_development_years: 8,
+                construction_years: 2,
+                operation_years: 35,
+                net_power_output_mw: 51.6,
+                gross_load_factor: 36.4,
+                availability: 100,
+                pre_development_costs_per_kw: 84.88,
+                construction_capital_cost_per_kw: 1570.4,
+                om_fixed_costs_per_kw_year: 39.97,
+                om_variable_costs_per_mwh: 0.0,
+                fuel_price_per_therm: 0.0,
+                mwh_per_therm: 1.0,
+                efficiency: 100,
+                carbon_price_per_ton: 0.0,
+                co2_scrubbing_prc: 0.0,
+                co2_emissions_per_therm: 0.0
+            },
+            gas_ccgt: {
+                hurdle_rate: 8.9,
+                pre_development_years: 2,
+                construction_years: 3,
+                operation_years: 25,
+                net_power_output_mw: 1666,
+                gross_load_factor: 30,
+                availability: 93,
+                pre_development_costs_per_kw: 17.11,
+                construction_capital_cost_per_kw: 989,
+                om_fixed_costs_per_kw_year: 22.9,
+                om_variable_costs_per_mwh: 4.5,
+                fuel_price_per_therm: 0.73,
+                mwh_per_therm: 0.0293,
+                efficiency: 60,
+                carbon_price_per_ton: 100,
+                co2_scrubbing_prc: 0.0,
+                co2_emissions_per_therm: 5.37
+            }
+        },
+        
+        hurdle_rate: 7.6,                           // Hurdle rate (%)
+        pre_development_years: 8,                   // Pre-development phase (years)
+        construction_years: 2,                      // Construction phase (years)
+        operation_years: 35,                        // Operation phase (years)
+        net_power_output_mw: 51.6,                  // Net power output (MW)
+        gross_load_factor: 36.4,                    // Gross load factor (%)
+        availability: 100,                          // Availability (%)
+        pre_development_costs_per_kw: 84.88,        // Pre-development costs (£/kW)
+        construction_capital_cost_per_kw: 1570.4,   // Construction capital cost (£/kW) - 1255 + 315.4
+        om_fixed_costs_per_kw_year: 39.97,          // Fixed O&M costs (£/kW/year) - sum of fixed + insurance + connection
+        om_variable_costs_per_mwh: 0.0,             // Variable O&M costs (£/MWh)
+        fuel_price_per_therm: 0.0,                  // Fuel price (£/therm)
+        mwh_per_therm: 1.0,                         // MWh per therm conversion
+        efficiency: 100,                            // Efficiency (%)
+        carbon_price_per_ton: 0.0,                  // Carbon price (£/ton)
+        co2_scrubbing_prc: 0.0,                     // CO2 scrubbing percentage (%)
+        co2_emissions_per_therm: 0.0,               // CO2 emissions (kg/therm)
+        
+        // Results
+        lcoe_results: null,
     },
     methods: {
+        // Load preset values
+        loadPreset: function() {
+            if (this.selectedPreset && this.presets[this.selectedPreset]) {
+                const preset = this.presets[this.selectedPreset];
+                this.hurdle_rate = preset.hurdle_rate;
+                this.pre_development_years = preset.pre_development_years;
+                this.construction_years = preset.construction_years;
+                this.operation_years = preset.operation_years;
+                this.net_power_output_mw = preset.net_power_output_mw;
+                this.gross_load_factor = preset.gross_load_factor;
+                this.availability = preset.availability;
+                this.pre_development_costs_per_kw = preset.pre_development_costs_per_kw;
+                this.construction_capital_cost_per_kw = preset.construction_capital_cost_per_kw;
+                this.om_fixed_costs_per_kw_year = preset.om_fixed_costs_per_kw_year;
+                this.om_variable_costs_per_mwh = preset.om_variable_costs_per_mwh;
+                this.fuel_price_per_therm = preset.fuel_price_per_therm;
+                this.mwh_per_therm = preset.mwh_per_therm;
+                this.efficiency = preset.efficiency;
+                this.carbon_price_per_ton = preset.carbon_price_per_ton;
+                this.co2_scrubbing_prc = preset.co2_scrubbing_prc;
+                this.co2_emissions_per_therm = preset.co2_emissions_per_therm;
+                
+                this.update();
+            }
+        },
+        
         // Recalculate LCOE when inputs change
         update: function () {
-            this.lcoe = calculateLCOE({
-                capex: this.capex,
-                opex: this.opex,
-                fuelCost: this.fuel,
-                fuelEfficiency: this.fuel_efficiency,
-                monthsToBuild: this.months_to_build,
-                lifespan: this.lifespan,
-                interestRate: this.interest_rate * 0.01,  // Convert percentage to decimal
-                capacityFactor: this.capacity_factor
+            this.lcoe_results = calculateLCOE({
+                hurdle_rate: this.hurdle_rate * 0.01,
+                pre_development_years: this.pre_development_years,
+                construction_years: this.construction_years,
+                operation_years: this.operation_years,
+                net_power_output_mw: this.net_power_output_mw,
+                gross_load_factor: this.gross_load_factor * 0.01,
+                availability: this.availability * 0.01,
+                pre_development_costs_per_kw: this.pre_development_costs_per_kw,
+                construction_capital_cost_per_kw: this.construction_capital_cost_per_kw,
+                om_fixed_costs_per_kw_year: this.om_fixed_costs_per_kw_year,
+                om_variable_costs_per_mwh: this.om_variable_costs_per_mwh,
+                fuel_price_per_therm: this.fuel_price_per_therm,
+                mwh_per_therm: this.mwh_per_therm,
+                efficiency: this.efficiency * 0.01,
+                carbon_price_per_ton: this.carbon_price_per_ton,
+                co2_scrubbing_prc: this.co2_scrubbing_prc * 0.01,
+                co2_emissions_per_therm: this.co2_emissions_per_therm
             });
         },
     },
@@ -43,43 +131,3 @@ const app = new Vue({
 
 // Calculate LCOE on initial load
 app.update();
-
-/**
- * Calculate Levelized Cost of Energy (LCOE)
- * @param {Object} params - Calculation parameters
- * @param {number} params.capex - Capital expenditure (£)
- * @param {number} params.opex - Annual operational expenditure (£)
- * @param {number} params.fuelCost - Fuel cost (£/MWh thermal energy)
- * @param {number} params.fuelEfficiency - Thermal to electrical efficiency (%)
- * @param {number} params.monthsToBuild - Construction period (months)
- * @param {number} params.lifespan - Plant operational lifespan (years)
- * @param {number} params.interestRate - Annual interest rate (decimal, e.g., 0.063 for 6.3%)
- * @param {number} params.capacityFactor - Plant capacity factor (%)
- * @returns {number} LCOE in £/MWh
- */
-function calculateLCOE({ capex, opex, fuelCost, fuelEfficiency, monthsToBuild, lifespan, interestRate, capacityFactor }) 
-{
-    // Calculate principal at commissioning with compound interest during construction
-    const principalAtCommissioning = capex * Math.pow((1 + interestRate / 12), monthsToBuild);
-
-    // Convert lifespan to months for loan calculation
-    const lifespanMonths = lifespan * 12;
-    const monthlyRate = interestRate / 12;
-
-    // Calculate monthly loan payment using annuity formula: P * r / (1 - (1 + r)^-n)
-    const monthlyPayment = monthlyRate * principalAtCommissioning / (1 - Math.pow(1 + monthlyRate, -lifespanMonths));
-    const annualLoanPayment = monthlyPayment * 12;
-
-    // Calculate annual electricity generation (MWh)
-    const annualGeneration = capacityFactor * 0.01 * 24 * 365;
-    
-    // Calculate annual fuel consumption and cost
-    const annualFuelConsumption = annualGeneration / (fuelEfficiency * 0.01); // MWh thermal energy required
-    const annualFuelCost = annualFuelConsumption * fuelCost * 0.001;
-
-    // Total annual cost
-    const annualCost = annualLoanPayment + opex + annualFuelCost;
-    
-    // Return LCOE in £/MWh
-    return 1000 * annualCost / annualGeneration;
-}
