@@ -104,7 +104,8 @@ var app = new Vue({
             discharge_GWh: 0,
             charge_max: 100,
             discharge_max: 100,
-            round_trip_efficiency: 80
+            round_trip_efficiency: 80,
+            cost_mwh: 0
         },
 
         store2: {
@@ -527,16 +528,46 @@ var app = new Vue({
             app.max_curtailement = max_curtailement;
 
             app.store1.cycles = 0.5 * (store1_charge_GWh + store1_discharge_GWh) / app.store1.capacity;
+            if (app.store1.capacity == 0) {
+                app.store1.cycles = 0;
+            }
             app.store2.cycles = 0.5 * (store2_charge_GWh + store2_discharge_GWh) / app.store2.capacity;
+            if (app.store2.capacity == 0) {
+                app.store2.cycles = 0;
+            }
 
             // Copy over to vue (faster than using vue reactive data during model run)
             app.solar_GWh = solar_GWh;
             app.wind_GWh = wind_GWh;
-            app.nuclear_GWh = nuclear_GWh;
+            app.nuclear_GWh = nuclear_GWh;app.store1.cost_mwh
             app.supply_GWh = supply_GWh;
             app.demand_GWh = demand_GWh;
 
             // Costs
+            app.store1.cost_mwh = 0;
+            if (app.store1.capacity > 0 && app.store1.cycles > 0) {
+                let storage1_lcoe = calculateLCOE({
+                    hurdle_rate: 8.9 * 0.01,
+                    pre_development_years: 1,              // assumed
+                    construction_years: 2,                 // Kilmarnock South project
+                    operation_years: 20,
+                    net_power_output_mw: 600,              // 600 MWh, this value makes no difference to LCOE 
+                    gross_load_factor: app.store1.cycles/(24*365),
+                    availability: 1.0,
+                    pre_development_costs_per_kw: 0,       // assumed part of £245/kWh capital cost
+                    construction_capital_cost_per_kw: 245, // £245/kWh based on £147 million for 600 MWh (Kilmarnock South project)
+                    om_fixed_costs_per_kw_year: 0,
+                    om_variable_costs_per_mwh: 3,
+                    fuel_price_per_therm: 0.0,
+                    mwh_per_therm: 1.0,
+                    efficiency: 1.0,
+                    carbon_price_per_ton: 0.0,
+                    co2_scrubbing_prc: 0.0,
+                    co2_emissions_per_therm: 0.0
+                });
+                app.store1.cost_mwh = storage1_lcoe.total_lcoe;
+            }
+
             // cost of backup
             // app.backup.cost_mwh = 1000 * Math.pow(app.backup.CF*100,-0.65);
             // app.backup.cost_mwh = 852 * Math.pow(app.backup.CF*100,-0.476);
@@ -574,9 +605,7 @@ var app = new Vue({
                 app.backup.cost_mwh = backup_lcoe.total_lcoe;
                 app.carbon_cost = backup_lcoe.carbon_cost_per_mwh;
             }
-
             app.backup_cost_per_mwh = app.backup.cost_mwh;
-            console.log(app.backup.cost_mwh);
 
             let backup_additional = (1.0 - app.balance.after_store1) * app.backup.cost_mwh;
             console.log("Backup additional cost: " + backup_additional.toFixed(2) + " £/MWh");
@@ -616,23 +645,27 @@ var app = new Vue({
 
             console.log("Grid cost: " + app.grid_cost_per_mwh.toFixed(2) + " £/MWh");
 
-            app.energy_cost_per_mwh = solar_cost + wind_cost + nuclear_cost + backup_additional;
-            let combined_cost = app.energy_cost_per_mwh + app.grid_cost_per_mwh;
-            console.log("Combined cost: " + combined_cost.toFixed(2) + " £/MWh");
+            // app.energy_cost_per_mwh = solar_cost + wind_cost + nuclear_cost + backup_additional;
+            // let combined_cost = app.energy_cost_per_mwh + app.grid_cost_per_mwh;
+            // console.log("Combined cost: " + combined_cost.toFixed(2) + " £/MWh");
 
             let total_cost = 0;
             total_cost += app.solar_GWh * app.solar_cost_per_mwh;
             total_cost += app.wind_GWh * app.wind_cost_per_mwh;
             total_cost += app.nuclear_GWh * app.nuclear_cost_per_mwh;
             total_cost += backup_demand_GWh * app.backup.cost_mwh;
-
+            total_cost += store1_discharge_GWh * app.store1.cost_mwh;
+            
             let combined_cost_2 = total_cost / app.demand_GWh;
+
+            app.energy_cost_per_mwh = combined_cost_2;
+
             combined_cost_2 += app.grid_cost_per_mwh;
 
             console.log("Combined cost (method 2): " + combined_cost_2.toFixed(2) + " £/MWh");
             app.total_cost_per_mwh = combined_cost_2;
 
-
+0
             console.log("Run count: " + app.run_count);
             console.log("Annual wind: " + wind_GWh.toFixed(0) + " GWh");
             console.log("Annual solar: " + solar_GWh.toFixed(0) + " GWh");

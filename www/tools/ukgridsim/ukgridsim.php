@@ -427,6 +427,15 @@
                     </div>
                 </div>
             </div>
+            <div class="row">
+                <label class="form-label col-sm-6 col-form-label">LCOS</label>
+                <div class="col-sm-6">
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" :value="store1.cost_mwh | toFixed(0)" disabled>
+                        <span class="input-group-text">£/MWh</span>
+                    </div>
+                </div>
+            </div>
 
             <p><i>Not yet included in cost model</i></p>
         </div>
@@ -492,4 +501,4 @@
 </div>
 
 <script src="<?php echo $path; ?>lcoe_lib.js?v=1"></script>
-<script src="<?php echo $path; ?>ukgridsim.js?v=20"></script>
+<script src="<?php echo $path; ?>ukgridsim.js?v=22"></script>
