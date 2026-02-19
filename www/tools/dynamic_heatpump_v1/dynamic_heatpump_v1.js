@@ -615,6 +615,16 @@ function sim(conf) {
     var timestep = 30;
     var itterations = 3600 * 24 * conf.days / timestep;
 
+    // Pre-process schedule - convert time strings to hours and sort
+    var processed_schedule = schedule.map(function(entry) {
+        return {
+            hour: time_str_to_hour(entry.start),
+            set_point: parseFloat(entry.set_point),
+            price: parseFloat(entry.price)
+        };
+    }).sort(function(a, b) {
+        return a.hour - b.hour;
+    });
 
     var elec_kwh = 0;
     var heat_kwh = 0;
@@ -704,15 +714,21 @@ function sim(conf) {
 
         last_setpoint = setpoint;
 
-        // Load heating schedule
-        for (let j = 0; j < schedule.length; j++) {
-            let start = time_str_to_hour(schedule[j].start);
-            if (hour >= start) {
-                setpoint = parseFloat(schedule[j].set_point);
-                price = parseFloat(schedule[j].price);
-                // max_flowT = parseFloat(schedule[j].flowT);
+        // Load heating schedule - find the active schedule entry for current hour
+        // Start with the last entry (handles wraparound to next day)
+        var scheduleIndex = processed_schedule.length - 1;
+        
+        // Find the correct schedule entry for this hour
+        for (let j = 0; j < processed_schedule.length; j++) {
+            if (hour >= processed_schedule[j].hour) {
+                scheduleIndex = j;
+            } else {
+                break;
             }
         }
+        
+        setpoint = processed_schedule[scheduleIndex].set_point;
+        price = processed_schedule[scheduleIndex].price;
 
         DHW_active = false;
 
