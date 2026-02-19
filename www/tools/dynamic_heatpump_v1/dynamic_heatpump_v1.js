@@ -626,6 +626,15 @@ function sim(conf) {
         return a.hour - b.hour;
     });
 
+    // Pre-process DHW schedule - convert time strings to hours and duration to hours
+    var processed_dhw_schedule = app.dhw_schedule.map(function(entry) {
+        return {
+            start_hour: time_str_to_hour(entry.start),
+            end_hour: time_str_to_hour(entry.start) + (entry.duration / 3600),
+            set_point: parseFloat(entry.set_point)
+        };
+    });
+
     var elec_kwh = 0;
     var heat_kwh = 0;
 
@@ -732,13 +741,24 @@ function sim(conf) {
 
         DHW_active = false;
 
-        // Load DHW schedule
-        for (let j = 0; j < app.dhw_schedule.length; j++) {
-            let start = time_str_to_hour(app.dhw_schedule[j].start);
-            let duration_hours = app.dhw_schedule[j].duration / 3600;
-            if (hour >= start && hour < (start + duration_hours)) {
-                DHW_active = true;
-                break;
+        // Load DHW schedule - check if current hour falls within any DHW period
+        for (let j = 0; j < processed_dhw_schedule.length; j++) {
+            let start = processed_dhw_schedule[j].start_hour;
+            let end = processed_dhw_schedule[j].end_hour;
+            
+            // Handle wraparound case where end > 24 (e.g., 23:00 + 2 hours = 25:00)
+            if (end > 24) {
+                // DHW period spans midnight
+                if (hour >= start || hour < (end - 24)) {
+                    DHW_active = true;
+                    break;
+                }
+            } else {
+                // Normal case - no wraparound
+                if (hour >= start && hour < end) {
+                    DHW_active = true;
+                    break;
+                }
             }
         }
         

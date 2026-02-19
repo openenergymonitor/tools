@@ -222,6 +222,8 @@
                                 <div class="input-group mb-3">
                                     <input type="text" class="form-control" v-model.number="item.duration"
                                         @change="simulate" style="width:30px" />
+                                    <!-- seconds -->
+                                    <span class="input-group-text">seconds</span>
                                 </div>
                             </td>
                         </tr>
