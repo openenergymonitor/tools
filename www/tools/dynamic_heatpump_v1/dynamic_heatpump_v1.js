@@ -77,8 +77,8 @@ var app = new Vue({
             mode: AUTO_ADAPT,
             wc_use_outside_mean: 1,
             
-            Kp: 2500,
-            Ki: 0.2,
+            Kp: 2000,
+            Ki: 0.04,
             Kd: 0.0,
 
             wc_Kp: 500,
@@ -97,6 +97,7 @@ var app = new Vue({
             { start: "15:00", set_point: 19, price: price_cap },
             { start: "22:00", set_point: 17, price: price_cap }
         ],
+        show_targetT: false,
         dhw_schedule: [
             { start: "02:00", set_point: 45, duration: 0 },
             { start: "14:00", set_point: 45, duration: 0 },
@@ -126,7 +127,9 @@ var app = new Vue({
             window_flowT_weighted: 0,
             window_outsideT_weighted: 0,
             window_flowT_minus_outsideT_weighted: 0,
-            window_wa_prc_carnot: 0
+            window_wa_prc_carnot: 0,
+            degree_hours_above_setpoint: 0,
+            degree_hours_below_setpoint: 0
             
         },
         baseline_enabled: false,
@@ -297,6 +300,8 @@ var app = new Vue({
                 app.stats.outsideT_weighted = result.outsideT_weighted;
                 app.stats.flowT_minus_outsideT_weighted = result.flowT_minus_outsideT_weighted;
                 app.stats.wa_prc_carnot = result.wa_prc_carnot;
+                app.stats.degree_hours_above_setpoint = result.degree_hours_above_setpoint;
+                app.stats.degree_hours_below_setpoint = result.degree_hours_below_setpoint;
 
                 // Set view if not already set
                 if (view.start == 0 && view.end == 0) {
@@ -592,6 +597,7 @@ function sim(conf) {
     elec_data = [];
     heat_data = [];
     agile_data = [];
+    targetT_data = [];
     
     var heatpump_off_duration = 0;
 
@@ -671,12 +677,15 @@ function sim(conf) {
     let kwh_carnot_elec = 0;
     let kwh_elec_running = 0;
     let kwh_heat_running = 0;
+    let degree_hours_above_setpoint = 0;
+    let degree_hours_below_setpoint = 0;
 
     let outside = 0;
     let solar = 0;
     let agile_price = 0;
 
     let DHW_active = false;
+    let last_on_time = 0;
 
     let outsideT_histogram = {};
 
@@ -777,9 +786,14 @@ function sim(conf) {
 
             PTerm = app.control.Kp * error
             ITerm += error * timestep
-            DTerm = delta_error / timestep
+            // DTerm = delta_error / timestep
 
-            heatpump_heat = PTerm + (app.control.Ki * ITerm) + (app.control.Kd * DTerm)
+            // Anti-windup: clamp ITerm so output can't exceed max capacity
+            let max_ITerm = app.heatpump.capacity / app.control.Ki;
+            if (ITerm > max_ITerm) ITerm = max_ITerm;
+            if (ITerm < 0) ITerm = 0;
+
+            heatpump_heat = PTerm + (app.control.Ki * ITerm) // + (app.control.Kd * DTerm)
             if (heatpump_heat == NaN) heatpump_heat = 0;
             // if infinite, set to zero
             if (!isFinite(heatpump_heat)) heatpump_heat = 0;
@@ -857,13 +871,17 @@ function sim(conf) {
         if (app.control.mode != DEGREE_MINUTES_WC) {
 
             // if heat pump is off and demand for heat is more than minimum modulation turn heat pump on
-            if (heatpump_state==0 && heatpump_heat>=(app.heatpump.capacity*app.heatpump.minimum_modulation*0.01) && MWT<(MWT_off-3)) {
-                heatpump_state = 1;
+            if (heatpump_state==0 && heatpump_heat>=(app.heatpump.capacity*app.heatpump.minimum_modulation*0.01)) {
+                // turn on if we have been off for at least 10 minutes to prevent short cycling
+                if (time - last_on_time >= 600) {
+                    heatpump_state = 1;
+                }
             }
                 
             // If we are below minimum modulation turn heat pump off
             if (heatpump_heat<(app.heatpump.capacity*app.heatpump.minimum_modulation*0.01) && heatpump_state==1) {
                 MWT_off = MWT;
+                last_on_time = time;
                 heatpump_state = 0;
             }
 
@@ -882,16 +900,6 @@ function sim(conf) {
         if (DHW_active) {
             heatpump_state = 0;
             heatpump_heat = 0;
-        }
-
-        // clear itrem if heat pump has been off for more than 12 hours
-        if (heatpump_state==0) {
-            heatpump_off_duration += timestep;
-            if (heatpump_off_duration > 43200) { // 12 hours in seconds
-                ITerm = 0;
-            }
-        } else {
-            heatpump_off_duration = 0;
         }
 
         // Implementation includes system volume
@@ -919,7 +927,11 @@ function sim(conf) {
         flow_temperature = MWT + (system_DT * 0.5);
         return_temperature = MWT - (system_DT * 0.5);
 
-        var PracticalCOP = 0;
+        var PracticalC
+            // Anti-windup: clamp ITerm so output can't exceed max capacity
+            let max_ITerm = app.heatpump.capacity / app.control.Ki;
+            if (ITerm > max_ITerm) ITerm = max_ITerm;
+            if (ITerm < 0) ITerm = 0;OP = 0;
         if (app.heatpump.cop_model == "carnot_fixed") {
             // Simple carnot equation based heat pump model with fixed offsets
             let condenser = flow_temperature + 2;
@@ -967,6 +979,18 @@ function sim(conf) {
             max_room_temp = room;
         }
 
+        // Record degree hours above and below setpoint when the heat pump is running for use in control algorithm performance metrics
+        let tolerance = 0.05; // 0.05 degree tolerance band around setpoint to avoid counting minor fluctuations as above/below setpoint
+        if (room>setpoint+tolerance) {
+            if (heatpump_heat>0) {
+                degree_hours_above_setpoint += ((room - setpoint) * (timestep / 3600));
+            }
+        } else if (room<setpoint-tolerance) {
+            degree_hours_below_setpoint += ((setpoint - room) * (timestep / 3600));
+        }
+
+
+
         // we will add timestamps to data at the point the data is plotted
         // record here as fixed interval timeseries
 
@@ -986,6 +1010,7 @@ function sim(conf) {
         elec_data[i] = heatpump_elec;
         heat_data[i] = heatpump_heat;
         agile_data[i] = agile_price;
+        targetT_data[i] = setpoint;
 
         // Calculate stats
 
@@ -1047,7 +1072,9 @@ function sim(conf) {
         flowT_weighted: flowT_weighted_sum / heat_kwh,
         outsideT_weighted: outsideT_weighted_sum / heat_kwh,
         flowT_minus_outsideT_weighted: flowT_minus_outsideT_weighted_sum / heat_kwh,
-        wa_prc_carnot: wa_prc_carnot
+        wa_prc_carnot: wa_prc_carnot,
+        degree_hours_above_setpoint: degree_hours_above_setpoint,
+        degree_hours_below_setpoint: degree_hours_below_setpoint
     }
     
     // Automatic refinement, disabled for now, running simulation 3 times instead.
@@ -1098,6 +1125,7 @@ function plot() {
     window.roomT_data = timeseries(roomT_data);
     window.outsideT_data = timeseries(outsideT_data);
     window.agile_data = timeseries(agile_data);
+    window.targetT_data = timeseries(targetT_data);
 
     let power_to_kwh = view.interval / 3600000;
 
@@ -1137,14 +1165,19 @@ function plot() {
         { label: "FlowT", data: window.flowT_data, color: 2, yaxis: 2, lines: { show: true, fill: false } },
         { label: "ReturnT", data: window.returnT_data, color: 3, yaxis: 2, lines: { show: true, fill: false } },
         { label: "RoomT", data: window.roomT_data, color: "#000", yaxis: 1, lines: { show: true, fill: false } },
+        { label: "TargetT", data: window.targetT_data, color: "#aaa", yaxis: 1, lines: { show: true, fill: false } },
         { label: "OutsideT", data: window.outsideT_data, color: "#0000cc", yaxis: 1, lines: { show: true, fill: false } },
-        { label: "Agile Price", data: window.agile_data, color: "#aaa", yaxis: 4, lines: { show: true, fill: false } }
-
+        { label: "Agile Price", data: window.agile_data, color: "#a6196bff", yaxis: 4, lines: { show: true, fill: false } }
     ];
 
     if (app.mode != "year") {
         // hide agile price in day mode
-        series[6].lines.show = false;
+        series[7].lines.show = false;
+    }
+
+    // Show/hide target temperature based on user setting
+    if (!app.show_targetT) {
+        series[5].lines.show = false;
     }
 
     var options = {
@@ -1236,8 +1269,10 @@ $('#graph').bind("plothover", function (event, pos, item) {
             tooltipstr += "ReturnT: " + (series[3].data[z][1]).toFixed(1) + "°C<br>";
             // Add roomT_data
             tooltipstr += "RoomT: " + (series[4].data[z][1]).toFixed(1) + "°C<br>";
+            // Add targetT_data
+            tooltipstr += "TargetT: " + (series[5].data[z][1]).toFixed(1) + "°C<br>";
             // Add outsideT_data
-            tooltipstr += "OutsideT: " + (series[5].data[z][1]).toFixed(1) + "°C<br>";
+            tooltipstr += "OutsideT: " + (series[6].data[z][1]).toFixed(1) + "°C<br>";
 
             tooltip(item.pageX, item.pageY, tooltipstr, "#fff", "#000");
 

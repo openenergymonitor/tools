@@ -191,6 +191,23 @@
                         </tr>
                     </table>
 
+                    <!-- input group with checkbox to show/hide target temperature on graph -->
+                    <div class="input-group mb-3">
+                        <span class="input-group-text">Show target temperature on graph</span>
+                        <span class="input-group-text"><input type="checkbox" v-model="show_targetT" @change="simulate" /></span>
+                    </div>
+
+                    <!-- show degree hours above set point when heat pump is running -->
+                    <div class="input-group mb-3">
+                        <span class="input-group-text">Degree hours above set point when heat pump is running</span>
+                        <span class="input-group-text">{{ stats.degree_hours_above_setpoint.toFixed(1) }}</span>
+                    </div>
+                    <!-- show degree hours below set point when heat pump is running -->
+                    <div class="input-group mb-3">
+                        <span class="input-group-text">Degree hours below set point</span>
+                        <span class="input-group-text">{{ stats.degree_hours_below_setpoint.toFixed(1) }}</span>
+                    </div>
+
                     <div class="alert alert-info"><b>Room temp reached maximum of: {{ max_room_temp | toFixed(2) }} °C.</b></div>
 
                     <!-- button to load Octopus Cosy schedule example -->
@@ -334,6 +351,7 @@
                                     @change="simulate" />
                             </div>
                         </div>
+                        <!--
                         <div class="col">
                             <label class="form-label">Derivative</label>
                             <div class="input-group mb-3">
@@ -342,6 +360,7 @@
                                     @change="simulate" />
                             </div>
                         </div>
+                        -->
                     </div>
 
                 </div>
