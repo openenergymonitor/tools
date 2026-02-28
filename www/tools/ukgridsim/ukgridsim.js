@@ -31,7 +31,7 @@ var app = new Vue({
         loading: true,
 
         // demand
-        standard_demand_TWh: 0,
+        standard_demand_TWh: 320, // 2025 demand
         heatpump_households: 0.5,
 
         // electric vehicles
@@ -46,14 +46,14 @@ var app = new Vue({
         solar_GWh_per_GWp: 870,
         solar_GWp: 0,
         solar_GWh: 0,
-        solar_cost_per_mwh: 75, // Latest AR7 auction results
+        solar_cost_per_mwh: 65, // Latest AR7 auction results
 
         // wind generation
         wind_prc_of_demand: 42,
         wind_cap_factor: 35,
         wind_GWp: 0,
         wind_GWh: 0,
-        wind_cost_per_mwh: 91, // Latest AR7 auction results
+        wind_cost_per_mwh: 85, // Latest AR7 auction results (30% of onshore wind cost £72/MWh, 70% offshore wind cost £91/MWh)
 
         // Renewable obligation costs 2023-2024
         // £6.7 bn for 78.2 TWh = £85.7 / MWh + £70-80/MWh wholesale = ~£160/MWh 
@@ -707,7 +707,7 @@ var app = new Vue({
 
             }
 
-            app.standard_demand_TWh = (input_demand_data_GWh * 0.001).toFixed(1);
+            // app.standard_demand_TWh = (input_demand_data_GWh * 0.001).toFixed(1);
         },
         draw_power_view: function () {
 
