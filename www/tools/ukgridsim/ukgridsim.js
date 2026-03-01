@@ -7,7 +7,8 @@ var series = [];
 var input_solar_data_GWh = 0;
 var input_wind_data_GWh = 0;
 var input_demand_data_GWh = 0;
-var input_heatpump_data_GWh = 0;
+var input_heatpump_elec_data_GWh = 0;
+var input_heatpump_heat_data_GWh = 0;
 
 // Power series
 var solar_data = [];
@@ -29,10 +30,14 @@ var app = new Vue({
     data: {
 
         loading: true,
+        show_chart: true,
+        activeTab: 'costs',
 
         // demand
         standard_demand_TWh: 320, // 2025 demand
         heatpump_households: 0.5,
+        heatpump_kwh_per_household: 9100,
+        heatpump_spf: 3.73,
 
         // electric vehicles
         ev_households: 1.0, // million
@@ -78,6 +83,13 @@ var app = new Vue({
         energy_cost_per_mwh: 0,
         grid_cost_per_mwh: 0,
         total_cost_per_mwh: 0,
+
+        // calculated total costs
+        solar_cost: 0,
+        wind_cost: 0,
+        nuclear_cost: 0,
+        backup_cost: 0,
+        store1_cost: 0,
 
         include_carbon_cost: true,
         carbon_cost: 0, // £/MWh of gas generation (should ideally be dynamic based on efficiency etc)
@@ -152,8 +164,20 @@ var app = new Vue({
 
             let standard_demand_scaler = app.standard_demand_TWh / (input_demand_data_GWh * 0.001);
 
-            // Demand
-            app.demand_GWh = (input_demand_data_GWh * standard_demand_scaler) + (input_heatpump_data_GWh * app.heatpump_households);
+
+            let average_household_heat_scaler = (app.heatpump_kwh_per_household / input_heatpump_heat_data_GWh)
+            let heatpump_elec_demand_GWh = (input_heatpump_elec_data_GWh * app.heatpump_households * average_household_heat_scaler);
+            let heatpump_heat_demand_GWh = (input_heatpump_heat_data_GWh * app.heatpump_households * average_household_heat_scaler);
+
+            console.log("Heat pump electric demand (GWh): " + heatpump_elec_demand_GWh.toFixed(2));
+            console.log("Heat pump heat demand (GWh): " + heatpump_heat_demand_GWh.toFixed(2));
+
+            let heatpump_elec_demand_GWh_adjusted = heatpump_heat_demand_GWh / app.heatpump_spf;
+            console.log("Adjusted heat pump electric demand (GWh): " + heatpump_elec_demand_GWh_adjusted.toFixed(2));
+            let heatpump_elec_spf_scaler = heatpump_elec_demand_GWh_adjusted / heatpump_elec_demand_GWh;
+            console.log("Heat pump electric demand SPF scaler: " + heatpump_elec_spf_scaler.toFixed(3));
+
+            app.demand_GWh = (input_demand_data_GWh * standard_demand_scaler) + heatpump_elec_demand_GWh_adjusted;
 
             // Calculate EV demand
             // Annual miles per household converted to kWh using average efficiency
@@ -266,7 +290,7 @@ var app = new Vue({
 
                 // Demand
                 let trad_demand = series[0].data[i][1] * 0.001 * standard_demand_scaler; // MW to GW
-                let heatpump = series[3].data[i][1] * 0.001 * app.heatpump_households;
+                let heatpump = series[3].data[i][1] * 0.001 * app.heatpump_households * average_household_heat_scaler * heatpump_elec_spf_scaler; // MW to GW, scaled by number of households and heat pump demand
 
                 // ---------------------------------------------------------------------------
                 // Synthesized EV demand profile
@@ -518,7 +542,7 @@ var app = new Vue({
             app.backup.CF = 0;
             if (backup_demand_GWh>0) {
                 app.backup.CF = backup_demand_GWh / (app.backup.capacity * 24 * 365);
-            }
+            }supply
 
             app.balance.before_store1 = (demand_GWh - deficit_before_store1_GWh) / demand_GWh;
             app.balance.after_store1 = (demand_GWh - deficit_after_store1_GWh) / demand_GWh;
@@ -542,8 +566,34 @@ var app = new Vue({
             app.nuclear_GWh = nuclear_GWh;app.store1.cost_mwh
             app.supply_GWh = supply_GWh;
             app.demand_GWh = demand_GWh;
+            app.store1_discharge_GWh = store1_discharge_GWh;
 
-            // Costs
+            app.max_demand = max_demand;
+            app.backup_demand_GWh = backup_demand_GWh;
+            app.model_costs();
+0
+            console.log("Run count: " + app.run_count);
+            console.log("Annual wind: " + wind_GWh.toFixed(0) + " GWh");
+            console.log("Annual solar: " + solar_GWh.toFixed(0) + " GWh");
+            console.log("Annual nuclear: " + nuclear_GWh.toFixed(0) + " GWh");
+
+            app.store1.soc_start = store1_soc;
+            if (store1_soc > 10 && app.run_count < 3) {
+                console.log("Re-running model with store1 SOC start: " + app.store1.soc_start.toFixed(2) + " GWh");
+                app.model();
+            }
+
+            app.store2.starting_soc = store2_soc;
+            if (store2_soc > 10 && app.run_count < 3) {
+                console.log("Re-running model with store2 SOC start: " + app.store2.starting_soc.toFixed(2) + " GWh");
+                app.model();
+            }
+
+            app.draw_power_view();
+        },
+        model_costs: function () {
+
+            // Battery storage LCOS calculation
             app.store1.cost_mwh = 0;
             if (app.store1.capacity > 0 && app.store1.cycles > 0) {
                 let storage1_lcoe = calculateLCOE({
@@ -568,13 +618,9 @@ var app = new Vue({
                 app.store1.cost_mwh = storage1_lcoe.total_lcoe;
             }
 
-            // cost of backup
-            // app.backup.cost_mwh = 1000 * Math.pow(app.backup.CF*100,-0.65);
-            // app.backup.cost_mwh = 852 * Math.pow(app.backup.CF*100,-0.476);
-
+            // Backup gas turbine LCOE calculation
             app.backup.cost_mwh = 0;
             if (app.backup.CF > 0) {
-
                 let carbon_price = 0;
                 if (app.include_carbon_cost) {
                     // higher than gov LCOE spreadsheet?
@@ -607,28 +653,15 @@ var app = new Vue({
             }
             app.backup_cost_per_mwh = app.backup.cost_mwh;
 
-            let backup_additional = (1.0 - app.balance.after_store1) * app.backup.cost_mwh;
-            console.log("Backup additional cost: " + backup_additional.toFixed(2) + " £/MWh");
-
-            let solar_cost = (app.solar_prc_of_demand/100) * app.solar_cost_per_mwh;
-            console.log("Solar cost: " + solar_cost.toFixed(2) + " £/MWh");
-
-            let wind_cost = (app.wind_prc_of_demand/100) * app.wind_cost_per_mwh;
-            console.log("Wind cost: " + wind_cost.toFixed(2) + " £/MWh");
-
-            let nuclear_cost = (app.nuclear_prc_of_demand/100) * app.nuclear_cost_per_mwh;
-            console.log("Nuclear cost: " + nuclear_cost.toFixed(2) + " £/MWh");
-
             // Capacity factor of overall demand
-            let demand_capacity_factor = app.demand_GWh / (max_demand * 1.1 * 24 * 365);
-            console.log("Demand capacity factor: " + (demand_capacity_factor*100).toFixed(2) + " %");
+            let demand_capacity_factor = app.demand_GWh / (app.max_demand * 1.1 * 24 * 365);
 
             app.grid_cost_per_mwh = calculateLCOE({
                 hurdle_rate: 0.075,
                 pre_development_years: 2,
                 construction_years: 4,
                 operation_years: 45,
-                net_power_output_mw: max_demand * 1.1,
+                net_power_output_mw: app.max_demand * 1.1,
                 gross_load_factor: demand_capacity_factor,
                 availability: 1.0,
                 pre_development_costs_per_kw: 50,
@@ -643,54 +676,28 @@ var app = new Vue({
                 co2_emissions_per_therm: 0.0
             }).total_lcoe;
 
-            console.log("Grid cost: " + app.grid_cost_per_mwh.toFixed(2) + " £/MWh");
+            app.solar_cost = app.solar_GWh * app.solar_cost_per_mwh;
+            app.wind_cost = app.wind_GWh * app.wind_cost_per_mwh;
+            app.nuclear_cost = app.nuclear_GWh * app.nuclear_cost_per_mwh;
+            app.backup_cost = app.backup.demand_GWh * app.backup.cost_mwh;
+            app.store1_cost = app.store1_discharge_GWh * app.store1.cost_mwh;
 
-            // app.energy_cost_per_mwh = solar_cost + wind_cost + nuclear_cost + backup_additional;
-            // let combined_cost = app.energy_cost_per_mwh + app.grid_cost_per_mwh;
-            // console.log("Combined cost: " + combined_cost.toFixed(2) + " £/MWh");
+            let total_energy_cost = app.solar_cost + app.wind_cost + app.nuclear_cost + app.backup_cost + app.store1_cost;
 
-            let total_cost = 0;
-            total_cost += app.solar_GWh * app.solar_cost_per_mwh;
-            total_cost += app.wind_GWh * app.wind_cost_per_mwh;
-            total_cost += app.nuclear_GWh * app.nuclear_cost_per_mwh;
-            total_cost += backup_demand_GWh * app.backup.cost_mwh;
-            total_cost += store1_discharge_GWh * app.store1.cost_mwh;
-            
-            let combined_cost_2 = total_cost / app.demand_GWh;
+            // Energy cost per MWh not including grid costs
+            app.energy_cost_per_mwh = total_energy_cost / app.demand_GWh;
 
-            app.energy_cost_per_mwh = combined_cost_2;
+            // Total cost per MWh including grid costs
+            app.total_cost_per_mwh = app.energy_cost_per_mwh + app.grid_cost_per_mwh;
 
-            combined_cost_2 += app.grid_cost_per_mwh;
-
-            console.log("Combined cost (method 2): " + combined_cost_2.toFixed(2) + " £/MWh");
-            app.total_cost_per_mwh = combined_cost_2;
-
-0
-            console.log("Run count: " + app.run_count);
-            console.log("Annual wind: " + wind_GWh.toFixed(0) + " GWh");
-            console.log("Annual solar: " + solar_GWh.toFixed(0) + " GWh");
-            console.log("Annual nuclear: " + nuclear_GWh.toFixed(0) + " GWh");
-
-            app.store1.soc_start = store1_soc;
-            if (store1_soc > 10 && app.run_count < 3) {
-                console.log("Re-running model with store1 SOC start: " + app.store1.soc_start.toFixed(2) + " GWh");
-                app.model();
-            }
-
-            app.store2.starting_soc = store2_soc;
-            if (store2_soc > 10 && app.run_count < 3) {
-                console.log("Re-running model with store2 SOC start: " + app.store2.starting_soc.toFixed(2) + " GWh");
-                app.model();
-            }
-
-            app.draw_power_view();
         },
         normalise: function () {
             // Normalise solar data to match solar_GWp
             input_solar_data_GWh = 0;
             input_wind_data_GWh = 0;
             input_demand_data_GWh = 0;
-            input_heatpump_data_GWh = 0;
+            input_heatpump_elec_data_GWh = 0;
+            input_heatpump_heat_data_GWh = 0;
 
             let power_to_GWh = app.interval / 3600;
 
@@ -698,13 +705,14 @@ var app = new Vue({
                 let demand = series[0].data[i][1] * 0.001; // MW to GW
                 let wind = series[1].data[i][1];
                 let solar = series[2].data[i][1];
-                let heatpump = series[3].data[i][1] * 0.001;
+                let heatpump_elec = series[3].data[i][1] * 0.001;
+                let heatpump_heat = series[4].data[i][1] * 0.001;
 
                 input_demand_data_GWh += demand * power_to_GWh;
                 input_wind_data_GWh += wind * power_to_GWh;
                 input_solar_data_GWh += solar * power_to_GWh;
-                input_heatpump_data_GWh += heatpump * power_to_GWh;
-
+                input_heatpump_elec_data_GWh += heatpump_elec * power_to_GWh;
+                input_heatpump_heat_data_GWh += heatpump_heat * power_to_GWh;
             }
 
             // app.standard_demand_TWh = (input_demand_data_GWh * 0.001).toFixed(1);
@@ -855,7 +863,7 @@ var app = new Vue({
     mounted: function () {
         // feeds: demand, wind, solar, heatpump
         this.loading = true;
-        feed.getdata("477241,480172,480862,476422", "2024-06-01T00:00:00Z", "2025-06-01T00:00:00Z", this.interval, 1, function (result) {
+        feed.getdata("477241,480172,480862,476422,536709", "2024-06-01T00:00:00Z", "2025-06-01T00:00:00Z", this.interval, 1, function (result) {
             series = result;
 
             view.start = series[0].data[0][0];
