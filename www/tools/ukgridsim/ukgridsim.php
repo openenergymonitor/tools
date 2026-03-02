@@ -177,7 +177,7 @@
                         :class="balance.unmet*0.001 < 1 ? 'stat-good' : balance.unmet*0.001 < 10 ? 'stat-warn' : 'stat-bad'">
                         {{ balance.unmet*0.001 | toFixed(1) }} TWh
                     </span>
-                    <span class="stat-label">Unmet demand</span>
+                    <span class="stat-label">Gas demand</span>
                 </div>
 
                 <div class="stat-item">
@@ -185,7 +185,7 @@
                         :class="balance.after_store1 >= 0.99 ? 'stat-good' : balance.after_store1 >= 0.95 ? 'stat-warn' : 'stat-bad'">
                         {{ balance.after_store1*100 | toFixed(1) }}%
                     </span>
-                    <span class="stat-label">Demand met</span>
+                    <span class="stat-label">Zero Carbon</span>
                 </div>
 
                 <div class="stat-item">
