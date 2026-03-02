@@ -49,6 +49,14 @@
 .cost-table td { vertical-align: middle; }
 .cost-table .input-cell { text-align: right; width: 120px; }
 .cost-table .input-cell input { text-align: right; }
+@media (max-width: 576px) {
+    .cost-table .input-cell { width: 70px; }
+    .cost-table th, .cost-table td { font-size: 0.78rem; padding: 0.2rem 0.25rem; }
+    .cost-table th:not(:first-child), .cost-table td:not(:first-child) { min-width: 0; width: auto; }
+    .cost-table th:first-child, .cost-table td:first-child { min-width: 80px; }
+    .cost-table .input-group-text { padding: 0.2rem 0.3rem; font-size: 0.75rem; }
+    .cost-table input.form-control-sm { font-size: 0.75rem; padding: 0.2rem 0.25rem; }
+}
 .stats-bar {
     background: #e9ecef;
     color: #212529;
@@ -258,10 +266,10 @@
                             <thead>
                                 <tr>
                                     <th>Source</th>
-                                    <th style="min-width:110px">Households<br>(million)</th>
-                                    <th style="min-width:110px">kWh/HH</th>
-                                    <th style="min-width:80px">SPF</th>
-                                    <th class="text-end" style="min-width:80px">TWh/yr</th>
+                                    <th style="width:110px">Households<br>(million)</th>
+                                    <th style="width:110px">kWh/HH</th>
+                                    <th style="width:80px">SPF</th>
+                                    <th class="text-end" style="width:80px">TWh/yr</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -324,10 +332,10 @@
                                     <th>Source</th>
                                     <th class="text-end" style="min-width:70px">% demand</th>
                                     <th class="text-end" style="min-width:70px">TWh/yr</th>
-                                    <th class="text-end" style="width:150px">Capacity</th>
-                                    <th style="width:150px">CF</th>
+                                    <th class="text-end d-none d-md-table-cell" style="width:150px">Capacity</th>
+                                    <th class="d-none d-md-table-cell" style="width:150px">CF</th>
                                     <th style="width:150px">LCOE £/MWh</th>
-                                    <th class="text-end">Contribution</th>
+                                    <th class="text-end"><span class="d-none d-md-inline">Contribution</span></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -340,8 +348,8 @@
                                         </div>
                                     </td>
                                     <td class="text-end align-middle">{{ solar_GWh*0.001 | toFixed(1) }}</td>
-                                    <td class="text-end align-middle">{{ solar_GWp | toFixed(1) }} GW</td>
-                                    <td class="align-middle">
+                                    <td class="text-end align-middle d-none d-md-table-cell">{{ solar_GWp | toFixed(1) }} GW</td>
+                                    <td class="align-middle d-none d-md-table-cell">
                                         <small class="text-muted">@{{ 10 | toFixed(1) }}%</small>
                                     </td>
                                     <td><input type="text" class="form-control form-control-sm" v-model.number="solar_cost_per_mwh" @change="model_costs"></td>
@@ -356,8 +364,8 @@
                                         </div>
                                     </td>
                                     <td class="text-end align-middle">{{ wind_GWh*0.001 | toFixed(1) }}</td>
-                                    <td class="text-end align-middle">{{ wind_GWp | toFixed(1) }} GW</td>
-                                    <td class="align-middle">
+                                    <td class="text-end align-middle d-none d-md-table-cell">{{ wind_GWp | toFixed(1) }} GW</td>
+                                    <td class="align-middle d-none d-md-table-cell">
                                         <small class="text-muted">@{{ wind_cap_factor | toFixed(1) }}%</small>
                                     </td>
                                     <td><input type="text" class="form-control form-control-sm" v-model.number="wind_cost_per_mwh" @change="model_costs"></td>
@@ -372,8 +380,8 @@
                                         </div>
                                     </td>
                                     <td class="text-end align-middle">{{ nuclear_GWh*0.001 | toFixed(1) }}</td>
-                                    <td class="text-end align-middle">{{ nuclear_GWp | toFixed(1) }} GW</td>
-                                    <td class="align-middle">
+                                    <td class="text-end align-middle d-none d-md-table-cell">{{ nuclear_GWp | toFixed(1) }} GW</td>
+                                    <td class="align-middle d-none d-md-table-cell">
                                         <small class="text-muted">@{{ nuclear_cap_factor | toFixed(1) }}%</small>
                                     </td>
                                     <td><input type="text" class="form-control form-control-sm" v-model.number="nuclear_cost_per_mwh" @change="model_costs"></td>
@@ -383,8 +391,8 @@
                                     <td>🔋 Storage</td>
                                     <td class="text-end align-middle"><span v-if="store1.capacity>0">{{ store1_discharge_GWh / demand_GWh * 100 | toFixed(1) }}%</span></td>
                                     <td class="text-end align-middle"><span v-if="store1.capacity>0">{{ store1_discharge_GWh*0.001 | toFixed(1) }}</span></td>
-                                    <td class="text-end align-middle">{{ store1.capacity | toFixed(0) }} GWh</td>
-                                    <td class="align-middle">
+                                    <td class="text-end align-middle d-none d-md-table-cell">{{ store1.capacity | toFixed(0) }} GWh</td>
+                                    <td class="align-middle d-none d-md-table-cell">
                                         <small class="text-muted" v-if="store1.capacity>0">@{{ store1.cycles | toFixed(1) }} cycles</small>
                                     </td>
                                     <td><input type="text" class="form-control form-control-sm" :value="store1.cost_mwh | toFixed(0)" disabled></td>
@@ -394,12 +402,10 @@
                                     <td>🔥 Gas Backup</td>
                                     <td class="text-end align-middle">{{ backup.demand_GWh / demand_GWh * 100 | toFixed(1) }}%</td>
                                     <td class="text-end align-middle">{{ backup.demand_GWh*0.001 | toFixed(1) }}</td>
-
-                                    <td class="text-end align-middle">{{ backup.capacity | toFixed(1) }} GW</td>
-                                    <td class="align-middle">
+                                    <td class="text-end align-middle d-none d-md-table-cell">{{ backup.capacity | toFixed(1) }} GW</td>
+                                    <td class="align-middle d-none d-md-table-cell">
                                         <small class="text-muted">@{{ backup.CF*100 | toFixed(2) }}%</small>
                                     </td>
-
                                     <td><input type="text" class="form-control form-control-sm" :value="backup_cost_per_mwh | toFixed(0)" disabled></td>
                                     <td class="text-end align-middle">+{{ backup_cost / demand_GWh | toFixed(0) }}</td>
                                 </tr>
