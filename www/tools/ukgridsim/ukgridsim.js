@@ -34,17 +34,25 @@ var app = new Vue({
         activeTab: 'costs',
 
         // demand
-        standard_demand_TWh: 320, // 2025 demand
-        heatpump_households: 0.5,
-        heatpump_kwh_per_household: 9100,
-        heatpump_spf: 3.73,
+        standard_demand_TWh: 320,
 
-        // electric vehicles
-        ev_households: 1.0, // million
-        ev_miles_per_household: 12000,
-        ev_summer_efficiency: 4.5, // miles per kWh
-        ev_winter_efficiency: 3.5, // miles per kWh
-        ev_charging_efficiency: 85, // %
+        // Heat pumps
+        heatpump: {
+            households: 0.5,                // millions of households with heat pumps
+            kwh_per_household: 9100,        // Average annual heat demand per household (includes space heating and hot water)
+            spf: 3.73,                      // Seasonal performance factor (average efficiency over the year, accounting for seasonal variation)
+            demand_GWh: 0,                  // Calculated annual electricity demand for heat pumps (GWh)
+        },
+
+        // Electric vehicles
+        ev: {
+            households: 1.0,
+            miles_per_household: 12000,
+            summer_efficiency: 4.5,
+            winter_efficiency: 3.5,
+            charging_efficiency: 85,
+            demand_GWh: 0,
+        },
 
         // solar generation
         solar_prc_of_demand: 6,
@@ -164,32 +172,26 @@ var app = new Vue({
 
             let standard_demand_scaler = app.standard_demand_TWh / (input_demand_data_GWh * 0.001);
 
+            let average_household_heat_scaler = (app.heatpump.kwh_per_household / input_heatpump_heat_data_GWh)
+            let heatpump_elec_demand_GWh = (input_heatpump_elec_data_GWh * app.heatpump.households * average_household_heat_scaler);
+            let heatpump_heat_demand_GWh = (input_heatpump_heat_data_GWh * app.heatpump.households * average_household_heat_scaler);
 
-            let average_household_heat_scaler = (app.heatpump_kwh_per_household / input_heatpump_heat_data_GWh)
-            let heatpump_elec_demand_GWh = (input_heatpump_elec_data_GWh * app.heatpump_households * average_household_heat_scaler);
-            let heatpump_heat_demand_GWh = (input_heatpump_heat_data_GWh * app.heatpump_households * average_household_heat_scaler);
-
-            console.log("Heat pump electric demand (GWh): " + heatpump_elec_demand_GWh.toFixed(2));
-            console.log("Heat pump heat demand (GWh): " + heatpump_heat_demand_GWh.toFixed(2));
-
-            let heatpump_elec_demand_GWh_adjusted = heatpump_heat_demand_GWh / app.heatpump_spf;
-            console.log("Adjusted heat pump electric demand (GWh): " + heatpump_elec_demand_GWh_adjusted.toFixed(2));
+            let heatpump_elec_demand_GWh_adjusted = heatpump_heat_demand_GWh / app.heatpump.spf;
             let heatpump_elec_spf_scaler = heatpump_elec_demand_GWh_adjusted / heatpump_elec_demand_GWh;
-            console.log("Heat pump electric demand SPF scaler: " + heatpump_elec_spf_scaler.toFixed(3));
 
             app.demand_GWh = (input_demand_data_GWh * standard_demand_scaler) + heatpump_elec_demand_GWh_adjusted;
 
             // Calculate EV demand
             // Annual miles per household converted to kWh using average efficiency
-            let avg_efficiency = (app.ev_summer_efficiency + app.ev_winter_efficiency) / 2;
-            let annual_kwh_per_household = (app.ev_miles_per_household / avg_efficiency) / (app.ev_charging_efficiency / 100);
-            let ev_demand_GWh_annual = (annual_kwh_per_household * app.ev_households * 1000000) / 1000000;
-            
-            // Daily flat demand in GW
+            let avg_efficiency = (app.ev.summer_efficiency + app.ev.winter_efficiency) / 2;
+            let annual_kwh_per_household = (app.ev.miles_per_household / avg_efficiency) / (app.ev.charging_efficiency / 100);
+            let ev_demand_GWh_annual = (annual_kwh_per_household * app.ev.households * 1000000) / 1000000;
             let ev_daily_demand_GW = ev_demand_GWh_annual / (365 * 24);
-            
-            // Add EV demand to total
+
             app.demand_GWh += ev_demand_GWh_annual;
+
+            app.heatpump.demand_GWh = heatpump_elec_demand_GWh_adjusted;
+            app.ev.demand_GWh = ev_demand_GWh_annual;
 
             // Solar generation
             app.solar_GWh = (app.solar_prc_of_demand / 100) * app.demand_GWh;
@@ -290,7 +292,9 @@ var app = new Vue({
 
                 // Demand
                 let trad_demand = series[0].data[i][1] * 0.001 * standard_demand_scaler; // MW to GW
-                let heatpump = series[3].data[i][1] * 0.001 * app.heatpump_households * average_household_heat_scaler * heatpump_elec_spf_scaler; // MW to GW, scaled by number of households and heat pump demand
+                let heatpump = series[3].data[i][1] * 0.001 * app.heatpump.households * average_household_heat_scaler * heatpump_elec_spf_scaler; // MW to GW, scaled by number of households and heat pump demand
+
+
 
                 // ---------------------------------------------------------------------------
                 // Synthesized EV demand profile
@@ -302,8 +306,8 @@ var app = new Vue({
                 // Jan 1 (day 0) = minimum efficiency (winter), July 1 (day ~182) = maximum (summer)
                 let efficiency_variation = Math.cos(2 * Math.PI * dayOfYear / 365);
                 // Map -1 to +1 range to winter to summer efficiency
-                let seasonal_efficiency = app.ev_winter_efficiency + 
-                    (app.ev_summer_efficiency - app.ev_winter_efficiency) * (efficiency_variation + 1) / 2;
+                let seasonal_efficiency = app.ev.winter_efficiency + 
+                    (app.ev.summer_efficiency - app.ev.winter_efficiency) * (efficiency_variation + 1) / 2;
                 
                 // Adjust demand based on efficiency (lower efficiency = higher demand)
                 let efficiency_factor = avg_efficiency / seasonal_efficiency;
@@ -337,6 +341,7 @@ var app = new Vue({
                 }
 
                 var supply = solarpv + wind + nuclear;
+
 
                 solar_GWh += solarpv * power_to_GWh;
                 wind_GWh += wind * power_to_GWh;
@@ -628,6 +633,11 @@ var app = new Vue({
                     carbon_price = 120;
                 }
 
+                let gas_price_per_mwh = 25; // ~£0.73 per therm, 1 MWh = 0.0293 therms
+
+                // biomethane price per mwh
+                let biomethane_price_per_mwh = 75;
+
                 let backup_lcoe = calculateLCOE({
                     hurdle_rate: 8.9 * 0.01,
                     pre_development_years: 2,
@@ -640,7 +650,7 @@ var app = new Vue({
                     construction_capital_cost_per_kw: 1000,
                     om_fixed_costs_per_kw_year: 22,
                     om_variable_costs_per_mwh: 5,
-                    fuel_price_per_therm: 0.73,
+                    fuel_price_per_therm: gas_price_per_mwh * 0.0293,
                     mwh_per_therm: 0.0293,
                     efficiency: 0.54,
                     carbon_price_per_ton: carbon_price,
