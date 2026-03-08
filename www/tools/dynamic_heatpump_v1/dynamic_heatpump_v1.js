@@ -652,6 +652,7 @@ function sim(conf) {
     var elec_kwh = 0;
     var heat_kwh = 0;
     var solar_elec_kwh = 0;
+    var solar_pv_kwh = 0;
     var solar_cost = 0;
 
     // max_flowT = 0;
@@ -976,11 +977,13 @@ function sim(conf) {
         heatpump_elec += app.heatpump.standby;
 
         // Solar PV electrical offset
-        let solar_pv_watts = solar * app.building.pv_scale;
+        // 0.90 converts pv_scale in kW to 870 kWh/year generation.
+        let solar_pv_watts = solar * app.building.pv_scale * 0.9;
         let solar_offset = Math.min(solar_pv_watts, heatpump_elec); // can only offset what we consume
         let net_elec = heatpump_elec - solar_offset;
 
         solar_pv_data[i] = solar_pv_watts;
+        solar_pv_kwh += solar_pv_watts * power_to_kwh;
 
         // 1. Calculate heat fluxes
         h3 = (app.building.internal_gains + radiator_heat + solar*app.building.solar_scale) - (u3 * (room - t2));
@@ -1079,7 +1082,8 @@ function sim(conf) {
         wa_prc_carnot = (kwh_heat_running / kwh_elec_running) / (kwh_heat_running / kwh_carnot_elec)
     }
 
-
+    // Print solar kWh console
+    console.log("Solar PV kWh: " + solar_pv_kwh.toFixed(2));
 
 
     return {

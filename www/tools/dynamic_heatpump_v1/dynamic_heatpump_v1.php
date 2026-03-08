@@ -667,7 +667,7 @@
                         <p>Scale PV dataset output to offset heat pump electricity consumption</p>
                         <div class="input-group mb-3">
                             <input type="text" class="form-control" v-model.number="building.pv_scale" @change="simulate" />
-                            <span class="input-group-text">x</span>
+                            <span class="input-group-text">kW</span>
                         </div>
                     </div>
                 </div>
