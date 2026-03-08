@@ -46,6 +46,7 @@ var app = new Vue({
             heat_loss: 3400,
             internal_gains: 330,
             solar_scale: 2.0,
+            pv_scale: 0.0,
             fabric: [
                 { proportion: 52, WK: 0, kWhK: 12, T: 16 },
                 { proportion: 28, WK: 0, kWhK: 6, T: 17 },
@@ -108,7 +109,9 @@ var app = new Vue({
             mean_room_temp: 0,
             max_room_temp: 0,
             total_cost: 0,
-            agile_cost: 0
+            agile_cost: 0,
+            solar_elec_kwh: 0,
+            solar_cost: 0
         },
         baseline: {
             elec_kwh: 0,
@@ -116,7 +119,9 @@ var app = new Vue({
             mean_room_temp: 0,
             max_room_temp: 0,
             total_cost: 0,
-            agile_cost: 0
+            agile_cost: 0,
+            solar_elec_kwh: 0,
+            solar_cost: 0
         },
         stats: {
             flowT_weighted: 0,
@@ -296,6 +301,8 @@ var app = new Vue({
                 app.results.max_room_temp = result.max_room_temp;
                 app.results.total_cost = result.total_cost;
                 app.results.agile_cost = result.agile_cost;
+                app.results.solar_elec_kwh = result.solar_elec_kwh;
+                app.results.solar_cost = result.solar_cost;
                 app.stats.flowT_weighted = result.flowT_weighted;
                 app.stats.outsideT_weighted = result.outsideT_weighted;
                 app.stats.flowT_minus_outsideT_weighted = result.flowT_minus_outsideT_weighted;
@@ -598,6 +605,7 @@ function sim(conf) {
     heat_data = [];
     agile_data = [];
     targetT_data = [];
+    solar_pv_data = [];
     
     var heatpump_off_duration = 0;
 
@@ -643,6 +651,8 @@ function sim(conf) {
 
     var elec_kwh = 0;
     var heat_kwh = 0;
+    var solar_elec_kwh = 0;
+    var solar_cost = 0;
 
     // max_flowT = 0;
     setpoint = 0;
@@ -965,6 +975,13 @@ function sim(conf) {
         }
         heatpump_elec += app.heatpump.standby;
 
+        // Solar PV electrical offset
+        let solar_pv_watts = solar * app.building.pv_scale;
+        let solar_offset = Math.min(solar_pv_watts, heatpump_elec); // can only offset what we consume
+        let net_elec = heatpump_elec - solar_offset;
+
+        solar_pv_data[i] = solar_pv_watts;
+
         // 1. Calculate heat fluxes
         h3 = (app.building.internal_gains + radiator_heat + solar*app.building.solar_scale) - (u3 * (room - t2));
         h2 = u3 * (room - t2) - u2 * (t2 - t1);
@@ -1033,8 +1050,11 @@ function sim(conf) {
         room_temp_sum += room;
         elec_kwh += heatpump_elec * power_to_kwh;
         heat_kwh += heatpump_heat * power_to_kwh;
-        total_cost += heatpump_elec * power_to_kwh * price * 0.01;
-        agile_cost += heatpump_elec * power_to_kwh * agile_price * 0.01 * 1.05; // 5% VAT
+        total_cost += net_elec * power_to_kwh * price * 0.01;
+        agile_cost += net_elec * power_to_kwh * agile_price * 0.01 * 1.05;
+        solar_elec_kwh += solar_offset * power_to_kwh;
+        solar_cost += solar_offset * power_to_kwh * price * 0.01;
+
         flowT_weighted_sum += flow_temperature * heatpump_heat * power_to_kwh;
         outsideT_weighted_sum += outside * heatpump_heat * power_to_kwh;
         flowT_minus_outsideT_weighted_sum += heatpump_heat * (flow_temperature-outside) * power_to_kwh;
@@ -1069,6 +1089,8 @@ function sim(conf) {
         mean_room_temp: room_temp_sum / stats_count,
         total_cost: total_cost,
         agile_cost: agile_cost,
+        solar_elec_kwh: solar_elec_kwh,
+        solar_cost: solar_cost,
         flowT_weighted: flowT_weighted_sum / heat_kwh,
         outsideT_weighted: outsideT_weighted_sum / heat_kwh,
         flowT_minus_outsideT_weighted: flowT_minus_outsideT_weighted_sum / heat_kwh,
@@ -1126,6 +1148,7 @@ function plot() {
     window.outsideT_data = timeseries(outsideT_data);
     window.agile_data = timeseries(agile_data);
     window.targetT_data = timeseries(targetT_data);
+    window.solar_pv_data = timeseries(solar_pv_data);
 
     let power_to_kwh = view.interval / 3600000;
 
@@ -1162,6 +1185,7 @@ function plot() {
     series = [
         { label: "Heat", data: window.heat_data, color: 0, yaxis: 3, lines: { show: true, fill: true } },
         { label: "Elec", data: window.elec_data, color: 1, yaxis: 3, lines: { show: true, fill: true } },
+        { label: "Solar PV", data: window.solar_pv_data, color: "#f5a623", yaxis: 3, lines: { show: true, fill: true } },
         { label: "FlowT", data: window.flowT_data, color: 2, yaxis: 2, lines: { show: true, fill: false } },
         { label: "ReturnT", data: window.returnT_data, color: 3, yaxis: 2, lines: { show: true, fill: false } },
         { label: "RoomT", data: window.roomT_data, color: "#000", yaxis: 1, lines: { show: true, fill: false } },
@@ -1171,13 +1195,15 @@ function plot() {
     ];
 
     if (app.mode != "year") {
-        // hide agile price in day mode
-        series[7].lines.show = false;
+        series[8].lines.show = false; // hide agile in day mode
     }
 
-    // Show/hide target temperature based on user setting
     if (!app.show_targetT) {
-        series[5].lines.show = false;
+        series[6].lines.show = false;
+    }
+
+    if (app.mode != "year") {
+        series[2].lines.show = false; // hide solar PV in day mode (no real data)
     }
 
     var options = {
@@ -1263,16 +1289,18 @@ $('#graph').bind("plothover", function (event, pos, item) {
             tooltipstr += "Elec: " + (series[1].data[z][1]).toFixed(0) + "W<br>";
             // Add heat_data
             tooltipstr += "Heat: " + (series[0].data[z][1]).toFixed(0) + "W<br>";
+            // Add solar_pv_data
+            tooltipstr += "Solar PV: " + (series[2].data[z][1]).toFixed(0) + "W<br>";
             // Add flowT_data
-            tooltipstr += "FlowT: " + (series[2].data[z][1]).toFixed(1) + "°C<br>";
+            tooltipstr += "FlowT: " + (series[3].data[z][1]).toFixed(1) + "°C<br>";
             // Add returnT_data
-            tooltipstr += "ReturnT: " + (series[3].data[z][1]).toFixed(1) + "°C<br>";
+            tooltipstr += "ReturnT: " + (series[4].data[z][1]).toFixed(1) + "°C<br>";
             // Add roomT_data
-            tooltipstr += "RoomT: " + (series[4].data[z][1]).toFixed(1) + "°C<br>";
+            tooltipstr += "RoomT: " + (series[5].data[z][1]).toFixed(1) + "°C<br>";
             // Add targetT_data
-            tooltipstr += "TargetT: " + (series[5].data[z][1]).toFixed(1) + "°C<br>";
+            tooltipstr += "TargetT: " + (series[6].data[z][1]).toFixed(1) + "°C<br>";
             // Add outsideT_data
-            tooltipstr += "OutsideT: " + (series[6].data[z][1]).toFixed(1) + "°C<br>";
+            tooltipstr += "OutsideT: " + (series[7].data[z][1]).toFixed(1) + "°C<br>";
 
             tooltip(item.pageX, item.pageY, tooltipstr, "#fff", "#000");
 

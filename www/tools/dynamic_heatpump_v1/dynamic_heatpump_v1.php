@@ -85,6 +85,8 @@
                             <th>Heat</th>
                             <th>COP</th>
                             <th>Cost</th>
+                            <th v-if="mode=='year' && building.pv_scale>0">Solar offset</th>
+                            <th v-if="mode=='year' && building.pv_scale>0">Solar saving</th>
                             <th v-if="mode=='year'">Agile (2024)</th>
                         </tr>
                         <tr v-if="baseline_enabled" style="background-color:#f0f0f0">
@@ -95,6 +97,8 @@
                             <td>{{ baseline.heat_kwh | toFixed(3) }} kWh</td>
                             <td>{{ (baseline.heat_kwh/baseline.elec_kwh) | toFixed(2) }}</td>
                             <td>£{{ baseline.total_cost | toFixed(2) }}</td>
+                            <td v-if="mode=='year' && building.pv_scale>0">{{ baseline.solar_elec_kwh | toFixed(3) }} kWh</td>
+                            <td v-if="mode=='year' && building.pv_scale>0">£{{ baseline.solar_cost | toFixed(2) }}</td>
                             <td v-if="mode=='year'">£{{ baseline.agile_cost | toFixed(2) }}</td>
                         </tr>
                         <tr class="table-success">
@@ -105,6 +109,8 @@
                             <td>{{ results.heat_kwh | toFixed(3) }} kWh</td>
                             <td>{{ (results.heat_kwh/results.elec_kwh) | toFixed(2) }}</td>
                             <td>£{{ results.total_cost | toFixed(2) }}</td>
+                            <td v-if="mode=='year' && building.pv_scale>0">{{ results.solar_elec_kwh | toFixed(3) }} kWh</td>
+                            <td v-if="mode=='year' && building.pv_scale>0">£{{ results.solar_cost | toFixed(2) }}</td>
                             <td v-if="mode=='year'">£{{ results.agile_cost | toFixed(2) }}</td>
                         </tr>
                         <tr v-if="baseline_enabled" class="table-info">
@@ -115,8 +121,9 @@
                             <td>{{ (results.heat_kwh-baseline.heat_kwh)*-1 | toFixed(3) }} kWh ({{ ((results.heat_kwh-baseline.heat_kwh)/baseline.heat_kwh*-100) | toFixed(1) }}%)</td>
                             <td>{{ ((results.heat_kwh/results.elec_kwh)-(baseline.heat_kwh/baseline.elec_kwh)) | toFixed(2) }}</td>
                             <td>£{{ (results.total_cost-baseline.total_cost)*-1 | toFixed(2) }}</td>
+                            <td v-if="mode=='year' && building.pv_scale>0">{{ (results.solar_elec_kwh-baseline.solar_elec_kwh) | toFixed(3) }} kWh</td>
+                            <td v-if="mode=='year' && building.pv_scale>0">£{{ (results.solar_cost-baseline.solar_cost) | toFixed(2) }}</td>
                             <td v-if="mode=='year'">£{{ (results.agile_cost-baseline.agile_cost)*-1 | toFixed(2) }}</td>
-
                         </tr>
                     </table>
                     <button type="button" class="btn btn-warning" @click="simulate" style="float:right">Refine</button>
@@ -651,9 +658,15 @@
 
                     <div v-if="mode=='year'">
                         <p><b>Solar gains:</b></p>
-                        <p>Scale PV output</p>
+                        <p>Scale PV output for thermal solar gains</p>
                         <div class="input-group mb-3">
                             <input type="text" class="form-control" v-model.number="building.solar_scale" @change="simulate" />
+                            <span class="input-group-text">x</span>
+                        </div>
+                        <p><b>Solar PV electrical output:</b></p>
+                        <p>Scale PV dataset output to offset heat pump electricity consumption</p>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" v-model.number="building.pv_scale" @change="simulate" />
                             <span class="input-group-text">x</span>
                         </div>
                     </div>
