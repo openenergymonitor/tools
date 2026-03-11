@@ -176,7 +176,7 @@ var app = new Vue({
             this.simulate();
         },
         load_csv_data: function() {
-            fetch('tools/dynamic_heatpump_v1/llanberis2024.csv')
+            fetch('tools/dynamic_heatpump/llanberis2024.csv')
                 .then(response => response.text())
                 .then(csv => {
                     this.parse_csv(csv);
