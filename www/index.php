@@ -23,6 +23,12 @@ $description = '';
 $content = '';
 $github = 'https://github.com/openenergymonitor/tools';
 
+// Hardcoded redirects
+$moved = array(
+    'dynamic_heatpump_v1' => 'dynamic_heatpump'
+);
+if (isset($moved[$q])) $q = $moved[$q];
+
 // Check if page exists in menu
 if (isset($menu[$q])) {
     $title = $menu[$q]['title'];

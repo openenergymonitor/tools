@@ -682,4 +682,4 @@
         </div>
     </div>
 </div>
-<script src="<?php echo $path; ?>dynamic_heatpump_v1.js?v=<?php echo time(); ?>"></script>
+<script src="<?php echo $path; ?>dynamic_heatpump.js?v=<?php echo time(); ?>"></script>

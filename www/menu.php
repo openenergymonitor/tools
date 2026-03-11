@@ -30,9 +30,9 @@ $menu = array(
         "title" => "Radiator Equation",
         "description" => "Calculate radiator heat output"
     ),
-    "dynamic_heatpump_v1" => array(
+    "dynamic_heatpump" => array(
         "category" => "Dynamic Simulation",
-        "case" => "dynamic_heatpump_v1",
+        "case" => "dynamic_heatpump",
         "title" => "Dynamic heat pump simulator",
         "description" => "Explore continuous vs intermittent heating, temperature set-backs and schedules"
     ),
