@@ -654,6 +654,10 @@ function sim(conf) {
         };
     });
 
+    // Calculate overheating temperature as max setpoint + 2 degrees (min 21 degrees)
+    var max_setpoint = Math.max(...processed_schedule.map(e => e.set_point));
+    var overheating_temp = Math.max(20, max_setpoint + 1);
+
     var elec_kwh = 0;
     var heat_kwh = 0;
     var solar_elec_kwh = 0;
@@ -998,9 +1002,9 @@ function sim(conf) {
         solar_gains_kwh += solar_gains * power_to_kwh;
         // Limit solar gains if room temperature is above 21
         let utilised_solar_gains = solar_gains;
-        if (room > 21) {
+        if (room > overheating_temp) {
             // linearly reduce gains as room temp rises above setpoint, zero gains at 5 degrees above setpoint
-            utilised_solar_gains = solar_gains * Math.max(0, 1 - ((room - 21) / 2)); 
+            utilised_solar_gains = solar_gains * Math.max(0, 1 - ((room - overheating_temp) / 2)); 
         }
         utilised_solar_gains_kwh += utilised_solar_gains * power_to_kwh;
 
