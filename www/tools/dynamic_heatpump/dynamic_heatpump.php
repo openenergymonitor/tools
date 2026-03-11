@@ -657,12 +657,25 @@
                     </div>
 
                     <div v-if="mode=='year'">
-                        <p><b>Solar gains:</b></p>
-                        <p>Scale PV output for thermal solar gains</p>
-                        <div class="input-group mb-3">
-                            <input type="text" class="form-control" v-model.number="building.solar_scale" @change="simulate" />
-                            <span class="input-group-text">x</span>
+                        <div class="row">
+                            <div class="col">
+                                <p><b>Solar gains:</b></p>
+                                <p>Scale PV dataset for solar gains</p>
+                                <div class="input-group mb-3">
+                                    <input type="text" class="form-control" v-model.number="building.solar_gains_scale" @change="simulate" />
+                                    <span class="input-group-text">kW</span>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <p><b>Solar gains utilisation:</b></p>
+                                <p>Useful vs total gains</p>
+                                <div class="input-group mb-3">
+                                    <span class="input-group-text">{{ results.utilised_solar_gains_kwh.toFixed(0) }} / {{ results.solar_gains_kwh.toFixed(0) }} kWh</span>
+                                </div>
+                            </div>
                         </div>
+
+
                         <p><b>Solar PV electrical output:</b></p>
                         <p>Scale PV dataset output to offset heat pump electricity consumption</p>
                         <div class="input-group mb-3">

@@ -45,7 +45,7 @@ var app = new Vue({
         building: {
             heat_loss: 3400,
             internal_gains: 330,
-            solar_scale: 2.0,
+            solar_gains_scale: 4.0,
             pv_scale: 0.0,
             fabric: [
                 { proportion: 52, WK: 0, kWhK: 12, T: 16 },
@@ -111,7 +111,9 @@ var app = new Vue({
             total_cost: 0,
             agile_cost: 0,
             solar_elec_kwh: 0,
-            solar_cost: 0
+            solar_cost: 0,
+            solar_gains_kwh: 0,
+            utilised_solar_gains_kwh: 0
         },
         baseline: {
             elec_kwh: 0,
@@ -303,6 +305,8 @@ var app = new Vue({
                 app.results.agile_cost = result.agile_cost;
                 app.results.solar_elec_kwh = result.solar_elec_kwh;
                 app.results.solar_cost = result.solar_cost;
+                app.results.solar_gains_kwh = result.solar_gains_kwh;
+                app.results.utilised_solar_gains_kwh = result.utilised_solar_gains_kwh;
                 app.stats.flowT_weighted = result.flowT_weighted;
                 app.stats.outsideT_weighted = result.outsideT_weighted;
                 app.stats.flowT_minus_outsideT_weighted = result.flowT_minus_outsideT_weighted;
@@ -654,6 +658,8 @@ function sim(conf) {
     var solar_elec_kwh = 0;
     var solar_pv_kwh = 0;
     var solar_cost = 0;
+    var solar_gains_kwh = 0;
+    var utilised_solar_gains_kwh = 0;
 
     // max_flowT = 0;
     setpoint = 0;
@@ -985,8 +991,20 @@ function sim(conf) {
         solar_pv_data[i] = solar_pv_watts;
         solar_pv_kwh += solar_pv_watts * power_to_kwh;
 
+        // Solar gains
+        // 0.9 converts from dataset to kW
+        let solar_gains = solar * app.building.solar_gains_scale * 0.9;
+        solar_gains_kwh += solar_gains * power_to_kwh;
+        // Limit solar gains if room temperature is above setpoint
+        let utilised_solar_gains = solar_gains;
+        if (room > setpoint) {
+            // linearly reduce gains as room temp rises above setpoint, zero gains at 5 degrees above setpoint
+            utilised_solar_gains = solar_gains * Math.max(0, 1 - ((room - setpoint) / 2)); 
+        }
+        utilised_solar_gains_kwh += utilised_solar_gains * power_to_kwh;
+
         // 1. Calculate heat fluxes
-        h3 = (app.building.internal_gains + radiator_heat + solar*app.building.solar_scale) - (u3 * (room - t2));
+        h3 = (app.building.internal_gains + radiator_heat + utilised_solar_gains) - (u3 * (room - t2));
         h2 = u3 * (room - t2) - u2 * (t2 - t1);
         h1 = u2 * (t2 - t1) - u1 * (t1 - outside);
         
@@ -1095,6 +1113,8 @@ function sim(conf) {
         agile_cost: agile_cost,
         solar_elec_kwh: solar_elec_kwh,
         solar_cost: solar_cost,
+        solar_gains_kwh: solar_gains_kwh,
+        utilised_solar_gains_kwh: utilised_solar_gains_kwh,
         flowT_weighted: flowT_weighted_sum / heat_kwh,
         outsideT_weighted: outsideT_weighted_sum / heat_kwh,
         flowT_minus_outsideT_weighted: flowT_minus_outsideT_weighted_sum / heat_kwh,
