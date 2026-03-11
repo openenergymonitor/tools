@@ -44,7 +44,7 @@ var app = new Vue({
         days: 1,
         building: {
             heat_loss: 3400,
-            internal_gains: 330,
+            internal_gains: 250,
             solar_gains_scale: 4.0,
             pv_scale: 0.0,
             fabric: [
@@ -62,24 +62,24 @@ var app = new Vue({
             use_csv: false
         },
         heatpump: {
-            capacity: 5000,
+            capacity: 8500,
             system_water_volume: 120, // Litres
             flow_rate: 12, // Litres per minute
             system_DT: 5,
-            radiatorRatedOutput: 15000,
+            radiatorRatedOutput: 7400,
             radiatorRatedDT: 50,
             prc_carnot: 47,
-            cop_model: "carnot_variable",
+            cop_model: "vaillant5",
             standby: 11,
             pumps: 15,
-            minimum_modulation: 40
+            minimum_modulation: 30
         },
         control: {
             mode: AUTO_ADAPT,
             wc_use_outside_mean: 1,
             
             Kp: 2000,
-            Ki: 0.04,
+            Ki: 0.06,
             Kd: 0.0,
 
             wc_Kp: 500,
@@ -95,6 +95,7 @@ var app = new Vue({
         schedule: [
             { start: "00:00", set_point: 17, price: price_cap },
             { start: "06:00", set_point: 18, price: price_cap },
+            { start: "10:00", set_point: 18, price: price_cap },
             { start: "15:00", set_point: 19, price: price_cap },
             { start: "22:00", set_point: 17, price: price_cap }
         ],
@@ -995,11 +996,11 @@ function sim(conf) {
         // 0.9 converts from dataset to kW
         let solar_gains = solar * app.building.solar_gains_scale * 0.9;
         solar_gains_kwh += solar_gains * power_to_kwh;
-        // Limit solar gains if room temperature is above setpoint
+        // Limit solar gains if room temperature is above 21
         let utilised_solar_gains = solar_gains;
-        if (room > setpoint) {
+        if (room > 21) {
             // linearly reduce gains as room temp rises above setpoint, zero gains at 5 degrees above setpoint
-            utilised_solar_gains = solar_gains * Math.max(0, 1 - ((room - setpoint) / 2)); 
+            utilised_solar_gains = solar_gains * Math.max(0, 1 - ((room - 21) / 2)); 
         }
         utilised_solar_gains_kwh += utilised_solar_gains * power_to_kwh;
 
