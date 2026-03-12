@@ -3,9 +3,7 @@ var WEATHER_COMP_CURVE = 1;
 var FIXED_SPEED = 3;
 var DEGREE_MINUTES_WC = 4;
 
-
-
-var price_cap = 27.69;
+var price_cap = 24.67; // (1 April to 30 June 2026)
 var cosy_examples_schedule = [
     { start: "00:00", set_point: 18, price: 29.94 },
     { start: "04:00", set_point: 21, price: 14.68 },
@@ -532,6 +530,13 @@ var app = new Vue({
             }
             
             return hasValidSection;
+        },
+        set_schedule_max: function () {
+            var max_setpoint = Math.max(...this.schedule.map(s => s.set_point));
+            this.schedule.forEach(function(item) {
+                item.set_point = max_setpoint;
+            });
+            this.simulate();
         }
 
     },

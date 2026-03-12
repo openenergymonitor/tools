@@ -219,6 +219,9 @@
 
                     <!-- button to load Octopus Cosy schedule example -->
                     <button type="button" class="btn btn-warning" @click="load_octopus_cosy">Load Octopus Cosy schedule example</button>
+                    
+                    <!-- button to switch all set points to max in schedule -->
+                    <button type="button" class="btn btn-warning" @click="set_schedule_max">Set all to {{ Math.max(...schedule.map(s => s.set_point)) }}°C</button>
                 </div>
             </div>
             <br>
