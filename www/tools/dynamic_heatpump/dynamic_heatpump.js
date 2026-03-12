@@ -953,11 +953,13 @@ function sim(conf) {
         flow_temperature = MWT + (system_DT * 0.5);
         return_temperature = MWT - (system_DT * 0.5);
 
-        var PracticalC
-            // Anti-windup: clamp ITerm so output can't exceed max capacity
-            let max_ITerm = app.heatpump.capacity / app.control.Ki;
-            if (ITerm > max_ITerm) ITerm = max_ITerm;
-            if (ITerm < 0) ITerm = 0;OP = 0;
+        
+        // Anti-windup: clamp ITerm so output can't exceed max capacity
+        let max_ITerm = app.heatpump.capacity / app.control.Ki;
+        if (ITerm > max_ITerm) ITerm = max_ITerm;
+        if (ITerm < 0) ITerm = 0;
+
+        var PracticalCOP = 0;
         if (app.heatpump.cop_model == "carnot_fixed") {
             // Simple carnot equation based heat pump model with fixed offsets
             let condenser = flow_temperature + 2;
