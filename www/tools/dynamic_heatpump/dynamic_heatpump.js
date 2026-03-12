@@ -119,7 +119,8 @@ var app = new Vue({
             solar_elec_kwh: 0,
             solar_cost: 0,
             solar_gains_kwh: 0,
-            utilised_solar_gains_kwh: 0
+            utilised_solar_gains_kwh: 0,
+            sim_time_ms: 0
         },
         baseline: {
             elec_kwh: 0,
@@ -293,18 +294,18 @@ var app = new Vue({
                         schedule: app.schedule,
                         days: app.days_pre_sim
                     });
-                    // reset view
-                    // view.start = 0;
-                    // view.end = 0;
                 }
 
                 // Run simulation
+                var sim_start = performance.now();
                 var result = sim({
                     outside_min_time: outside_min_time,
                     outside_max_time: outside_max_time,
                     schedule: app.schedule,
                     days: app.days
                 });
+                app.results.sim_time_ms = performance.now() - sim_start;
+
                 app.max_room_temp = result.max_room_temp;
 
                 app.results.elec_kwh = result.elec_kwh;
