@@ -657,11 +657,19 @@
             <div class="card">
                 <div class="card-body">
                     <p><b>Internal gains:</b></p>
-                    <p>Body heat (approx 60W per person), Electric consumption for lights, appliances and cooking ~210W (5 kWh/d), solar gains could be added here too.</p>
+
+                    <p>Body heat (approx 60W per person when occupied).</p>
                     <div class="input-group mb-3">
-                        <input type="text" class="form-control" v-model.number="building.internal_gains" @change="simulate" />
+                        <input type="text" class="form-control" v-model.number="building.metabolic_gains" @change="simulate" />
                         <span class="input-group-text">W</span>
                     </div>
+
+                    <p>Electric consumption for lights, appliances and cooking ~210W (5 kWh/d).</p>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" v-model.number="building.lac_gains" @change="simulate" />
+                        <span class="input-group-text">W</span>
+                    </div>
+
 
                     <div v-if="mode=='year'">
                         <div class="row">
@@ -682,7 +690,6 @@
                             </div>
                         </div>
 
-
                         <p><b>Solar PV electrical output:</b></p>
                         <p>Scale PV dataset output to offset heat pump electricity consumption</p>
                         <div class="input-group mb-3">
@@ -696,6 +703,13 @@
                             <input type="text" class="form-control" v-model.number="battery.capacity_kwh" @change="simulate" />
                             <span class="input-group-text">kWh</span>
                         </div>
+
+                        <!-- checkbox to include lac gains in electricity demand for solar offset -->
+                        <div class="input-group mb-3">
+                            <span class="input-group-text">Include lighting, appliances and cooking electric in cost calculation</span>
+                            <span class="input-group-text"><input type="checkbox" v-model="building.include_lac_gains_in_elec_demand" @change="simulate" /></span>
+                        </div>
+
                     </div>
                 </div>
             </div>

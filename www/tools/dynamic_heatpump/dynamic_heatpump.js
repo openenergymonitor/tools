@@ -42,7 +42,9 @@ var app = new Vue({
         days: 1,
         building: {
             heat_loss: 3400,
-            internal_gains: 250,
+            metabolic_gains: 80,
+            lac_gains: 210,
+            include_lac_gains_in_elec_demand: false,
             solar_gains_scale: 4.0,
             pv_scale: 0.0,
             fabric: [
@@ -720,6 +722,40 @@ function sim(conf) {
 
     let battery_soc = app.battery.capacity_kwh * 0.5; // Start at 50% state of charge
 
+    // Extract app parameters as constants before the loop
+    const ctrl_mode = app.control.mode;
+    const ctrl_Kp = app.control.Kp;
+    const ctrl_Ki = app.control.Ki;
+    const ctrl_Kd = app.control.Kd;
+    const ctrl_wc_Kp = app.control.wc_Kp;
+    const ctrl_wc_Ki = app.control.wc_Ki;
+    const ctrl_wc_Kd = app.control.wc_Kd;
+    const ctrl_wc_use_outside_mean = app.control.wc_use_outside_mean;
+    const ctrl_curve = app.control.curve;
+    const ctrl_limit_by_roomT = app.control.limit_by_roomT;
+    const ctrl_roomT_hysteresis = app.control.roomT_hysteresis;
+    const ctrl_fixed_compressor_speed = app.control.fixed_compressor_speed;
+    const hp_capacity = app.heatpump.capacity;
+    const hp_minimum_modulation = app.heatpump.minimum_modulation;
+    const hp_system_water_volume = app.heatpump.system_water_volume;
+    const hp_flow_rate = app.heatpump.flow_rate;
+    const hp_radiatorRatedOutput = app.heatpump.radiatorRatedOutput;
+    const hp_radiatorRatedDT = app.heatpump.radiatorRatedDT;
+    const hp_prc_carnot = app.heatpump.prc_carnot;
+    const hp_cop_model = app.heatpump.cop_model;
+    const hp_standby = app.heatpump.standby;
+    const hp_pumps = app.heatpump.pumps;
+    const bld_metabolic_gains = app.building.metabolic_gains;
+    const bld_lac_gains = app.building.lac_gains;
+    const bld_solar_gains_scale = app.building.solar_gains_scale;
+    const bld_pv_scale = app.building.pv_scale;
+    const bld_include_lac_gains_in_elec_demand = app.building.include_lac_gains_in_elec_demand;
+    const bat_capacity_kwh = app.battery.capacity_kwh;
+    const bat_max_rate_kw = app.battery.max_rate_kw;
+    const bat_round_trip_efficiency = app.battery.round_trip_efficiency;
+    const ext_mid = app.external.mid;
+    const ext_use_csv = app.external.use_csv;
+
     let DHW_active = false;
     let last_on_time = 0;
 
@@ -731,7 +767,7 @@ function sim(conf) {
         hour = hour % 24;
         
         
-        if (app.external.use_csv && annual_dataset_loaded) {
+        if (ext_use_csv && annual_dataset_loaded) {
             // Use CSV data - time is in seconds from start of simulation
             let dataset = get_from_annual_dataset(time);
             let csv_temp = dataset ? dataset.temperature : null;
@@ -761,7 +797,7 @@ function sim(conf) {
                 A = (hour_mod-outside_max_time+(6*ramp_down/12)) / (ramp_down*2)
             }
             radians = 2 * Math.PI * A
-            outside = app.external.mid + Math.sin(radians) * app.external.swing * 0.5;
+            outside = ext_mid + Math.sin(radians) * app.external.swing * 0.5;
         }
 
         // if (outside > 19.9) outside = 19.9;
@@ -807,7 +843,7 @@ function sim(conf) {
             }
         }
         
-        if (app.control.mode==AUTO_ADAPT) {
+        if (ctrl_mode==AUTO_ADAPT) {
             // 3 term control algorithm
             // Kp = 1400 // Find unstable oscillation point and divide in half.. 
             // Ki = 0.2
@@ -820,41 +856,39 @@ function sim(conf) {
             // error = max_flowT - flow_temperature
             delta_error = error - last_error
 
-            PTerm = app.control.Kp * error
+            PTerm = ctrl_Kp * error
             ITerm += error * timestep
-            // DTerm = delta_error / timestep
 
-            // Anti-windup: clamp ITerm so output can't exceed max capacity
-            let max_ITerm = app.heatpump.capacity / app.control.Ki;
+            let max_ITerm = hp_capacity / ctrl_Ki;
             if (ITerm > max_ITerm) ITerm = max_ITerm;
             if (ITerm < 0) ITerm = 0;
 
-            heatpump_heat = PTerm + (app.control.Ki * ITerm) // + (app.control.Kd * DTerm)
+            heatpump_heat = PTerm + (ctrl_Ki * ITerm) // + (app.control.Kd * DTerm)
             if (heatpump_heat == NaN) heatpump_heat = 0;
             // if infinite, set to zero
             if (!isFinite(heatpump_heat)) heatpump_heat = 0;
             
-        } else if (app.control.mode==WEATHER_COMP_CURVE) {
+        } else if (ctrl_mode==WEATHER_COMP_CURVE) {
             
             // Rather than describe a heating curve based on table data with the requirement to work out which curve you should be on
             // this approach makes use of the fact that we know the building parameters exactly. We can then use these to generate
             // a flow temperature to outside temperature relationship that is finely tuned to the physics of the building.
             
-            if (app.control.wc_use_outside_mean) {
-                used_outside = app.external.mid
+            if (ctrl_wc_use_outside_mean) {
+                used_outside = ext_mid
             } else {
                 used_outside = outside 
             }
 
-            flowT_target = setpoint + 2.55 * Math.pow(app.control.curve*(setpoint - used_outside), 0.78);
+            flowT_target = setpoint + 2.55 * Math.pow(ctrl_curve*(setpoint - used_outside), 0.78);
 
 
-            if (app.control.limit_by_roomT) {
-                if (room>setpoint+(app.control.roomT_hysteresis*0.5)) {
+            if (ctrl_limit_by_roomT) {
+                if (room>setpoint+(ctrl_roomT_hysteresis*0.5)) {
                     heatpump_max_roomT_state = 1;
                 }
 
-                if (heatpump_max_roomT_state==1 && room<setpoint-(app.control.roomT_hysteresis*0.5)) {
+                if (heatpump_max_roomT_state==1 && room<setpoint-(ctrl_roomT_hysteresis*0.5)) {
                     heatpump_max_roomT_state = 0;
                 }
             }
@@ -866,48 +900,48 @@ function sim(conf) {
 
                 delta_error = error - last_error
 
-                PTerm = app.control.wc_Kp * error
+                PTerm = ctrl_wc_Kp * error
                 ITerm += error * timestep
                 DTerm = delta_error / timestep
 
-                heatpump_heat = PTerm + (app.control.wc_Ki * ITerm) + (app.control.wc_Kd * DTerm)
+                heatpump_heat = PTerm + (ctrl_wc_Ki * ITerm) + (ctrl_wc_Kd * DTerm)
             } else {
                 heatpump_heat = 0;
             }
 
-        } else if (app.control.mode==FIXED_SPEED) {
-            heatpump_heat = app.heatpump.capacity;
+        } else if (ctrl_mode==FIXED_SPEED) {
+            heatpump_heat = hp_capacity;
 
-            if (app.control.limit_by_roomT) {
-                if (room>setpoint+(app.control.roomT_hysteresis*0.5)) {
+            if (ctrl_limit_by_roomT) {
+                if (room>setpoint+(ctrl_roomT_hysteresis*0.5)) {
                     heatpump_max_roomT_state = 1;
                 }
 
-                if (heatpump_max_roomT_state==1 && room<setpoint-(app.control.roomT_hysteresis*0.5)) {
+                if (heatpump_max_roomT_state==1 && room<setpoint-(ctrl_roomT_hysteresis*0.5)) {
                     heatpump_max_roomT_state = 0;
                 }
             }
 
             if (heatpump_max_roomT_state==0) {
-                heatpump_heat = 1.0 * app.heatpump.capacity * (app.control.fixed_compressor_speed / 100);
+                heatpump_heat = 1.0 * hp_capacity * (ctrl_fixed_compressor_speed / 100);
             } else {
                 heatpump_heat = 0;
             }
         }
 
         // Apply limits
-        if (heatpump_heat > app.heatpump.capacity) {
-            heatpump_heat = app.heatpump.capacity;
+        if (heatpump_heat > hp_capacity) {
+            heatpump_heat = hp_capacity;
         }
         if (heatpump_heat < 0) {
             heatpump_heat = 0;
         }
         
         // Minimum modulation cycling control
-        if (app.control.mode != DEGREE_MINUTES_WC) {
+        if (ctrl_mode != DEGREE_MINUTES_WC) {
 
             // if heat pump is off and demand for heat is more than minimum modulation turn heat pump on
-            if (heatpump_state==0 && heatpump_heat>=(app.heatpump.capacity*app.heatpump.minimum_modulation*0.01)) {
+            if (heatpump_state==0 && heatpump_heat>=(hp_capacity*hp_minimum_modulation*0.01)) {
                 // turn on if we have been off for at least 10 minutes to prevent short cycling
                 if (time - last_on_time >= 600) {
                     heatpump_state = 1;
@@ -915,7 +949,7 @@ function sim(conf) {
             }
                 
             // If we are below minimum modulation turn heat pump off
-            if (heatpump_heat<(app.heatpump.capacity*app.heatpump.minimum_modulation*0.01) && heatpump_state==1) {
+            if (heatpump_heat<(hp_capacity*hp_minimum_modulation*0.01) && heatpump_state==1) {
                 MWT_off = MWT;
                 last_on_time = time;
                 heatpump_state = 0;
@@ -948,46 +982,46 @@ function sim(conf) {
         // Flow and return temperatures are calculated later as an output based on flow rate.
 
         // 1. Heat added to system volume from heat pump
-        MWT += (heatpump_heat * timestep) / (app.heatpump.system_water_volume * 4187)
+        MWT += (heatpump_heat * timestep) / (hp_system_water_volume * 4187)
 
         // 2. Calculate radiator output based on Room temp and MWT
         Delta_T = MWT - room;
         if (Delta_T < 0) Delta_T = 0;
-        radiator_heat = app.heatpump.radiatorRatedOutput * Math.pow(Delta_T / app.heatpump.radiatorRatedDT, 1.3);
+        radiator_heat = hp_radiatorRatedOutput * Math.pow(Delta_T / hp_radiatorRatedDT, 1.3);
 
         // 3. Subtract this heat output from MWT
-        MWT -= (radiator_heat * timestep) / (app.heatpump.system_water_volume * 4187)
+        MWT -= (radiator_heat * timestep) / (hp_system_water_volume * 4187)
         
-        let system_DT = heatpump_heat / ((app.heatpump.flow_rate / 60) * 4187);
+        let system_DT = heatpump_heat / ((hp_flow_rate / 60) * 4187);
 
         flow_temperature = MWT + (system_DT * 0.5);
         return_temperature = MWT - (system_DT * 0.5);
 
         
         // Anti-windup: clamp ITerm so output can't exceed max capacity
-        let max_ITerm = app.heatpump.capacity / app.control.Ki;
+        let max_ITerm = hp_capacity / ctrl_Ki;
         if (ITerm > max_ITerm) ITerm = max_ITerm;
         if (ITerm < 0) ITerm = 0;
 
         var PracticalCOP = 0;
-        if (app.heatpump.cop_model == "carnot_fixed") {
+        if (hp_cop_model == "carnot_fixed") {
             // Simple carnot equation based heat pump model with fixed offsets
             let condenser = flow_temperature + 2;
             let evaporator = outside - 6;
             let IdealCOP = (condenser + 273) / ((condenser + 273) - (evaporator + 273));
-            PracticalCOP = IdealCOP * (app.heatpump.prc_carnot / 100);
-        } else if (app.heatpump.cop_model == "carnot_variable") {
+            PracticalCOP = IdealCOP * (hp_prc_carnot / 100);
+        } else if (hp_cop_model == "carnot_variable") {
             // Simple carnot equation based heat pump model with variable offsets
-            let output_ratio = heatpump_heat / app.heatpump.capacity;
+            let output_ratio = heatpump_heat / hp_capacity;
             let condenser = flow_temperature + (3 * output_ratio);
             let evaporator = outside - (8 * output_ratio);
             let IdealCOP = (condenser + 273) / ((condenser + 273) - (evaporator + 273));
-            PracticalCOP = IdealCOP * (app.heatpump.prc_carnot / 100);
-        } else if (app.heatpump.cop_model == "ecodan") {
-            PracticalCOP = get_ecodan_cop(flow_temperature, outside, heatpump_heat / app.heatpump.capacity);
-        } else if (app.heatpump.cop_model == "vaillant5") {
+            PracticalCOP = IdealCOP * (hp_prc_carnot / 100);
+        } else if (hp_cop_model == "ecodan") {
+            PracticalCOP = get_ecodan_cop(flow_temperature, outside, heatpump_heat / hp_capacity);
+        } else if (hp_cop_model == "vaillant5") {
             PracticalCOP = getCOP(vaillant_data['5kW'], flow_temperature, outside, 0.001*heatpump_heat);
-        } else if (app.heatpump.cop_model == "vaillant12") {
+        } else if (hp_cop_model == "vaillant12") {
             PracticalCOP = getCOP(vaillant_data['12kW'], flow_temperature, outside, 0.001*heatpump_heat);
         }
 
@@ -999,13 +1033,11 @@ function sim(conf) {
 
         // Add standby power and pump power
         if (heatpump_elec > 0) {
-            heatpump_elec += app.heatpump.pumps;
+            heatpump_elec += hp_pumps;
         }
-        heatpump_elec += app.heatpump.standby;
+        heatpump_elec += hp_standby;
 
-        // Solar gains
-        // 0.9 converts from dataset to kW
-        let solar_gains = solar * app.building.solar_gains_scale * 0.9;
+        let solar_gains = solar * bld_solar_gains_scale * 0.9;
         solar_gains_kwh += solar_gains * power_to_kwh;
         // Limit solar gains if room temperature is above 21
         let utilised_solar_gains = solar_gains;
@@ -1015,8 +1047,10 @@ function sim(conf) {
         }
         utilised_solar_gains_kwh += utilised_solar_gains * power_to_kwh;
 
+        let internal_gains = bld_metabolic_gains + bld_lac_gains;
+
         // 1. Calculate heat fluxes
-        h3 = (app.building.internal_gains + radiator_heat + utilised_solar_gains) - (u3 * (room - t2));
+        h3 = (internal_gains + radiator_heat + utilised_solar_gains) - (u3 * (room - t2));
         h2 = u3 * (room - t2) - u2 * (t2 - t1);
         h1 = u2 * (t2 - t1) - u1 * (t1 - outside);
         
@@ -1104,25 +1138,28 @@ function sim(conf) {
 
         // Solar PV electrical offset
         // 0.90 converts pv_scale in kW to 870 kWh/year generation.
-        let solar_pv_watts = solar * app.building.pv_scale * 0.9;
-        let balance = solar_pv_watts - heatpump_elec;
+        let solar_pv_watts = solar * bld_pv_scale * 0.9;
+        let balance = solar_pv_watts - heatpump_elec
+        if (bld_include_lac_gains_in_elec_demand) {
+            balance -= bld_lac_gains;
+        }
 
         // Simple direct charge and discharge battery storage model
-        let battery_one_way_efficiency = Math.sqrt(app.battery.round_trip_efficiency);
+        let battery_one_way_efficiency = Math.sqrt(bat_round_trip_efficiency);
 
-        if (app.battery.capacity_kwh > 0) {
+        if (bat_capacity_kwh > 0) {
             if (balance > 0) {
                 let charge = balance;
-                if (charge > app.battery.max_rate_kw * 1000) {
-                    charge = app.battery.max_rate_kw * 1000;
+                if (charge > bat_max_rate_kw * 1000) {
+                    charge = bat_max_rate_kw * 1000;
                 }
 
                 let charge_after_loss = charge * battery_one_way_efficiency;
                 let battery_soc_inc = charge_after_loss * power_to_kwh;
                 
-                if (battery_soc + battery_soc_inc > app.battery.capacity_kwh) {
+                if (battery_soc + battery_soc_inc > bat_capacity_kwh) {
                     // Can't charge beyond capacity, so reduce charge to fit remaining capacity
-                    battery_soc_inc = app.battery.capacity_kwh - battery_soc;
+                    battery_soc_inc = bat_capacity_kwh - battery_soc;
                     charge_after_loss = battery_soc_inc / power_to_kwh;
                     charge = charge_after_loss / battery_one_way_efficiency; // Adjust for efficiency losses
                 }
@@ -1131,8 +1168,8 @@ function sim(conf) {
                 balance -= charge; // Reduce balance by the amount charged to battery                
             } else {
                 let discharge = -balance;
-                if (discharge > app.battery.max_rate_kw * 1000) {
-                    discharge = app.battery.max_rate_kw * 1000;
+                if (discharge > bat_max_rate_kw * 1000) {
+                    discharge = bat_max_rate_kw * 1000;
                 }
 
                 let discharge_before_loss = discharge / battery_one_way_efficiency;
@@ -1158,6 +1195,9 @@ function sim(conf) {
         if (balance >= 0) {
             export_power = balance;
             solar_offset = heatpump_elec;
+            if (bld_include_lac_gains_in_elec_demand) {
+                solar_offset += bld_lac_gains;
+            }
         } else {
             import_power = -balance;
             solar_offset = solar_pv_watts;
