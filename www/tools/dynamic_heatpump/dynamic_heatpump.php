@@ -282,13 +282,17 @@
                         </div>
                     </div>
 
+                    <p class="text-muted"><b>Layer 1:</b> External, <b>Layer 3:</b> Internal</p>
+
                     <table class="table">
                         <tr>
+                            <th>Index</th>
                             <th>Proportion</th>
                             <th>W/K</th>
                             <th>kWh/K</th>
                         </tr>
                         <tr v-for="(layer,index) in building.fabric">
+                            <td>{{ index+1 }}</td>
                             <td>
                                 <div class="input-group mb-3">
                                     <input type="text" class="form-control" v-model="layer.proportion" @change="simulate" :disabled="index==0" />

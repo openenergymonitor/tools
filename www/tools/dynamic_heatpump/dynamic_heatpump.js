@@ -621,8 +621,6 @@ function sim(conf) {
     targetT_data = [];
     solar_pv_data = [];
     
-    var heatpump_off_duration = 0;
-
     if (app.control.fixed_compressor_speed>100) app.control.fixed_compressor_speed = 100;
     if (app.control.fixed_compressor_speed<app.heatpump.minimum_modulation) app.control.fixed_compressor_speed = app.heatpump.minimum_modulation;
 
