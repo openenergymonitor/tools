@@ -689,6 +689,13 @@
                             <input type="text" class="form-control" v-model.number="building.pv_scale" @change="simulate" />
                             <span class="input-group-text">kW</span>
                         </div>
+
+                        <p><b>Battery storage capacity:</b></p>
+                        <p>Battery storage to maximise self consumption of PV electricity</p>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" v-model.number="battery.capacity_kwh" @change="simulate" />
+                            <span class="input-group-text">kWh</span>
+                        </div>
                     </div>
                 </div>
             </div>

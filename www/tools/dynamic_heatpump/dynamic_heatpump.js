@@ -52,6 +52,11 @@ var app = new Vue({
             ],
             fabric_WK: 0
         },
+        battery: {
+            capacity_kwh: 0,
+            max_rate_kw: 7,
+            round_trip_efficiency: 0.85
+        },
         external: {
             mid: 4,
             swing: 2,
@@ -713,6 +718,8 @@ function sim(conf) {
     let solar = 0;
     let agile_price = 0;
 
+    let battery_soc = app.battery.capacity_kwh * 0.5; // Start at 50% state of charge
+
     let DHW_active = false;
     let last_on_time = 0;
 
@@ -996,15 +1003,6 @@ function sim(conf) {
         }
         heatpump_elec += app.heatpump.standby;
 
-        // Solar PV electrical offset
-        // 0.90 converts pv_scale in kW to 870 kWh/year generation.
-        let solar_pv_watts = solar * app.building.pv_scale * 0.9;
-        let solar_offset = Math.min(solar_pv_watts, heatpump_elec); // can only offset what we consume
-        let net_elec = heatpump_elec - solar_offset;
-
-        solar_pv_data[i] = solar_pv_watts;
-        solar_pv_kwh += solar_pv_watts * power_to_kwh;
-
         // Solar gains
         // 0.9 converts from dataset to kW
         let solar_gains = solar * app.building.solar_gains_scale * 0.9;
@@ -1085,10 +1083,6 @@ function sim(conf) {
         room_temp_sum += room;
         elec_kwh += heatpump_elec * power_to_kwh;
         heat_kwh += heatpump_heat * power_to_kwh;
-        total_cost += net_elec * power_to_kwh * price * 0.01;
-        agile_cost += net_elec * power_to_kwh * agile_price * 0.01 * 1.05;
-        solar_elec_kwh += solar_offset * power_to_kwh;
-        solar_cost += solar_offset * power_to_kwh * price * 0.01;
 
         flowT_weighted_sum += flow_temperature * heatpump_heat * power_to_kwh;
         outsideT_weighted_sum += outside * heatpump_heat * power_to_kwh;
@@ -1105,6 +1099,81 @@ function sim(conf) {
             outsideT_histogram[outside_bucket] = 0;
         }
         outsideT_histogram[outside_bucket] += timestep;
+
+        // == Home solar and battery storage model ==
+
+        // Solar PV electrical offset
+        // 0.90 converts pv_scale in kW to 870 kWh/year generation.
+        let solar_pv_watts = solar * app.building.pv_scale * 0.9;
+        let balance = solar_pv_watts - heatpump_elec;
+
+        // Simple direct charge and discharge battery storage model
+        let battery_one_way_efficiency = Math.sqrt(app.battery.round_trip_efficiency);
+
+        if (app.battery.capacity_kwh > 0) {
+            if (balance > 0) {
+                let charge = balance;
+                if (charge > app.battery.max_rate_kw * 1000) {
+                    charge = app.battery.max_rate_kw * 1000;
+                }
+
+                let charge_after_loss = charge * battery_one_way_efficiency;
+                let battery_soc_inc = charge_after_loss * power_to_kwh;
+                
+                if (battery_soc + battery_soc_inc > app.battery.capacity_kwh) {
+                    // Can't charge beyond capacity, so reduce charge to fit remaining capacity
+                    battery_soc_inc = app.battery.capacity_kwh - battery_soc;
+                    charge_after_loss = battery_soc_inc / power_to_kwh;
+                    charge = charge_after_loss / battery_one_way_efficiency; // Adjust for efficiency losses
+                }
+
+                battery_soc += battery_soc_inc;
+                balance -= charge; // Reduce balance by the amount charged to battery                
+            } else {
+                let discharge = -balance;
+                if (discharge > app.battery.max_rate_kw * 1000) {
+                    discharge = app.battery.max_rate_kw * 1000;
+                }
+
+                let discharge_before_loss = discharge / battery_one_way_efficiency;
+                let battery_soc_dec = discharge_before_loss * power_to_kwh;
+                
+                if (battery_soc - battery_soc_dec < 0) {
+                    // Can't discharge beyond empty, so reduce discharge to fit available charge
+                    battery_soc_dec = battery_soc;
+                    discharge_before_loss = battery_soc_dec / power_to_kwh;
+                    discharge = discharge_before_loss * battery_one_way_efficiency; // Adjust for efficiency losses
+                }
+
+                battery_soc -= battery_soc_dec;
+                balance += discharge; // Reduce balance by the amount discharged from battery
+            }
+        }
+        
+
+        let solar_offset = 0;
+        let import_power = 0;
+        let export_power = 0;
+
+        if (balance >= 0) {
+            export_power = balance;
+            solar_offset = heatpump_elec;
+        } else {
+            import_power = -balance;
+            solar_offset = solar_pv_watts;
+        }
+
+        // Add solar generation to timeseries for plotting
+        solar_pv_data[i] = solar_pv_watts;
+
+        // Record solar PV generation and offset for stats
+        solar_pv_kwh += solar_pv_watts * power_to_kwh;
+        solar_elec_kwh += solar_offset * power_to_kwh;
+
+        // Cost calculations
+        total_cost += import_power * power_to_kwh * price * 0.01;
+        agile_cost += import_power * power_to_kwh * agile_price * 0.01 * 1.05;
+        solar_cost += solar_offset * power_to_kwh * price * 0.01;
     }
 
     calculate_outside_design_temperatures(outsideT_histogram);
