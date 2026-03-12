@@ -35,6 +35,7 @@ var outside_temperature_start_timestamp = 0;
 var app = new Vue({
     el: '#app',
     data: {
+        simulation_index: 0,
         mode: "day",
         // These are days not included in results, to allow system to stabilise
         days_pre_sim: 5,
@@ -187,7 +188,6 @@ var app = new Vue({
                 .then(response => response.text())
                 .then(csv => {
                     this.parse_csv(csv);
-                    app.simulate();
                 })
                 .catch(error => {
                     console.error('Error loading CSV:', error);
@@ -238,7 +238,7 @@ var app = new Vue({
             this.baseline_enabled = true;
         },
         simulate: function () {
-            console.log("Simulating");
+            console.log("== Call to simulate ==");
             
             // Show loading spinner
             show_spinner();
@@ -297,6 +297,7 @@ var app = new Vue({
                 }
 
                 // Run simulation
+                app.simulation_index++;
                 var sim_start = performance.now();
                 var result = sim({
                     outside_min_time: outside_min_time,
@@ -341,6 +342,7 @@ var app = new Vue({
                 // Hide loading spinner
                 hide_spinner();
 
+                console.log("== End of simulate ==");
             }, 10);
         },
         add_space: function () {
@@ -618,24 +620,26 @@ function get_from_annual_dataset(time_seconds) {
 }
 
 function sim(conf) {
+    console.log("Sim run: ", app.simulation_index, "Days: ", conf.days);
 
-    roomT_data = [];
-    outsideT_data = [];
-    flowT_data = [];
-    returnT_data = [];
-    elec_data = [];
-    heat_data = [];
-    agile_data = [];
-    targetT_data = [];
-    solar_pv_data = [];
-    
+    // Simulation time parameters
+    var timestep = 30;
+    var itterations = 3600 * 24 * conf.days / timestep;
+    var power_to_kwh = timestep / 3600000;
+
+    // Limit fixed compressor speed to 100% and minimum modulation
     if (app.control.fixed_compressor_speed>100) app.control.fixed_compressor_speed = 100;
     if (app.control.fixed_compressor_speed<app.heatpump.minimum_modulation) app.control.fixed_compressor_speed = app.heatpump.minimum_modulation;
 
+    // Outside temperature parameters
     var outside_min_time = conf.outside_min_time;
     var outside_max_time = conf.outside_max_time;
-    var schedule = conf.schedule;
 
+    // Calculate ramp up and down times for outside temperature
+    var ramp_up = outside_max_time - outside_min_time;
+    var ramp_down = 24 - ramp_up;
+
+    // Building fabric parameters
     // Layer 1:
     var u1 = app.building.fabric[0].WK;
     var k1 = 3600000 * app.building.fabric[0].kWhK;
@@ -646,8 +650,8 @@ function sim(conf) {
     var u3 = app.building.fabric[2].WK;
     var k3 = 3600000 * app.building.fabric[2].kWhK;
 
-    var timestep = 30;
-    var itterations = 3600 * 24 * conf.days / timestep;
+    // Schedule for set points and prices
+    var schedule = conf.schedule;
 
     // Pre-process schedule - convert time strings to hours and sort
     var processed_schedule = schedule.map(function(entry) {
@@ -673,55 +677,65 @@ function sim(conf) {
     var max_setpoint = Math.max(...processed_schedule.map(e => e.set_point));
     var overheating_temp = Math.max(20, max_setpoint + 1);
 
-    var elec_kwh = 0;
-    var heat_kwh = 0;
-    var solar_elec_kwh = 0;
-    var solar_pv_kwh = 0;
-    var solar_cost = 0;
-    var solar_gains_kwh = 0;
-    var utilised_solar_gains_kwh = 0;
+    // Battery parameters
+    let battery_soc = app.battery.capacity_kwh * 0.5; // Start at 50% state of charge
 
-    // max_flowT = 0;
-    setpoint = 0;
-    heatpump_heat = 0;
-    heatpump_elec = 0;
+    // Initialize variables for simulation loop
 
-    var power_to_kwh = timestep / 3600000;
-
-    var max_room_temp = 0;
-    
-    heatpump_state = 0;
-    flow_temperature = room;
-    return_temperature = room;
-    MWT_off = 200;
-
-    heatpump_max_roomT_state = 0;
-    
-
-    var ramp_up = outside_max_time - outside_min_time;
-    var ramp_down = 24 - ramp_up;
-
-    var room_temp_sum = 0;
-
-    var total_cost = 0;
-    var agile_cost = 0;
+    // State variables
+    let setpoint = 0;
+    let heatpump_heat = 0;
+    let heatpump_elec = 0;
+    let heatpump_state = 0;
+    let flow_temperature = room;
+    let return_temperature = room;
+    let heatpump_max_roomT_state = 0;
     var price = 0;
-    
+    let outside = 0;
+    let solar = 0;
+    let agile_price = 0;
+    let DHW_active = false;
+    let last_on_time = 0;
+
+    // Max
+    var max_room_temp = 0;
+
+    // Reset results accumulators
+    let elec_kwh = 0;
+    let heat_kwh = 0;
+    let solar_elec_kwh = 0;
+    let solar_pv_kwh = 0;
+    let solar_cost = 0;
+    let solar_gains_kwh = 0;
+    let utilised_solar_gains_kwh = 0;
+    let kwh_carnot_elec = 0;
+    let kwh_elec_running = 0;
+    let kwh_heat_running = 0;
+
+    let degree_hours_above_setpoint = 0;
+    let degree_hours_below_setpoint = 0;
     let stats_count = 0;
     let flowT_weighted_sum = 0;
     let outsideT_weighted_sum = 0;
     let flowT_minus_outsideT_weighted_sum = 0;
-    let kwh_carnot_elec = 0;
-    let kwh_elec_running = 0;
-    let kwh_heat_running = 0;
-    let degree_hours_above_setpoint = 0;
-    let degree_hours_below_setpoint = 0;
 
-    let outside = 0;
-    let solar = 0;
-    let agile_price = 0;
+    let room_temp_sum = 0;
+    let total_cost = 0;
+    let agile_cost = 0;
 
-    let battery_soc = app.battery.capacity_kwh * 0.5; // Start at 50% state of charge
+    // Reset time series data arrays
+    roomT_data = [];
+    outsideT_data = [];
+    flowT_data = [];
+    returnT_data = [];
+    elec_data = [];
+    heat_data = [];
+    agile_data = [];
+    targetT_data = [];
+    solar_pv_data = [];
+    
+    // Reset degree minutes accumulator
+    let outsideT_histogram = {};
 
     // Extract app parameters as constants before the loop
     const ctrl_mode = app.control.mode;
@@ -955,7 +969,6 @@ function sim(conf) {
                 
             // If we are below minimum modulation turn heat pump off
             if (heatpump_heat<(hp_capacity*hp_minimum_modulation*0.01) && heatpump_state==1) {
-                MWT_off = MWT;
                 last_on_time = time;
                 heatpump_state = 0;
             }

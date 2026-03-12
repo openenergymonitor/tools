@@ -130,7 +130,7 @@
                     <button type="button" class="btn btn-info" @click="export_config" style="float:right; margin-right:10px;">Export Config</button>
                     <button type="button" class="btn btn-success" @click="import_config" style="float:right; margin-right:10px;">Import Config</button>
                     <button type="button" class="btn btn-warning" @click="save_baseline">Save as baseline</button>
-                    <span class="text-muted ms-2" style="line-height:38px;">Sim time: {{ results.sim_time_ms | toFixed(0) }} ms</span>
+                    <span class="text-muted ms-2" style="line-height:38px;">Sim time: {{ results.sim_time_ms | toFixed(0) }} ms (Run: {{ simulation_index }})</span>
                 </div>
             </div>
         </div>
