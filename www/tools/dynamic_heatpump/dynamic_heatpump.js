@@ -756,12 +756,16 @@ function sim(conf) {
     const bat_round_trip_efficiency = app.battery.round_trip_efficiency;
     const ext_mid = app.external.mid;
     const ext_use_csv = app.external.use_csv;
+    const ext_swing_half = app.external.swing * 0.5;
 
-    let DHW_active = false;
-    let last_on_time = 0;
+    // Hoisted loop invariants
+    const timestep_hours = timestep / 3600;
+    const water_heat_capacity = hp_system_water_volume * 4187;
+    const flow_heat_capacity = (hp_flow_rate / 60) * 4187;
+    const schedule_last_index = processed_schedule.length - 1;
+    const dhw_schedule_length = processed_dhw_schedule.length;
 
-    let outsideT_histogram = {};
-
+    // == Main simulation loop ==
     for (var i = 0; i < itterations; i++) {
         let time = i * timestep;
         let hour = time / 3600;
@@ -798,7 +802,7 @@ function sim(conf) {
                 A = (hour_mod-outside_max_time+(6*ramp_down/12)) / (ramp_down*2)
             }
             radians = 2 * Math.PI * A
-            outside = ext_mid + Math.sin(radians) * app.external.swing * 0.5;
+            outside = ext_mid + Math.sin(radians) * ext_swing_half;
         }
 
         // if (outside > 19.9) outside = 19.9;
@@ -807,7 +811,7 @@ function sim(conf) {
 
         // Load heating schedule - find the active schedule entry for current hour
         // Start with the last entry (handles wraparound to next day)
-        var scheduleIndex = processed_schedule.length - 1;
+        var scheduleIndex = schedule_last_index;
         
         // Find the correct schedule entry for this hour
         for (let j = 0; j < processed_schedule.length; j++) {
@@ -824,7 +828,7 @@ function sim(conf) {
         DHW_active = false;
 
         // Load DHW schedule - check if current hour falls within any DHW period
-        for (let j = 0; j < processed_dhw_schedule.length; j++) {
+        for (let j = 0; j < dhw_schedule_length; j++) {
             let start = processed_dhw_schedule[j].start_hour;
             let end = processed_dhw_schedule[j].end_hour;
             
@@ -983,7 +987,7 @@ function sim(conf) {
         // Flow and return temperatures are calculated later as an output based on flow rate.
 
         // 1. Heat added to system volume from heat pump
-        MWT += (heatpump_heat * timestep) / (hp_system_water_volume * 4187)
+        MWT += (heatpump_heat * timestep) / water_heat_capacity
 
         // 2. Calculate radiator output based on Room temp and MWT
         Delta_T = MWT - room;
@@ -991,18 +995,14 @@ function sim(conf) {
         radiator_heat = hp_radiatorRatedOutput * Math.pow(Delta_T / hp_radiatorRatedDT, 1.3);
 
         // 3. Subtract this heat output from MWT
-        MWT -= (radiator_heat * timestep) / (hp_system_water_volume * 4187)
+        MWT -= (radiator_heat * timestep) / water_heat_capacity
         
-        let system_DT = heatpump_heat / ((hp_flow_rate / 60) * 4187);
+        let system_DT = heatpump_heat / flow_heat_capacity;
 
         flow_temperature = MWT + (system_DT * 0.5);
         return_temperature = MWT - (system_DT * 0.5);
 
-        
-        // Anti-windup: clamp ITerm so output can't exceed max capacity
-        let max_ITerm = hp_capacity / ctrl_Ki;
-        if (ITerm > max_ITerm) ITerm = max_ITerm;
-        if (ITerm < 0) ITerm = 0;
+        // Anti-windup clamp removed here (duplicate - already applied inside AUTO_ADAPT block above)
 
         var PracticalCOP = 0;
         if (hp_cop_model == "carnot_fixed") {
@@ -1064,14 +1064,14 @@ function sim(conf) {
             max_room_temp = room;
         }
 
-        // Record degree hours above and below setpoint when the heat pump is running for use in control algorithm performance metrics
-        let tolerance = 0.05; // 0.05 degree tolerance band around setpoint to avoid counting minor fluctuations as above/below setpoint
+        // Record degree hours above and below setpoint
+        let tolerance = 0.05;
         if (room>setpoint+tolerance) {
             if (heatpump_heat>0) {
-                degree_hours_above_setpoint += ((room - setpoint) * (timestep / 3600));
+                degree_hours_above_setpoint += (room - setpoint) * timestep_hours;
             }
         } else if (room<setpoint-tolerance) {
-            degree_hours_below_setpoint += ((setpoint - room) * (timestep / 3600));
+            degree_hours_below_setpoint += (setpoint - room) * timestep_hours;
         }
 
 
