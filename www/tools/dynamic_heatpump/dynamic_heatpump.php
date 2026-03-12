@@ -696,3 +696,4 @@
     </div>
 </div>
 <script src="<?php echo $path; ?>dynamic_heatpump.js?v=<?php echo time(); ?>"></script>
+<script src="<?php echo $path; ?>timeseries.js?v=1"></script>
