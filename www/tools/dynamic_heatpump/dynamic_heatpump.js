@@ -947,8 +947,9 @@ function sim(conf) {
                 used_outside = outside 
             }
 
-            flowT_target = setpoint + 2.55 * Math.pow(ctrl_curve*(setpoint - used_outside), 0.78);
-
+            // Original:
+            // flowT_target = setpoint + 2.55 * Math.pow(ctrl_curve*(setpoint - used_outside), 0.78);
+            flowT_target = setpoint + (2.8 * Math.pow(ctrl_curve, 0.8)) * Math.pow(setpoint - used_outside, 0.75);
 
             if (ctrl_limit_by_roomT) {
                 if (room>setpoint+(ctrl_roomT_hysteresis*0.5)) {
