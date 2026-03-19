@@ -336,9 +336,9 @@
                     <label class="form-label">Control mode:</label>
                     
                     <select class="form-control" v-model="control.mode" @change="simulate">
-                        <option value=0>Auto adapt 3 term PID controller</option>
-                        <option value=1>Weather compensation with parallel shift</option>
+                        <option value=0>Single PI (room temp → heat demand)</option>
                         <option value=2>Cascade PI (room temp → flow temp → heat demand)</option>
+                        <option value=1>Weather compensation with parallel shift</option>
                         <option value=3>Fixed speed compressor (on/off thermostat)</option>
                     </select>
 
@@ -438,43 +438,32 @@
                         <input type="text" class="form-control" v-model.number="control.curve" @change="simulate" />
                     </div>
 
-
-                
-                    <label class="form-label">Flow temperature 3 term PID controller:</label>
-
+                   <label class="form-label">Inner loop (flow temp → heat demand):</label>
                     <div class="row">
                         <div class="col">
                             <label class="form-label">Proportional</label>
                             <div class="input-group mb-3">
                                 <span class="input-group-text">Kp</span>
-                                <input type="text" class="form-control" v-model.number="control.wc_Kp"
-                                    @change="simulate" />
+                                <input type="text" class="form-control" v-model.number="control.cascade_inner_Kp" @change="simulate" />
                             </div>
                         </div>
                         <div class="col">
                             <label class="form-label">Integral</label>
                             <div class="input-group mb-3">
                                 <span class="input-group-text">Ki</span>
-                                <input type="text" class="form-control" v-model.number="control.wc_Ki"
-                                    @change="simulate" />
-                            </div>
-                        </div>
-                        <div class="col">
-                            <label class="form-label">Derivative</label>
-                            <div class="input-group mb-3">
-                                <span class="input-group-text">Kd</span>
-                                <input type="text" class="form-control" v-model.number="control.wc_Kd"
-                                    @change="simulate" />
+                                <input type="text" class="form-control" v-model.number="control.cascade_inner_Ki" @change="simulate" />
                             </div>
                         </div>
                     </div>
 
-                    <label class="form-label">Weather compensation outside temperature response:</label>
-                    
-                    <select class="form-control" v-model.number="control.wc_use_outside_mean" @change="simulate">
-                        <option value=0>Instantaneous</option>
-                        <option value=1>Average temperature for the day</option>
-                    </select>
+                    <div v-if="days==1">
+                        <label class="form-label">Weather compensation outside temperature response:</label>
+                        
+                        <select class="form-control" v-model.number="control.wc_use_outside_mean" @change="simulate">
+                            <option value=0>Instantaneous</option>
+                            <option value=1>Average temperature for the day</option>
+                        </select>
+                    </div>
                     <br>
                     <p><i>Curve automatically selected based on building heat loss, internal gains and heat emitter spec.</i></p>
 

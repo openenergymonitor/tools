@@ -89,19 +89,17 @@ var app = new Vue({
             Ki: 0.06,
             Kd: 0.0,
 
-            wc_Kp: 500,
-            wc_Ki: 0.05,
-            wc_Kd: 0.0,
-
             // Cascade PI: outer loop (room temp -> flow temp target)
+            // also used by Weather comp mode
             cascade_outer_Kp: 3.0,
             cascade_outer_Ki: 0.002,
             cascade_outer_max_flowT: 55,
+
             // Cascade PI: inner loop (flow temp target -> heat demand)
             cascade_inner_Kp: 500,
             cascade_inner_Ki: 0.05,
 
-            curve: 1.0,
+            curve: 0.86,
             limit_by_roomT: true,
             roomT_hysteresis: 0.5,
 
@@ -636,6 +634,7 @@ function sim(conf) {
     // Simulation time parameters
     var timestep = 30;
     var itterations = 3600 * 24 * conf.days / timestep;
+    var days = conf.days;
     var power_to_kwh = timestep / 3600000;
 
     // Limit fixed compressor speed to 100% and minimum modulation
@@ -923,9 +922,33 @@ function sim(conf) {
             if (cascade_flowT_target < cascade_flowT_min) cascade_flowT_target = cascade_flowT_min;
             if (cascade_flowT_target > ctrl_cascade_outer_max_flowT) cascade_flowT_target = ctrl_cascade_outer_max_flowT;
 
+
+            flowT_target = cascade_flowT_target;
+
+        } else if (ctrl_mode==WEATHER_COMP_CURVE) {
+            used_outside = outside
+
+            // Mean option only available in day mode not annual mode
+            if (ctrl_wc_use_outside_mean && days == 1) {
+                used_outside = ext_mid
+            }
+
+            // Simple weather compensation curve - flow temperature target is a function of setpoint and outside temperature
+            flowT_target = setpoint + (2.8 * Math.pow(ctrl_curve, 0.8)) * Math.pow(setpoint - used_outside, 0.75);
+
+            // Clamp flow temp target to reasonable bounds
+            if (flowT_target < setpoint) flowT_target = setpoint;
+            if (flowT_target > 80) flowT_target = 80; // Max flow temp of 80 degrees to prevent unrealistic targets
+
+        } else if (ctrl_mode==FIXED_SPEED) {
+            heatpump_heat = 1.0 * hp_capacity * (ctrl_fixed_compressor_speed / 100);
+        }
+
+        // Inner cascade loop control (used by both weather compensation and cascade PI modes)
+        if (ctrl_mode==CASCADE_PI || ctrl_mode==WEATHER_COMP_CURVE) {
             // Inner PI loop: flow temperature error -> heat demand
             last_error = error;
-            error = cascade_flowT_target - flow_temperature;
+            error = flowT_target - flow_temperature;
             ITerm += error * timestep;
 
             let max_ITerm_inner = hp_capacity / ctrl_cascade_inner_Ki;
@@ -934,23 +957,11 @@ function sim(conf) {
 
             heatpump_heat = ctrl_cascade_inner_Kp * error + ctrl_cascade_inner_Ki * ITerm;
             if (!isFinite(heatpump_heat)) heatpump_heat = 0;
+        }
 
-        } else if (ctrl_mode==WEATHER_COMP_CURVE) {
-            
-            // Rather than describe a heating curve based on table data with the requirement to work out which curve you should be on
-            // this approach makes use of the fact that we know the building parameters exactly. We can then use these to generate
-            // a flow temperature to outside temperature relationship that is finely tuned to the physics of the building.
-            
-            if (ctrl_wc_use_outside_mean) {
-                used_outside = ext_mid
-            } else {
-                used_outside = outside 
-            }
-
-            // Original:
-            // flowT_target = setpoint + 2.55 * Math.pow(ctrl_curve*(setpoint - used_outside), 0.78);
-            flowT_target = setpoint + (2.8 * Math.pow(ctrl_curve, 0.8)) * Math.pow(setpoint - used_outside, 0.75);
-
+        // Max temperature limit control - only applies in fixed speed or weather compensation modes 
+        // as in these modes we are not already modulating heat pump output based on room temperature
+        if (ctrl_mode == WEATHER_COMP_CURVE || ctrl_mode == FIXED_SPEED) {
             if (ctrl_limit_by_roomT) {
                 if (room>setpoint+(ctrl_roomT_hysteresis*0.5)) {
                     heatpump_max_roomT_state = 1;
@@ -959,41 +970,10 @@ function sim(conf) {
                 if (heatpump_max_roomT_state==1 && room<setpoint-(ctrl_roomT_hysteresis*0.5)) {
                     heatpump_max_roomT_state = 0;
                 }
-            }
 
-            if (heatpump_max_roomT_state==0) {
-            
-                last_error = error
-                error = flowT_target - flow_temperature
-
-                delta_error = error - last_error
-
-                PTerm = ctrl_wc_Kp * error
-                ITerm += error * timestep
-                DTerm = delta_error / timestep
-
-                heatpump_heat = PTerm + (ctrl_wc_Ki * ITerm) + (ctrl_wc_Kd * DTerm)
-            } else {
-                heatpump_heat = 0;
-            }
-
-        } else if (ctrl_mode==FIXED_SPEED) {
-            heatpump_heat = hp_capacity;
-
-            if (ctrl_limit_by_roomT) {
-                if (room>setpoint+(ctrl_roomT_hysteresis*0.5)) {
-                    heatpump_max_roomT_state = 1;
+                if (heatpump_max_roomT_state==1) {
+                    heatpump_heat = 0;
                 }
-
-                if (heatpump_max_roomT_state==1 && room<setpoint-(ctrl_roomT_hysteresis*0.5)) {
-                    heatpump_max_roomT_state = 0;
-                }
-            }
-
-            if (heatpump_max_roomT_state==0) {
-                heatpump_heat = 1.0 * hp_capacity * (ctrl_fixed_compressor_speed / 100);
-            } else {
-                heatpump_heat = 0;
             }
         }
 
