@@ -338,6 +338,7 @@
                     <select class="form-control" v-model="control.mode" @change="simulate">
                         <option value=0>Auto adapt 3 term PID controller</option>
                         <option value=1>Weather compensation with parallel shift</option>
+                        <option value=2>Cascade PI (room temp → flow temp → heat demand)</option>
                         <option value=3>Fixed speed compressor (on/off thermostat)</option>
                     </select>
 
@@ -378,6 +379,55 @@
                         -->
                     </div>
 
+                </div>
+            </div>
+            <div class="card" v-if="control.mode==2">
+                <div class="card-body">
+                    <label class="form-label">Cascade PI controller:</label>
+                    <p class="text-muted">Outer loop: room temperature error → flow temperature target. Inner loop: flow temperature error → heat demand.</p>
+
+                    <label class="form-label">Outer loop (room temp → flow temp target):</label>
+                    <div class="row">
+                        <div class="col">
+                            <label class="form-label">Proportional</label>
+                            <div class="input-group mb-3">
+                                <span class="input-group-text">Kp</span>
+                                <input type="text" class="form-control" v-model.number="control.cascade_outer_Kp" @change="simulate" />
+                            </div>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Integral</label>
+                            <div class="input-group mb-3">
+                                <span class="input-group-text">Ki</span>
+                                <input type="text" class="form-control" v-model.number="control.cascade_outer_Ki" @change="simulate" />
+                            </div>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Max flow temp</label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" v-model.number="control.cascade_outer_max_flowT" @change="simulate" />
+                                <span class="input-group-text">°C</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <label class="form-label">Inner loop (flow temp → heat demand):</label>
+                    <div class="row">
+                        <div class="col">
+                            <label class="form-label">Proportional</label>
+                            <div class="input-group mb-3">
+                                <span class="input-group-text">Kp</span>
+                                <input type="text" class="form-control" v-model.number="control.cascade_inner_Kp" @change="simulate" />
+                            </div>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Integral</label>
+                            <div class="input-group mb-3">
+                                <span class="input-group-text">Ki</span>
+                                <input type="text" class="form-control" v-model.number="control.cascade_inner_Ki" @change="simulate" />
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="card" v-if="control.mode==1">

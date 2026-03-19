@@ -1,5 +1,6 @@
 var AUTO_ADAPT = 0;
 var WEATHER_COMP_CURVE = 1;
+var CASCADE_PI = 2;
 var FIXED_SPEED = 3;
 var DEGREE_MINUTES_WC = 4;
 
@@ -91,6 +92,14 @@ var app = new Vue({
             wc_Kp: 500,
             wc_Ki: 0.05,
             wc_Kd: 0.0,
+
+            // Cascade PI: outer loop (room temp -> flow temp target)
+            cascade_outer_Kp: 3.0,
+            cascade_outer_Ki: 0.002,
+            cascade_outer_max_flowT: 55,
+            // Cascade PI: inner loop (flow temp target -> heat demand)
+            cascade_inner_Kp: 500,
+            cascade_inner_Ki: 0.05,
 
             curve: 1.0,
             limit_by_roomT: true,
@@ -579,6 +588,8 @@ $('#graph').width($('#graph_bound').width()).height($('#graph_bound').height());
 
 ITerm = 0
 error = 0
+ITerm_outer = 0
+error_outer = 0
 
 
 update_fabric_starting_temperatures();
@@ -750,6 +761,11 @@ function sim(conf) {
     const ctrl_limit_by_roomT = app.control.limit_by_roomT;
     const ctrl_roomT_hysteresis = app.control.roomT_hysteresis;
     const ctrl_fixed_compressor_speed = app.control.fixed_compressor_speed;
+    const ctrl_cascade_outer_Kp = app.control.cascade_outer_Kp;
+    const ctrl_cascade_outer_Ki = app.control.cascade_outer_Ki;
+    const ctrl_cascade_outer_max_flowT = app.control.cascade_outer_max_flowT;
+    const ctrl_cascade_inner_Kp = app.control.cascade_inner_Kp;
+    const ctrl_cascade_inner_Ki = app.control.cascade_inner_Ki;
     const hp_capacity = app.heatpump.capacity;
     const hp_minimum_modulation = app.heatpump.minimum_modulation;
     const hp_system_water_volume = app.heatpump.system_water_volume;
@@ -887,6 +903,38 @@ function sim(conf) {
             // if infinite, set to zero
             if (!isFinite(heatpump_heat)) heatpump_heat = 0;
             
+        } else if (ctrl_mode==CASCADE_PI) {
+
+            // Outer PI loop: room temperature error -> flow temperature target
+            error_outer = setpoint - room;
+            ITerm_outer += error_outer * timestep;
+
+            // Clamp outer ITerm so the flow temp target stays within [setpoint, max_flowT]
+            let cascade_flowT_min = setpoint;
+            let max_ITerm_outer = (ctrl_cascade_outer_max_flowT - cascade_flowT_min) / ctrl_cascade_outer_Ki;
+            if (ITerm_outer > max_ITerm_outer) ITerm_outer = max_ITerm_outer;
+            if (ITerm_outer < 0) ITerm_outer = 0;
+
+            let cascade_flowT_target = cascade_flowT_min
+                + ctrl_cascade_outer_Kp * error_outer
+                + ctrl_cascade_outer_Ki * ITerm_outer;
+
+            // Clamp flow temp target to reasonable bounds
+            if (cascade_flowT_target < cascade_flowT_min) cascade_flowT_target = cascade_flowT_min;
+            if (cascade_flowT_target > ctrl_cascade_outer_max_flowT) cascade_flowT_target = ctrl_cascade_outer_max_flowT;
+
+            // Inner PI loop: flow temperature error -> heat demand
+            last_error = error;
+            error = cascade_flowT_target - flow_temperature;
+            ITerm += error * timestep;
+
+            let max_ITerm_inner = hp_capacity / ctrl_cascade_inner_Ki;
+            if (ITerm > max_ITerm_inner) ITerm = max_ITerm_inner;
+            if (ITerm < 0) ITerm = 0;
+
+            heatpump_heat = ctrl_cascade_inner_Kp * error + ctrl_cascade_inner_Ki * ITerm;
+            if (!isFinite(heatpump_heat)) heatpump_heat = 0;
+
         } else if (ctrl_mode==WEATHER_COMP_CURVE) {
             
             // Rather than describe a heating curve based on table data with the requirement to work out which curve you should be on
