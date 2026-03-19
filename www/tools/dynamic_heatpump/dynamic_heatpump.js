@@ -79,7 +79,8 @@ var app = new Vue({
             cop_model: "vaillant5",
             standby: 11,
             pumps: 15,
-            minimum_modulation: 30
+            minimum_modulation: 30,
+            ramp_rate: 1
         },
         control: {
             mode: AUTO_ADAPT,
@@ -694,6 +695,8 @@ function sim(conf) {
 
     // State variables
     let setpoint = 0;
+    let heatpump_heat_target = 0;
+    let last_heatpump_heat = 0;
     let heatpump_heat = 0;
     let heatpump_elec = 0;
     let heatpump_state = 0;
@@ -775,6 +778,7 @@ function sim(conf) {
     const hp_cop_model = app.heatpump.cop_model;
     const hp_standby = app.heatpump.standby;
     const hp_pumps = app.heatpump.pumps;
+    const hp_ramp_rate = app.heatpump.ramp_rate;
     const bld_metabolic_gains = app.building.metabolic_gains;
     const bld_lac_gains = app.building.lac_gains;
     const bld_solar_gains_scale = app.building.solar_gains_scale;
@@ -900,10 +904,10 @@ function sim(conf) {
             if (ITerm > max_ITerm) ITerm = max_ITerm;
             if (ITerm < 0) ITerm = 0;
 
-            heatpump_heat = PTerm + (ctrl_Ki * ITerm) // + (app.control.Kd * DTerm)
-            if (heatpump_heat == NaN) heatpump_heat = 0;
+            heatpump_heat_target = PTerm + (ctrl_Ki * ITerm) // + (app.control.Kd * DTerm)
+            if (heatpump_heat_target == NaN) heatpump_heat_target = 0;
             // if infinite, set to zero
-            if (!isFinite(heatpump_heat)) heatpump_heat = 0;
+            if (!isFinite(heatpump_heat_target)) heatpump_heat_target = 0;
             
         } else if (ctrl_mode==CASCADE_PI) {
 
@@ -946,7 +950,7 @@ function sim(conf) {
             if (flowT_target > 80) flowT_target = 80; // Max flow temp of 80 degrees to prevent unrealistic targets
 
         } else if (ctrl_mode==FIXED_SPEED) {
-            heatpump_heat = 1.0 * hp_capacity * (ctrl_fixed_compressor_speed / 100);
+            heatpump_heat_target = 1.0 * hp_capacity * (ctrl_fixed_compressor_speed / 100);
         }
 
         // Inner cascade loop control (used by both weather compensation and cascade PI modes)
@@ -960,8 +964,8 @@ function sim(conf) {
             if (ITerm > max_ITerm_inner) ITerm = max_ITerm_inner;
             if (ITerm < 0) ITerm = 0;
 
-            heatpump_heat = ctrl_cascade_inner_Kp * error + ctrl_cascade_inner_Ki * ITerm;
-            if (!isFinite(heatpump_heat)) heatpump_heat = 0;
+            heatpump_heat_target = ctrl_cascade_inner_Kp * error + ctrl_cascade_inner_Ki * ITerm;
+            if (!isFinite(heatpump_heat_target)) heatpump_heat_target = 0;
         }
 
         // Max temperature limit control - only applies in fixed speed or weather compensation modes 
@@ -977,22 +981,22 @@ function sim(conf) {
                 }
 
                 if (heatpump_max_roomT_state==1) {
-                    heatpump_heat = 0;
+                    heatpump_heat_target = 0;
                 }
             }
         }
 
         // Apply limits
-        if (heatpump_heat > hp_capacity) {
-            heatpump_heat = hp_capacity;
+        if (heatpump_heat_target > hp_capacity) {
+            heatpump_heat_target = hp_capacity;
         }
-        if (heatpump_heat < 0) {
-            heatpump_heat = 0;
+        if (heatpump_heat_target < 0) {
+            heatpump_heat_target = 0;
         }
         
         // === Minimum modulation cycling control ===
         // if heat pump is off and demand for heat is more than minimum modulation turn heat pump on
-        if (heatpump_state==0 && heatpump_heat>=(hp_capacity*hp_minimum_modulation*0.01)) {
+        if (heatpump_state==0 && heatpump_heat_target>=(hp_capacity*hp_minimum_modulation*0.01)) {
             // turn on if we have been off for at least 10 minutes to prevent short cycling
             if (time - last_on_time >= 600) {
                 heatpump_state = 1;
@@ -1000,20 +1004,20 @@ function sim(conf) {
         }
             
         // If we are below minimum modulation turn heat pump off
-        if (heatpump_heat<(hp_capacity*hp_minimum_modulation*0.01) && heatpump_state==1) {
+        if (heatpump_heat_target<(hp_capacity*hp_minimum_modulation*0.01) && heatpump_state==1) {
             last_on_time = time;
             heatpump_state = 0;
         }
 
         // Set heat pump heat to zero if state is off
         if (heatpump_state==0) {
-            heatpump_heat = 0;
+            heatpump_heat_target = 0;
         }
         // === End of minimum modulation control ===
 
         if (outside>15) {
             heatpump_state = 0;
-            heatpump_heat = 0;
+            heatpump_heat_target = 0;
             // Reset integrators when heat pump is off due to high outside temperature
             // to prevent windup that would prevent the heat pump restarting in autumn
             ITerm = 0;
@@ -1023,7 +1027,19 @@ function sim(conf) {
 
         if (DHW_active) {
             heatpump_state = 0;
-            heatpump_heat = 0;
+            heatpump_heat_target = 0;
+        }
+
+        last_heatpump_heat = heatpump_heat;
+
+        // Only apply ramp rate limiting if not fixed speed mode
+        if (ctrl_mode != FIXED_SPEED) {
+            let min_modulation_watts = hp_capacity * hp_minimum_modulation * 0.01;
+            // Use min_modulation as the ramp rate when starting from zero, otherwise use ramp_rate % of capacity per timestep
+            let max_step = heatpump_heat >= min_modulation_watts ? hp_capacity * hp_ramp_rate * 0.01 : min_modulation_watts;
+            heatpump_heat = Math.min(heatpump_heat_target, last_heatpump_heat + max_step);
+        } else {
+            heatpump_heat = heatpump_heat_target;
         }
 
         // Implementation includes system volume

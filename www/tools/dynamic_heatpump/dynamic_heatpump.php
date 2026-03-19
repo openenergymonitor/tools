@@ -563,7 +563,25 @@
                             <label class="form-label">Minimum output</label>
                             <div class="input-group mb-3">
                                 <input type="text" class="form-control" :value="heatpump.minimum_modulation*heatpump.capacity/100 | toFixed(0)" disabled />
-                                <span class="input-group-text">kW</span>
+                                <span class="input-group-text">W</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col">
+                            <label class="form-label">Ramp rate <small class="text-muted">(modulating modes only)</small></label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" v-model.number="heatpump.ramp_rate"
+                                    @change="simulate" />
+                                <span class="input-group-text">% capacity/step</span>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Ramp rate</label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" :value="heatpump.ramp_rate*heatpump.capacity/100 | toFixed(0)" disabled />
+                                <span class="input-group-text">W/step</span>
                             </div>
                         </div>
                     </div>
