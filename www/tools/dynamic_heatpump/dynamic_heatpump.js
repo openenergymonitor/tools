@@ -810,6 +810,9 @@ function sim(conf) {
             
             if (csv_temp !== null) {
                 outside = csv_temp;
+                if (outside < -10) outside = -10; // Limit extreme cold temperatures to avoid simulation instability
+                if (outside > 35) outside = 35; // Limit extreme hot temperatures to avoid simulation instability
+
             }
 
             if (csv_solar !== null) {
@@ -985,29 +988,26 @@ function sim(conf) {
             heatpump_heat = 0;
         }
         
-        // Minimum modulation cycling control
-        if (ctrl_mode != DEGREE_MINUTES_WC) {
-
-            // if heat pump is off and demand for heat is more than minimum modulation turn heat pump on
-            if (heatpump_state==0 && heatpump_heat>=(hp_capacity*hp_minimum_modulation*0.01)) {
-                // turn on if we have been off for at least 10 minutes to prevent short cycling
-                if (time - last_on_time >= 600) {
-                    heatpump_state = 1;
-                }
+        // === Minimum modulation cycling control ===
+        // if heat pump is off and demand for heat is more than minimum modulation turn heat pump on
+        if (heatpump_state==0 && heatpump_heat>=(hp_capacity*hp_minimum_modulation*0.01)) {
+            // turn on if we have been off for at least 10 minutes to prevent short cycling
+            if (time - last_on_time >= 600) {
+                heatpump_state = 1;
             }
-                
-            // If we are below minimum modulation turn heat pump off
-            if (heatpump_heat<(hp_capacity*hp_minimum_modulation*0.01) && heatpump_state==1) {
-                last_on_time = time;
-                heatpump_state = 0;
-            }
-
-            // Set heat pump heat to zero if state is off
-            if (heatpump_state==0) {
-                heatpump_heat = 0;
-            }
-
         }
+            
+        // If we are below minimum modulation turn heat pump off
+        if (heatpump_heat<(hp_capacity*hp_minimum_modulation*0.01) && heatpump_state==1) {
+            last_on_time = time;
+            heatpump_state = 0;
+        }
+
+        // Set heat pump heat to zero if state is off
+        if (heatpump_state==0) {
+            heatpump_heat = 0;
+        }
+        // === End of minimum modulation control ===
 
         if (outside>15) {
             heatpump_state = 0;
