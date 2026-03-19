@@ -937,7 +937,9 @@ function sim(conf) {
             }
 
             // Simple weather compensation curve - flow temperature target is a function of setpoint and outside temperature
-            flowT_target = setpoint + (2.8 * Math.pow(ctrl_curve, 0.8)) * Math.pow(setpoint - used_outside, 0.75);
+            // Clamp temp difference to 0 to avoid Math.pow(negative, 0.75) returning NaN when outside > setpoint
+            let wc_temp_diff = Math.max(0, setpoint - used_outside);
+            flowT_target = setpoint + (2.8 * Math.pow(ctrl_curve, 0.8)) * Math.pow(wc_temp_diff, 0.75);
 
             // Clamp flow temp target to reasonable bounds
             if (flowT_target < setpoint) flowT_target = setpoint;
@@ -1012,6 +1014,11 @@ function sim(conf) {
         if (outside>15) {
             heatpump_state = 0;
             heatpump_heat = 0;
+            // Reset integrators when heat pump is off due to high outside temperature
+            // to prevent windup that would prevent the heat pump restarting in autumn
+            ITerm = 0;
+            ITerm_outer = 0;
+            heatpump_max_roomT_state = 0;
         }
 
         if (DHW_active) {
