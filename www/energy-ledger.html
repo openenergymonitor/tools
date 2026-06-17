@@ -62,7 +62,8 @@
   .ledger-row{display:grid;grid-template-columns:160px 1fr 96px;align-items:center;gap:14px;margin:11px 0;}
   .ledger-label{font-size:12px;color:var(--muted);}
   .ledger-label b{display:block;color:var(--text);font-family:"Space Grotesk";font-size:13px;font-weight:600;}
-  .bar{height:34px;border-radius:7px;background:#0d1217;display:flex;overflow:hidden;border:1px solid var(--line);}
+  .bar{height:34px;border-radius:7px;background:#0d1217;overflow:hidden;border:1px solid var(--line);}
+  .barfill{height:100%;display:flex;overflow:hidden;border-radius:6px;transition:width .55s cubic-bezier(.22,.61,.36,1);}
   .seg{height:100%;transition:flex-grow .55s cubic-bezier(.22,.61,.36,1), background .3s;position:relative;}
   .seg:first-child{border-top-left-radius:6px;border-bottom-left-radius:6px}
   .ledger-total{font-family:"JetBrains Mono";font-weight:700;font-size:17px;text-align:right;}
@@ -189,8 +190,10 @@
     <div class="ledger-row">
       <div class="ledger-label"><b>Status quo</b>petrol + gas boiler</div>
       <div class="bar">
-        <div v-for="s in statusQuo.segments" :key="s.key" class="seg"
-             :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+gbp(s.value)"></div>
+        <div class="barfill" :style="{width:(statusQuo.allIn/costScaleMax*100)+'%'}">
+          <div v-for="s in statusQuo.segments" :key="s.key" class="seg"
+               :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+gbp(s.value)"></div>
+        </div>
       </div>
       <div class="ledger-total num">{{ gbp(statusQuo.allIn) }}<span>/year</span></div>
     </div>
@@ -198,8 +201,10 @@
     <div class="ledger-row">
       <div class="ledger-label"><b>This build</b>{{ buildName }}</div>
       <div class="bar">
-        <div v-for="s in current.segments" :key="s.key" class="seg"
-             :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+gbp(s.value)"></div>
+        <div class="barfill" :style="{width:(current.allIn/costScaleMax*100)+'%'}">
+          <div v-for="s in current.segments" :key="s.key" class="seg"
+               :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+gbp(s.value)"></div>
+        </div>
       </div>
       <div class="ledger-total num">{{ gbp(current.allIn) }}<span>/year</span></div>
     </div>
@@ -221,8 +226,10 @@
     <div class="ledger-row">
       <div class="ledger-label"><b>Status quo</b>petrol + gas boiler</div>
       <div class="bar">
-        <div v-for="s in statusQuo.carbonSegments" :key="s.key" class="seg"
-             :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+co2(s.value)"></div>
+        <div class="barfill" :style="{width:(statusQuo.totalCO2/carbonScaleMax*100)+'%'}">
+          <div v-for="s in statusQuo.carbonSegments" :key="s.key" class="seg"
+               :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+co2(s.value)"></div>
+        </div>
       </div>
       <div class="ledger-total num">{{ co2(statusQuo.totalCO2) }}<span>CO₂e/yr</span></div>
     </div>
@@ -230,8 +237,10 @@
     <div class="ledger-row">
       <div class="ledger-label"><b>This build</b>{{ buildName }}</div>
       <div class="bar">
-        <div v-for="s in current.carbonSegments" :key="s.key" class="seg"
-             :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+co2(s.value)"></div>
+        <div class="barfill" :style="{width:(current.totalCO2/carbonScaleMax*100)+'%'}">
+          <div v-for="s in current.carbonSegments" :key="s.key" class="seg"
+               :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+co2(s.value)"></div>
+        </div>
       </div>
       <div class="ledger-total num">{{ co2(current.totalCO2) }}<span>CO₂e/yr</span></div>
     </div>
@@ -640,11 +649,18 @@ createApp({
     // is only shown while Agile is on — keep the state in sync so the slow
     // cost-optimised solve never runs once Agile is switched off.
     'cfg.agile'(on){ if(!on) this.optimalDispatch = false; },
+    // Disconnecting gas only makes sense once heating is electrified, so default
+    // to a full disconnect when the heat pump goes on (the user can still keep
+    // gas for cooking by unticking it), and clear it when the heat pump goes off.
+    'cfg.hp'(on){ this.cfg.disconnectGas = on; },
   },
   computed:{
     current(){ return this.compute(this.cfg); },
     statusQuo(){ return this.compute({ev:false,hp:false,solar:false,battery:false,agile:false,disconnectGas:false}); },
     saving(){ return this.statusQuo.allIn - this.current.allIn; },
+    // shared linear scale for the cost bars: status quo (usually the largest)
+    // anchors the full width, so the build bar shrinks as savings are made.
+    costScaleMax(){ return Math.max(this.statusQuo.allIn, this.current.allIn, 1); },
     buildName(){
       const on=[];
       if(this.cfg.ev)on.push('EV'); if(this.cfg.hp)on.push('heat pump');
@@ -661,6 +677,8 @@ createApp({
       return x;
     },
     carbonSaving(){ return this.statusQuo.totalCO2 - this.current.totalCO2; },
+    // shared linear scale for the carbon bars (mirrors costScaleMax)
+    carbonScaleMax(){ return Math.max(this.statusQuo.totalCO2, this.current.totalCO2, 1); },
     extraEmbodiedTotal(){
       // one-time extra manufacturing carbon (the "carbon debt") vs like-for-like replacement
       const p=this.p; let x=0;
