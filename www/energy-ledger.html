@@ -92,6 +92,7 @@
   .tech .tx b{font-family:"Space Grotesk";font-weight:600;font-size:14px;}
   .tech .tx small{display:block;color:var(--muted);font-size:11.5px;}
   .tech .mg{font-family:"JetBrains Mono";font-size:12.5px;font-weight:700;text-align:right;white-space:nowrap;}
+  .tech .mg .co2{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-top:1px;}
   .tech .mg span{display:block;font-size:10px;color:var(--faint);font-weight:400;}
 
   /* toggle */
@@ -249,40 +250,40 @@
     <!-- LEFT: configuration -->
     <div>
       <div class="card builder">
-        <div class="card-head"><h2>Build your home</h2><span class="hint">marginal £/yr shows the effect of each step given the rest</span></div>
+        <div class="card-head"><h2>Build your home</h2><span class="hint">marginal £/yr and kgCO₂e/yr show the effect of each step given the rest</span></div>
 
         <div class="tech">
           <div class="icon" style="background:var(--ev)">EV</div>
           <div class="tx"><b>Electric vehicle</b><small>replaces the petrol car</small></div>
-          <div class="mg">{{ marginalLabel('ev') }}<span>marginal</span></div>
+          <div class="mg">{{ marginalLabel('ev') }}<small class="co2">{{ marginalCarbonLabel('ev') }} CO₂e</small><span>marginal</span></div>
           <label class="sw"><input type="checkbox" v-model="cfg.ev"><span class="track"></span><span class="knob"></span></label>
         </div>
 
         <div class="tech">
           <div class="icon" style="background:var(--hp)">HP</div>
           <div class="tx"><b>Heat pump</b><small>replaces the gas boiler</small></div>
-          <div class="mg">{{ marginalLabel('hp') }}<span>marginal</span></div>
+          <div class="mg">{{ marginalLabel('hp') }}<small class="co2">{{ marginalCarbonLabel('hp') }} CO₂e</small><span>marginal</span></div>
           <label class="sw"><input type="checkbox" v-model="cfg.hp"><span class="track"></span><span class="knob"></span></label>
         </div>
 
         <div class="tech">
           <div class="icon" style="background:var(--solar)">PV</div>
           <div class="tx"><b>Solar PV</b><small>{{ p.solarKwp }} kWp on the roof</small></div>
-          <div class="mg">{{ marginalLabel('solar') }}<span>marginal</span></div>
+          <div class="mg">{{ marginalLabel('solar') }}<small class="co2">{{ marginalCarbonLabel('solar') }} CO₂e</small><span>marginal</span></div>
           <label class="sw"><input type="checkbox" v-model="cfg.solar"><span class="track"></span><span class="knob"></span></label>
         </div>
 
         <div class="tech">
           <div class="icon" style="background:var(--battery)">B</div>
           <div class="tx"><b>Home battery</b><small>{{ p.batteryKwh }} kWh storage</small></div>
-          <div class="mg">{{ marginalLabel('battery') }}<span>marginal</span></div>
+          <div class="mg">{{ marginalLabel('battery') }}<small class="co2">{{ marginalCarbonLabel('battery') }} CO₂e</small><span>marginal</span></div>
           <label class="sw"><input type="checkbox" v-model="cfg.battery"><span class="track"></span><span class="knob"></span></label>
         </div>
 
         <div class="tech" :class="{disabled: !useHHModel}">
           <div class="icon" style="background:var(--grid)">⚡</div>
           <div class="tx"><b>Agile tariff</b><small v-if="useHHModel">half-hourly wholesale-linked import &amp; export prices</small><small v-else>needs the half-hourly model · enable it under Advanced</small></div>
-          <div class="mg" v-if="useHHModel">{{ marginalLabel('agile') }}<span>marginal</span></div>
+          <div class="mg" v-if="useHHModel">{{ marginalLabel('agile') }}<small class="co2">{{ marginalCarbonLabel('agile') }} CO₂e</small><span>marginal</span></div>
           <label class="sw"><input type="checkbox" v-model="cfg.agile" :disabled="!useHHModel"><span class="track"></span><span class="knob"></span></label>
         </div>
 
@@ -747,6 +748,19 @@ createApp({
                                    : (here - there);  // currently off: now minus cost-if-added → +ve means adding saves
       const sign = delta>=0 ? '−' : '+';
       return sign + this.gbp(Math.abs(delta));
+    },
+
+    marginalCarbonLabel(tech){
+      // effect on all-in carbon (operational + amortised embodied) of flipping
+      // this technology, given the rest of the current build — parallel to marginalLabel
+      const flipped = Object.assign({}, this.cfg);
+      flipped[tech] = !flipped[tech];
+      const here = this.current.totalCO2;       // reuse the cached current build
+      const there = this.compute(flipped).totalCO2;
+      const delta = this.cfg[tech] ? (there - here)   // currently on: carbon if removed minus now → +ve means it's cutting that much
+                                   : (here - there);  // currently off: now minus carbon-if-added → +ve means adding cuts
+      const sign = delta>=0 ? '−' : '+';
+      return sign + this.co2(Math.abs(delta));
     },
 
     compute(c){
