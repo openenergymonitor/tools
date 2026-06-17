@@ -59,7 +59,7 @@
   .saving-badge.pos{color:var(--good);border-color:rgba(84,192,138,.4);background:rgba(84,192,138,.08);}
   .saving-badge.neg{color:var(--bad);border-color:rgba(216,105,77,.4);background:rgba(216,105,77,.08);}
 
-  .ledger-row{display:grid;grid-template-columns:130px 1fr 96px;align-items:center;gap:14px;margin:11px 0;}
+  .ledger-row{display:grid;grid-template-columns:160px 1fr 96px;align-items:center;gap:14px;margin:11px 0;}
   .ledger-label{font-size:12px;color:var(--muted);}
   .ledger-label b{display:block;color:var(--text);font-family:"Space Grotesk";font-size:13px;font-weight:600;}
   .bar{height:34px;border-radius:7px;background:#0d1217;display:flex;overflow:hidden;border:1px solid var(--line);}
@@ -93,6 +93,7 @@
   .tech .tx small{display:block;color:var(--muted);font-size:11.5px;}
   .tech .mg{font-family:"JetBrains Mono";font-size:12.5px;font-weight:700;text-align:right;white-space:nowrap;}
   .tech .mg .co2{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-top:1px;}
+  .tech .mg .abate{display:block;font-size:11px;font-weight:600;color:var(--faint);margin-top:1px;}
   .tech .mg span{display:block;font-size:10px;color:var(--faint);font-weight:400;}
 
   /* toggle */
@@ -135,7 +136,8 @@
 
   /* ---- results ---- */
   .stat-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
-  @media(max-width:480px){.stat-row{grid-template-columns:1fr 1fr}}
+  .stat-row.q4{grid-template-columns:repeat(4,1fr);}
+  @media(max-width:480px){.stat-row{grid-template-columns:1fr 1fr}.stat-row.q4{grid-template-columns:1fr 1fr}}
   .stat{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:13px;}
   .stat .k{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);}
   .stat .v{font-family:"JetBrains Mono";font-weight:700;font-size:20px;margin-top:5px;}
@@ -250,40 +252,40 @@
     <!-- LEFT: configuration -->
     <div>
       <div class="card builder">
-        <div class="card-head"><h2>Build your home</h2><span class="hint">marginal £/yr and kgCO₂e/yr show the effect of each step given the rest</span></div>
+        <div class="card-head"><h2>Build your home</h2><label class="chk" style="font-size:11px;"><input type="checkbox" v-model="showMarginalDetail">show carbon &amp; abatement</label></div>
 
         <div class="tech">
           <div class="icon" style="background:var(--ev)">EV</div>
           <div class="tx"><b>Electric vehicle</b><small>replaces the petrol car</small></div>
-          <div class="mg">{{ marginalLabel('ev') }}<small class="co2">{{ marginalCarbonLabel('ev') }} CO₂e</small><span>marginal</span></div>
+          <div class="mg">{{ marginalLabel('ev') }}<template v-if="showMarginalDetail"><small class="co2">{{ marginalCarbonLabel('ev') }} CO₂e</small><small class="abate">{{ marginalAbatementLabel('ev') }}</small></template><span>{{ showMarginalDetail ? 'marginal · abatement' : 'marginal' }}</span></div>
           <label class="sw"><input type="checkbox" v-model="cfg.ev"><span class="track"></span><span class="knob"></span></label>
         </div>
 
         <div class="tech">
           <div class="icon" style="background:var(--hp)">HP</div>
           <div class="tx"><b>Heat pump</b><small>replaces the gas boiler</small></div>
-          <div class="mg">{{ marginalLabel('hp') }}<small class="co2">{{ marginalCarbonLabel('hp') }} CO₂e</small><span>marginal</span></div>
+          <div class="mg">{{ marginalLabel('hp') }}<template v-if="showMarginalDetail"><small class="co2">{{ marginalCarbonLabel('hp') }} CO₂e</small><small class="abate">{{ marginalAbatementLabel('hp') }}</small></template><span>{{ showMarginalDetail ? 'marginal · abatement' : 'marginal' }}</span></div>
           <label class="sw"><input type="checkbox" v-model="cfg.hp"><span class="track"></span><span class="knob"></span></label>
         </div>
 
         <div class="tech">
           <div class="icon" style="background:var(--solar)">PV</div>
           <div class="tx"><b>Solar PV</b><small>{{ p.solarKwp }} kWp on the roof</small></div>
-          <div class="mg">{{ marginalLabel('solar') }}<small class="co2">{{ marginalCarbonLabel('solar') }} CO₂e</small><span>marginal</span></div>
+          <div class="mg">{{ marginalLabel('solar') }}<template v-if="showMarginalDetail"><small class="co2">{{ marginalCarbonLabel('solar') }} CO₂e</small><small class="abate">{{ marginalAbatementLabel('solar') }}</small></template><span>{{ showMarginalDetail ? 'marginal · abatement' : 'marginal' }}</span></div>
           <label class="sw"><input type="checkbox" v-model="cfg.solar"><span class="track"></span><span class="knob"></span></label>
         </div>
 
         <div class="tech">
           <div class="icon" style="background:var(--battery)">B</div>
           <div class="tx"><b>Home battery</b><small>{{ p.batteryKwh }} kWh storage</small></div>
-          <div class="mg">{{ marginalLabel('battery') }}<small class="co2">{{ marginalCarbonLabel('battery') }} CO₂e</small><span>marginal</span></div>
+          <div class="mg">{{ marginalLabel('battery') }}<template v-if="showMarginalDetail"><small class="co2">{{ marginalCarbonLabel('battery') }} CO₂e</small><small class="abate">{{ marginalAbatementLabel('battery') }}</small></template><span>{{ showMarginalDetail ? 'marginal · abatement' : 'marginal' }}</span></div>
           <label class="sw"><input type="checkbox" v-model="cfg.battery"><span class="track"></span><span class="knob"></span></label>
         </div>
 
         <div class="tech" :class="{disabled: !useHHModel}">
           <div class="icon" style="background:var(--grid)">⚡</div>
           <div class="tx"><b>Agile tariff</b><small v-if="useHHModel">half-hourly wholesale-linked import &amp; export prices</small><small v-else>needs the half-hourly model · enable it under Advanced</small></div>
-          <div class="mg" v-if="useHHModel">{{ marginalLabel('agile') }}<small class="co2">{{ marginalCarbonLabel('agile') }} CO₂e</small><span>marginal</span></div>
+          <div class="mg" v-if="useHHModel">{{ marginalLabel('agile') }}<small v-if="showMarginalDetail" class="co2">{{ marginalCarbonLabel('agile') }} CO₂e</small><span>marginal</span></div>
           <label class="sw"><input type="checkbox" v-model="cfg.agile" :disabled="!useHHModel"><span class="track"></span><span class="knob"></span></label>
         </div>
 
@@ -487,10 +489,11 @@
 
       <div class="card">
         <div class="card-head"><h2>This build · carbon</h2><span class="hint">kgCO₂e per year</span></div>
-        <div class="stat-row">
+        <div class="stat-row q4">
           <div class="stat"><div class="k">CO₂e / yr</div><div class="v">{{ co2(current.totalCO2) }}</div><div class="s">operational + embodied</div></div>
           <div class="stat"><div class="k">vs status quo</div><div class="v" :style="{color: carbonSaving>=0?'var(--good)':'var(--bad)'}">{{ carbonSaving>=0?'−':'+' }}{{ co2(Math.abs(carbonSaving)) }}</div><div class="s">per year</div></div>
           <div class="stat"><div class="k">Carbon payback</div><div class="v">{{ carbonPayback===null ? '—' : carbonPayback.toFixed(1) }}<span v-if="carbonPayback!==null" style="font-size:12px;color:var(--faint);"> yrs</span></div><div class="s">debt vs op. saving</div></div>
+          <div class="stat"><div class="k">Abatement cost</div><div class="v" :style="{color: abatementCost===null ? 'var(--faint)' : (abatementCost<0?'var(--good)':'var(--text)')}">{{ abatementCost===null ? '—' : (abatementCost<0?'−':'')+gbp(Math.abs(abatementCost)) }}<span v-if="abatementCost!==null" style="font-size:12px;color:var(--faint);">/t</span></div><div class="s">{{ abatementCost===null ? 'no carbon cut' : (abatementCost<0 ? 'paid to abate' : 'per tCO₂e avoided') }}</div></div>
         </div>
 
         <table class="flows">
@@ -542,7 +545,7 @@
       <div class="foot">
         <p><b>How to read this.</b> Lumpy purchases (a car, a boiler) are spread over their life as an equivalent annual cost — discounted for the time-value of money — so options compare like-for-like. The fossil status quo already carries a car and a boiler you'd replace anyway — switching to an EV or heat pump swaps one asset cost for another rather than adding to it. “Extra upfront” is the cash needed today for the new kit beyond a like-for-like petrol-car / boiler replacement.</p>
         <p style="margin-top:10px;"><b>Simplifications.</b> Solar self-consumption is, by default, run through a half-hourly simulation of a real year (the same engine as the <a href="solar-matching.html">Solar Matching</a> tool) — solar, battery and EV charging are dispatched interval-by-interval, so self-consumption and the import / export split emerge from the timing. A simple annualised daytime-match estimate is available under <em>Advanced · solar matching</em> for comparison. The <b>Agile tariff</b> switch prices every half-hour of import and export against the dataset's wholesale-linked rates (the same dispatch, re-costed); with it off, a flat unit rate and a flat export rate apply. The EV charges within the window set under <em>Electric vehicle</em>. Lumpy purchases are converted to an equivalent annual cost with a capital-recovery (annuity) factor at a real discount rate (default {{ p.discountRate }}%, editable under <em>Assumptions · Discounting</em>), so capital spent today weighs more than future spend and resale values are discounted back — set it to 0 for plain straight-line spreading. Insurance is treated as roughly neutral between petrol and EV. Prices are a mid-2026 snapshot and unusually high. <span class="pill">v2 · half-hourly</span></p>
-        <p style="margin-top:10px;"><b>Carbon basis.</b> Petrol ~2.9 kgCO₂e/L well-to-wheel; gas 0.183 kgCO₂e/kWh combustion plus an upstream/methane uplift (default +20%, GWP100 — the evidence suggests this is the floor, not the ceiling). Grid ~125 gCO₂/kWh (2024-25 average, falling fast toward ~50 by 2030), so the electrified case looks better every year. Exported solar is credited against gas (CCGT) generation. Embodied carbon follows the Hoekstra framing: the car glider is ~equal for petrol and EV, with the battery the main difference (~75 kgCO₂e/kWh of cell). “Carbon payback” = one-off extra manufacturing carbon ÷ annual operational saving. <span class="pill">factors editable</span></p>
+        <p style="margin-top:10px;"><b>Carbon basis.</b> Petrol ~2.9 kgCO₂e/L well-to-wheel; gas 0.183 kgCO₂e/kWh combustion plus an upstream/methane uplift (default +20%, GWP100 — the evidence suggests this is the floor, not the ceiling). Grid ~125 gCO₂/kWh (2024-25 average, falling fast toward ~50 by 2030), so the electrified case looks better every year. Exported solar is credited against gas (CCGT) generation. Embodied carbon follows the Hoekstra framing: the car glider is ~equal for petrol and EV, with the battery the main difference (~75 kgCO₂e/kWh of cell). “Carbon payback” = one-off extra manufacturing carbon ÷ annual operational saving. <b>“Abatement cost”</b> = the change in all-in annual cost ÷ the tonnes of CO₂e abated per year (whole build vs status quo, or per step given the rest of the build): a <b>negative</b> figure means the measure cuts carbon <em>and</em> saves money — you're effectively paid to decarbonise — while a positive figure is what you pay per tonne avoided (for context, UK government appraisal currently values carbon at roughly £250/tCO₂e). Steps that don't cut carbon show “—”. <span class="pill">factors editable</span></p>
       </div>
     </div>
   </div>
@@ -607,6 +610,7 @@ createApp({
       // solar-matching engine: half-hourly simulation (model.js) by default,
       // with the simple annual estimate available for comparison.
       useHHModel: true,
+      showMarginalDetail: false,   // build rows: reveal per-step carbon + abatement lines (default hidden to reduce clutter)
       optimalDispatch: false,   // battery: cost-optimised Agile dispatch (model.js DP)
       modelReady: false,
       usingSynthetic: false,
@@ -670,6 +674,15 @@ createApp({
       const annualOpSaving = this.statusQuo.opCO2 - this.current.opCO2;
       if(annualOpSaving <= 0) return null;
       return this.extraEmbodiedTotal / annualOpSaving;
+    },
+    abatementCost(){
+      // £ per tonne CO2e abated by the whole build vs the fossil status quo:
+      // all-in annual cost change ÷ annual carbon abated. Negative = the build
+      // cuts carbon AND saves money (you're paid to decarbonise). null = it
+      // doesn't abate carbon, so £/tonne is undefined.
+      const tonnes = this.carbonSaving / 1000;
+      if(tonnes <= 0.0005) return null;
+      return -this.saving / tonnes;   // -saving = extra annual cost over status quo
     },
   },
   methods:{
@@ -761,6 +774,20 @@ createApp({
                                    : (here - there);  // currently off: now minus carbon-if-added → +ve means adding cuts
       const sign = delta>=0 ? '−' : '+';
       return sign + this.co2(Math.abs(delta));
+    },
+
+    marginalAbatementLabel(tech){
+      // £ per tonne CO2e abated by flipping this step, given the rest of the build.
+      // Negative = the step cuts carbon AND saves money; '—' = it doesn't cut carbon.
+      const flipped = Object.assign({}, this.cfg);
+      flipped[tech] = !flipped[tech];
+      const there = this.compute(flipped);                  // cached if already computed for the £/kg labels
+      const costSaving   = this.cfg[tech] ? (there.allIn - this.current.allIn)       : (this.current.allIn - there.allIn);     // +ve = step saves £/yr
+      const carbonAbated = this.cfg[tech] ? (there.totalCO2 - this.current.totalCO2) : (this.current.totalCO2 - there.totalCO2); // +ve = step cuts kg/yr
+      const tonnes = carbonAbated / 1000;
+      if(tonnes <= 0.0005) return '—';                      // step doesn't cut carbon → undefined
+      const perTonne = -costSaving / tonnes;                // +£/t = pay to abate; −£/t = paid to abate
+      return (perTonne < 0 ? '−' : '') + this.gbp(Math.abs(perTonne)) + '/t';
     },
 
     compute(c){
