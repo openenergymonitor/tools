@@ -309,12 +309,12 @@
         <details open>
           <summary>Energy prices &amp; tariff <span class="chev">›</span></summary>
           <div class="fields">
-            <div class="field"><label>Electricity unit rate <span class="unit">p/kWh</span></label><input type="number" step="0.01" v-model.number="p.elecRate"></div>
+            <div class="field" v-if="!cfg.agile"><label>Electricity unit rate <span class="unit">p/kWh</span></label><input type="number" step="0.01" v-model.number="p.elecRate"></div>
             <div class="field"><label>Electricity standing charge <span class="unit">p/day</span></label><input type="number" step="0.01" v-model.number="p.elecStanding"></div>
             <div class="field"><label>Gas unit rate <span class="unit">p/kWh</span></label><input type="number" step="0.01" v-model.number="p.gasRate"></div>
             <div class="field"><label>Gas standing charge <span class="unit">p/day</span></label><input type="number" step="0.01" v-model.number="p.gasStanding"></div>
-            <div class="field"><label>Export rate (SEG / flat) <span class="unit">p/kWh</span></label><input type="number" step="0.01" v-model.number="p.segRate"></div>
-            <p v-if="cfg.agile" style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Agile tariff is on: half-hourly import &amp; export prices come from the dataset (avg {{ current.avgAgileImport==null ? '—' : current.avgAgileImport.toFixed(1) }}p import / {{ current.avgAgileExport==null ? '—' : current.avgAgileExport.toFixed(1) }}p export across this build). The flat unit rate above applies when Agile is off.</p>
+            <div class="field" v-if="!cfg.agile"><label>Export rate (SEG / flat) <span class="unit">p/kWh</span></label><input type="number" step="0.01" v-model.number="p.segRate"></div>
+            <p v-if="cfg.agile" style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Agile tariff is on: import &amp; export prices come from the half-hourly dataset (avg {{ current.avgAgileImport==null ? '—' : current.avgAgileImport.toFixed(1) }}p import / {{ current.avgAgileExport==null ? '—' : current.avgAgileExport.toFixed(1) }}p export across this build), so the flat import &amp; export rates don't apply. Switch Agile off to set them.</p>
           </div>
         </details>
 
@@ -519,7 +519,9 @@
           <div class="seg" :style="{flexGrow:Math.max(current.solarExport,0.001), background:'var(--solar)'}"></div>
         </div>
         <p v-if="cfg.solar" style="font-size:11.5px;color:var(--muted);margin:10px 2px 4px;">
-          {{ current.selfPct }}% of your solar is used at home. Adding load (EV, heat pump) or a battery pushes this up — every self-consumed kWh is worth the {{ p.elecRate }}p import rate you avoid, versus only {{ p.segRate }}p if exported.
+          {{ current.selfPct }}% of your solar is used at home. Adding load (EV, heat pump) or a battery pushes this up — every self-consumed kWh is worth the
+          <template v-if="cfg.agile && current.avgAgileImport!=null">~{{ current.avgAgileImport.toFixed(1) }}p avg Agile import rate you avoid, versus only ~{{ current.avgAgileExport.toFixed(1) }}p avg if exported.</template>
+          <template v-else>{{ p.elecRate }}p import rate you avoid, versus only {{ p.segRate }}p if exported.</template>
         </p>
       </div>
 
