@@ -324,6 +324,14 @@
         </details>
 
         <details>
+          <summary>Discounting · time-value of money <span class="chev">›</span></summary>
+          <div class="fields">
+            <div class="field"><label>Real discount rate <span class="unit">%/yr</span></label><input type="number" step="0.5" v-model.number="p.discountRate"></div>
+            <p style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Lumpy purchases (car, boiler, heat pump, solar, battery) are turned into an equivalent annual cost with a capital-recovery (annuity) factor at this <em>real</em> (above-inflation) rate, so cash spent today weighs more than cash spent years out; resale values, received at end of life, are discounted back the same way. Set to <b>0</b> for plain straight-line spreading. Running costs (energy, fuel, maintenance) are level year-on-year, so a constant annual figure already is their discounted equivalent.</p>
+          </div>
+        </details>
+
+        <details>
           <summary>Home energy use <span class="chev">›</span></summary>
           <div class="fields">
             <div class="field"><label>Annual gas use <span class="unit">kWh</span></label><input type="number" v-model.number="p.gasTotal"></div>
@@ -531,8 +539,8 @@
       </div>
 
       <div class="foot">
-        <p><b>How to read this.</b> Lumpy purchases (a car, a boiler) are spread evenly over their life as an annual equivalent, so options compare like-for-like. The fossil status quo already carries a car and a boiler you'd replace anyway — switching to an EV or heat pump swaps one asset cost for another rather than adding to it. “Extra upfront” is the cash needed today for the new kit beyond a like-for-like petrol-car / boiler replacement.</p>
-        <p style="margin-top:10px;"><b>Simplifications.</b> Solar self-consumption is, by default, run through a half-hourly simulation of a real year (the same engine as the <a href="solar-matching.html">Solar Matching</a> tool) — solar, battery and EV charging are dispatched interval-by-interval, so self-consumption and the import / export split emerge from the timing. A simple annualised daytime-match estimate is available under <em>Advanced · solar matching</em> for comparison. The <b>Agile tariff</b> switch prices every half-hour of import and export against the dataset's wholesale-linked rates (the same dispatch, re-costed); with it off, a flat unit rate and a flat export rate apply. The EV charges within the window set under <em>Electric vehicle</em>. No discounting / time-value of money yet, and insurance is treated as roughly neutral between petrol and EV. Prices are a mid-2026 snapshot and unusually high. <span class="pill">v2 · half-hourly</span></p>
+        <p><b>How to read this.</b> Lumpy purchases (a car, a boiler) are spread over their life as an equivalent annual cost — discounted for the time-value of money — so options compare like-for-like. The fossil status quo already carries a car and a boiler you'd replace anyway — switching to an EV or heat pump swaps one asset cost for another rather than adding to it. “Extra upfront” is the cash needed today for the new kit beyond a like-for-like petrol-car / boiler replacement.</p>
+        <p style="margin-top:10px;"><b>Simplifications.</b> Solar self-consumption is, by default, run through a half-hourly simulation of a real year (the same engine as the <a href="solar-matching.html">Solar Matching</a> tool) — solar, battery and EV charging are dispatched interval-by-interval, so self-consumption and the import / export split emerge from the timing. A simple annualised daytime-match estimate is available under <em>Advanced · solar matching</em> for comparison. The <b>Agile tariff</b> switch prices every half-hour of import and export against the dataset's wholesale-linked rates (the same dispatch, re-costed); with it off, a flat unit rate and a flat export rate apply. The EV charges within the window set under <em>Electric vehicle</em>. Lumpy purchases are converted to an equivalent annual cost with a capital-recovery (annuity) factor at a real discount rate (default {{ p.discountRate }}%, editable under <em>Assumptions · Discounting</em>), so capital spent today weighs more than future spend and resale values are discounted back — set it to 0 for plain straight-line spreading. Insurance is treated as roughly neutral between petrol and EV. Prices are a mid-2026 snapshot and unusually high. <span class="pill">v2 · half-hourly</span></p>
         <p style="margin-top:10px;"><b>Carbon basis.</b> Petrol ~2.9 kgCO₂e/L well-to-wheel; gas 0.183 kgCO₂e/kWh combustion plus an upstream/methane uplift (default +20%, GWP100 — the evidence suggests this is the floor, not the ceiling). Grid ~125 gCO₂/kWh (2024-25 average, falling fast toward ~50 by 2030), so the electrified case looks better every year. Exported solar is credited against gas (CCGT) generation. Embodied carbon follows the Hoekstra framing: the car glider is ~equal for petrol and EV, with the battery the main difference (~75 kgCO₂e/kWh of cell). “Carbon payback” = one-off extra manufacturing carbon ÷ annual operational saving. <span class="pill">factors editable</span></p>
       </div>
     </div>
@@ -567,6 +575,8 @@ const DEFAULTS = {
   solarKwp:4, genPerKwp:950, solarPrice:5500, solarLife:25, solarMaint:30,
   // battery
   batteryKwh:5, batteryPrice:4000, batteryLife:15, batteryUtil:0.8,
+  // discounting — real (above-inflation) discount rate, %/yr, applied to capital
+  discountRate:3,
   // advanced — annual solar-matching estimate (used when the half-hourly model is off)
   daytimeFrac:0.40, directMatch:0.70,
   // carbon — operational emission factors
@@ -665,7 +675,19 @@ createApp({
     gbp(n){ return '£'+Math.round(n).toLocaleString('en-GB'); },
     kwh(n){ return Math.round(n).toLocaleString('en-GB')+' kWh'; },
     co2(n){ return Math.round(n).toLocaleString('en-GB')+' kg'; },
-    ann(price,residual,life){ return life>0 ? (price-residual)/life : 0; },
+    // Equivalent annual cost of a lumpy capital sum, spread over its life.
+    // With a discount rate it uses the capital-recovery (annuity) factor so
+    // money spent today weighs more than money spent years out, and discounts
+    // the end-of-life resale value back to today. At rate 0 this collapses to
+    // plain straight-line spreading: (price − residual) / life.
+    ann(price,residual,life){
+      if(life<=0) return 0;
+      const r=(this.p.discountRate||0)/100;
+      if(r<=0) return (price-residual)/life;
+      const crf=r*Math.pow(1+r,life)/(Math.pow(1+r,life)-1);   // capital recovery factor
+      const pvResidual=residual/Math.pow(1+r,life);            // resale received at end of life
+      return crf*(price-pvResidual);
+    },
 
     // Map the ledger's build + assumptions onto model.js parameters and run the
     // half-hourly simulation, returning the annual solar / import / export flows.
