@@ -10,7 +10,7 @@
 <script src="<?php echo $path_lib; ?>feed.js?v=1"></script>
 <script src="<?php echo $path_lib; ?>vis.helper.js?v=1"></script>
 
-<script src="tools/solarmatching/model.js?v=1"></script>
+<script src="tools/solarmatching/model.js?v=2"></script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
