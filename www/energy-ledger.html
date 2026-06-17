@@ -769,10 +769,18 @@ createApp({
       return r;
     },
 
-    marginalLabel(tech){
-      // effect on all-in cost of flipping this technology, given the rest of the current build
+    flipCfg(tech){
+      // build the config that flipping `tech` would produce, mirroring the watchers:
+      // disconnecting gas is coupled to the heat pump, so flipping hp flips it too.
       const flipped = Object.assign({}, this.cfg);
       flipped[tech] = !flipped[tech];
+      if(tech === 'hp') flipped.disconnectGas = flipped.hp;
+      return flipped;
+    },
+
+    marginalLabel(tech){
+      // effect on all-in cost of flipping this technology, given the rest of the current build
+      const flipped = this.flipCfg(tech);
       const here = this.current.allIn;          // reuse the cached current build
       const there = this.compute(flipped).allIn;
       const delta = this.cfg[tech] ? (there - here)   // currently on: cost if removed minus now → +ve means it's saving you that much
@@ -784,8 +792,7 @@ createApp({
     marginalCarbonLabel(tech){
       // effect on all-in carbon (operational + amortised embodied) of flipping
       // this technology, given the rest of the current build — parallel to marginalLabel
-      const flipped = Object.assign({}, this.cfg);
-      flipped[tech] = !flipped[tech];
+      const flipped = this.flipCfg(tech);
       const here = this.current.totalCO2;       // reuse the cached current build
       const there = this.compute(flipped).totalCO2;
       const delta = this.cfg[tech] ? (there - here)   // currently on: carbon if removed minus now → +ve means it's cutting that much
@@ -797,8 +804,7 @@ createApp({
     marginalAbatementLabel(tech){
       // £ per tonne CO2e abated by flipping this step, given the rest of the build.
       // Negative = the step cuts carbon AND saves money; '—' = it doesn't cut carbon.
-      const flipped = Object.assign({}, this.cfg);
-      flipped[tech] = !flipped[tech];
+      const flipped = this.flipCfg(tech);
       const there = this.compute(flipped);                  // cached if already computed for the £/kg labels
       const costSaving   = this.cfg[tech] ? (there.allIn - this.current.allIn)       : (this.current.allIn - there.allIn);     // +ve = step saves £/yr
       const carbonAbated = this.cfg[tech] ? (there.totalCO2 - this.current.totalCO2) : (this.current.totalCO2 - there.totalCO2); // +ve = step cuts kg/yr
