@@ -159,6 +159,13 @@ var model = {
             import_rate: 26, // p/kWh flat-rate import
             export_rate: 10, // p/kWh flat-rate export
 
+            // Off-peak window. Used only to report how much grid import falls in
+            // the window (annual.import_offpeak_kwh); it does not change battery
+            // or EV dispatch. A caller applying a two-rate (peak/off-peak) tariff
+            // can split the reported import on this volume.
+            off_peak_start_hour: 0,
+            off_peak_end_hour: 7,
+
             // SOC convergence: re-run feeding the final battery SOC back in as
             // the starting SOC, so the annual figures settle to a steady state.
             max_runs: 3
@@ -257,6 +264,8 @@ var model = {
             // Annual-only agile accumulators.
             // Cost of meeting all demand from agile import, no solar/battery (baseline for saving %)
             let annual_agile_no_solar_cost = 0;
+            // Grid import that falls in the off-peak window (kWh).
+            let annual_import_offpeak_kwh = 0;
             // Volume-weighted average agile price accumulators (p/kWh * kWh)
             let agile_import_rate_sum = 0;
             let agile_export_rate_sum = 0;
@@ -377,6 +386,11 @@ var model = {
                 add_interval(annual, solar_kwh, demand_kwh, import_kwh, export_kwh, import_cost, export_earnings);
                 add_interval(mtot, solar_kwh, demand_kwh, import_kwh, export_kwh, import_cost, export_earnings);
 
+                // Grid import falling in the off-peak window (for two-rate tariffs)
+                if (hour >= p.off_peak_start_hour && hour < p.off_peak_end_hour) {
+                    annual_import_offpeak_kwh += import_kwh;
+                }
+
                 // Baseline: full demand imported at the agile import price (no solar/battery)
                 annual_agile_no_solar_cost += demand_kwh * import_rate * 0.01;
                 // For volume-weighted average agile prices
@@ -436,6 +450,7 @@ var model = {
                     solar_kwh: annual.solar_kwh,
                     demand_kwh: annual.demand_kwh,
                     import_kwh: annual.import_kwh,
+                    import_offpeak_kwh: annual_import_offpeak_kwh,
                     export_kwh: annual.export_kwh,
                     prc_from_solar: prc_from_solar,
                     prc_self_consumption: prc_self_consumption,

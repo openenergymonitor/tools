@@ -85,6 +85,8 @@
   .builder{padding-bottom:18px;}
   .tech{display:flex;align-items:center;gap:13px;padding:12px 0;border-top:1px solid var(--line);}
   .tech:first-of-type{border-top:none;}
+  .tech.disabled{opacity:.45;}
+  .tech.disabled .sw,.tech.disabled .sw input{cursor:not-allowed;}
   .tech .icon{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;font-family:"JetBrains Mono";font-weight:700;font-size:13px;color:#0d1217;flex:none;}
   .tech .tx{flex:1;min-width:0;}
   .tech .tx b{font-family:"Space Grotesk";font-weight:600;font-size:14px;}
@@ -277,6 +279,13 @@
           <label class="sw"><input type="checkbox" v-model="cfg.battery"><span class="track"></span><span class="knob"></span></label>
         </div>
 
+        <div class="tech" :class="{disabled: !useHHModel}">
+          <div class="icon" style="background:var(--grid)">⚡</div>
+          <div class="tx"><b>Agile tariff</b><small v-if="useHHModel">half-hourly wholesale-linked import &amp; export prices</small><small v-else>needs the half-hourly model · enable it under Advanced</small></div>
+          <div class="mg" v-if="useHHModel">{{ marginalLabel('agile') }}<span>marginal</span></div>
+          <label class="sw"><input type="checkbox" v-model="cfg.agile" :disabled="!useHHModel"><span class="track"></span><span class="knob"></span></label>
+        </div>
+
         <div class="tech">
           <div class="icon" style="background:var(--raise);color:var(--text);font-size:15px;">◆</div>
           <div class="tx"><b>Hyundai Kona preset</b><small>loads real petrol / EV figures into the car cells</small></div>
@@ -289,9 +298,8 @@
           </select>
         </div>
 
-        <div class="subtoggle">
-          <label class="chk"><input type="checkbox" v-model="cfg.smartTariff">Smart tariff (cheap off-peak rate)</label>
-          <label class="chk" v-if="cfg.hp"><input type="checkbox" v-model="cfg.disconnectGas">Disconnect gas entirely</label>
+        <div class="subtoggle" v-if="cfg.hp">
+          <label class="chk"><input type="checkbox" v-model="cfg.disconnectGas">Disconnect gas entirely</label>
         </div>
       </div>
 
@@ -305,8 +313,8 @@
             <div class="field"><label>Electricity standing charge <span class="unit">p/day</span></label><input type="number" step="0.01" v-model.number="p.elecStanding"></div>
             <div class="field"><label>Gas unit rate <span class="unit">p/kWh</span></label><input type="number" step="0.01" v-model.number="p.gasRate"></div>
             <div class="field"><label>Gas standing charge <span class="unit">p/day</span></label><input type="number" step="0.01" v-model.number="p.gasStanding"></div>
-            <div class="field"><label>Off-peak rate (smart tariff) <span class="unit">p/kWh</span></label><input type="number" step="0.01" v-model.number="p.offPeakRate"></div>
-            <div class="field"><label>Export rate (SEG) <span class="unit">p/kWh</span></label><input type="number" step="0.01" v-model.number="p.segRate"></div>
+            <div class="field"><label>Export rate (SEG / flat) <span class="unit">p/kWh</span></label><input type="number" step="0.01" v-model.number="p.segRate"></div>
+            <p v-if="cfg.agile" style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Agile tariff is on: half-hourly import &amp; export prices come from the dataset (avg {{ current.avgAgileImport==null ? '—' : current.avgAgileImport.toFixed(1) }}p import / {{ current.avgAgileExport==null ? '—' : current.avgAgileExport.toFixed(1) }}p export across this build). The flat unit rate above applies when Agile is off.</p>
           </div>
         </details>
 
@@ -349,7 +357,8 @@
           <summary>Electric vehicle <span class="chev">›</span></summary>
           <div class="fields">
             <div class="field"><label>Efficiency <span class="unit">mi/kWh</span></label><input type="number" step="0.1" v-model.number="p.evEfficiency"></div>
-            <div class="field"><label>Share charged off-peak <span class="unit">0–1</span></label><input type="number" step="0.05" v-model.number="p.evOffPeakFrac"></div>
+            <div class="field"><label>Charge window — from <span class="unit">h</span></label><input type="number" step="1" min="0" max="23" v-model.number="p.evChargeStart"></div>
+            <div class="field"><label>Charge window — until <span class="unit">h</span></label><input type="number" step="1" min="1" max="24" v-model.number="p.evChargeEnd"></div>
             <div class="field"><label>Purchase price <span class="unit">£</span></label><input type="number" v-model.number="p.evPrice"></div>
             <div class="field"><label>Ownership period <span class="unit">yrs</span></label><input type="number" v-model.number="p.evLife"></div>
             <div class="field"><label>Resale value at end <span class="unit">£</span></label><input type="number" v-model.number="p.evResidual"></div>
@@ -387,15 +396,23 @@
             <div class="field"><label>Usable capacity <span class="unit">kWh</span></label><input type="number" step="0.5" v-model.number="p.batteryKwh"></div>
             <div class="field"><label>Install cost <span class="unit">£</span></label><input type="number" v-model.number="p.batteryPrice"></div>
             <div class="field"><label>Lifespan <span class="unit">yrs</span></label><input type="number" v-model.number="p.batteryLife"></div>
-            <div class="field"><label>Annual cycling utilisation <span class="unit">0–1</span></label><input type="number" step="0.05" v-model.number="p.batteryUtil"></div>
           </div>
         </details>
 
         <details>
           <summary>Advanced · solar matching <span class="chev">›</span></summary>
           <div class="fields">
-            <div class="field"><label>Daytime share of demand <span class="unit">0–1</span></label><input type="number" step="0.05" v-model.number="p.daytimeFrac"></div>
-            <div class="field"><label>Hour-by-hour match factor <span class="unit">0–1</span></label><input type="number" step="0.05" v-model.number="p.directMatch"></div>
+            <label class="chk" style="padding:8px 0;"><input type="checkbox" v-model="useHHModel">Half-hourly simulation <span v-if="useHHModel && !modelReady" class="pill" style="margin-left:8px;">loading…</span><span v-else-if="useHHModel && usingSynthetic" class="pill" style="margin-left:8px;">demo data</span></label>
+
+            <template v-if="useHHModel">
+              <p style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Dispatches solar, battery and EV charging across a real half-hourly year (from the solar-matching dataset). Self-consumption, import and export emerge from the timing rather than a fixed ratio. The EV charge window is set under <em>Electric vehicle</em>. The <b>Agile tariff</b> switch always uses this simulation, since it prices each half-hour against the dataset's wholesale-linked rates.</p>
+            </template>
+            <template v-else>
+              <div class="field"><label>Daytime share of demand <span class="unit">0–1</span></label><input type="number" step="0.05" v-model.number="p.daytimeFrac"></div>
+              <div class="field"><label>Hour-by-hour match factor <span class="unit">0–1</span></label><input type="number" step="0.05" v-model.number="p.directMatch"></div>
+              <div class="field"><label>Battery cycling utilisation <span class="unit">0–1</span></label><input type="number" step="0.05" v-model.number="p.batteryUtil"></div>
+              <p style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Simple annualised estimate: a fixed daytime-match plus battery shift, with no time-of-day detail. Useful as a back-of-envelope comparison against the half-hourly simulation.</p>
+            </template>
           </div>
         </details>
 
@@ -438,8 +455,8 @@
           <tr><td class="grp" colspan="2">Running costs</td></tr>
           <tr v-if="!cfg.ev"><td><span class="tag" style="background:var(--petrol)"></span>Petrol</td><td class="num">{{ gbp(current.petrol) }}</td></tr>
           <tr><td><span class="tag" style="background:var(--gas)"></span>Gas{{ cfg.hp && !cfg.disconnectGas ? ' (cooking only)' : '' }}</td><td class="num">{{ gbp(current.gas) }}</td></tr>
-          <tr><td><span class="tag" style="background:var(--grid)"></span>Electricity import</td><td class="num">{{ gbp(current.importCost) }}</td></tr>
-          <tr v-if="current.exportRevenue>0"><td class="sub"><span class="tag" style="background:var(--solar)"></span>Solar export credit</td><td class="num credit">−{{ gbp(current.exportRevenue) }}</td></tr>
+          <tr><td><span class="tag" style="background:var(--grid)"></span>Electricity import{{ cfg.agile ? ' (Agile)' : '' }}</td><td class="num">{{ gbp(current.importCost) }}</td></tr>
+          <tr v-if="current.exportRevenue>0"><td class="sub"><span class="tag" style="background:var(--solar)"></span>{{ cfg.agile ? 'Agile export credit' : 'Solar export credit' }}</td><td class="num credit">−{{ gbp(current.exportRevenue) }}</td></tr>
           <tr><td class="sub">Electricity standing charge</td><td class="num">{{ gbp(current.elecStandingCost) }}</td></tr>
           <tr class="tot"><td>Running subtotal</td><td class="num">{{ gbp(current.running) }}</td></tr>
 
@@ -495,7 +512,7 @@
           <tr v-if="cfg.solar"><td class="sub">— self-consumed ({{ current.selfPct }}%)</td><td class="num credit">{{ kwh(current.solarSelf) }}</td></tr>
           <tr v-if="cfg.solar"><td class="sub">— exported</td><td class="num">{{ kwh(current.solarExport) }}</td></tr>
           <tr class="tot"><td>Grid import</td><td class="num">{{ kwh(current.gridImport) }}</td></tr>
-          <tr v-if="cfg.smartTariff && current.offPeak>0"><td class="sub">— at off-peak rate</td><td class="num">{{ kwh(current.offPeak) }}</td></tr>
+          <tr v-if="cfg.agile && current.avgAgileImport!=null"><td class="sub">— avg Agile import price</td><td class="num">{{ current.avgAgileImport.toFixed(1) }} p/kWh</td></tr>
         </table>
         <div v-if="cfg.solar" class="bartrack" :title="'Self-consumed vs exported'">
           <div class="seg" :style="{flexGrow:current.solarSelf, background:'var(--battery)'}"></div>
@@ -508,7 +525,7 @@
 
       <div class="foot">
         <p><b>How to read this.</b> Lumpy purchases (a car, a boiler) are spread evenly over their life as an annual equivalent, so options compare like-for-like. The fossil status quo already carries a car and a boiler you'd replace anyway — switching to an EV or heat pump swaps one asset cost for another rather than adding to it. “Extra upfront” is the cash needed today for the new kit beyond a like-for-like petrol-car / boiler replacement.</p>
-        <p style="margin-top:10px;"><b>Simplifications.</b> Solar self-consumption uses a transparent daytime-match + battery-shift model (tune it under <em>Advanced</em>); off-peak shifting assumes a smart tariff moves EV charging and battery throughput to the cheap rate. No discounting / time-value of money yet, and insurance is treated as roughly neutral between petrol and EV. Prices are a mid-2026 snapshot and unusually high. <span class="pill">v1 · back of the envelope</span></p>
+        <p style="margin-top:10px;"><b>Simplifications.</b> Solar self-consumption is, by default, run through a half-hourly simulation of a real year (the same engine as the <a href="solar-matching.html">Solar Matching</a> tool) — solar, battery and EV charging are dispatched interval-by-interval, so self-consumption and the import / export split emerge from the timing. A simple annualised daytime-match estimate is available under <em>Advanced · solar matching</em> for comparison. The <b>Agile tariff</b> switch prices every half-hour of import and export against the dataset's wholesale-linked rates (the same dispatch, re-costed); with it off, a flat unit rate and a flat export rate apply. The EV charges within the window set under <em>Electric vehicle</em>. No discounting / time-value of money yet, and insurance is treated as roughly neutral between petrol and EV. Prices are a mid-2026 snapshot and unusually high. <span class="pill">v2 · half-hourly</span></p>
         <p style="margin-top:10px;"><b>Carbon basis.</b> Petrol ~2.9 kgCO₂e/L well-to-wheel; gas 0.183 kgCO₂e/kWh combustion plus an upstream/methane uplift (default +20%, GWP100 — the evidence suggests this is the floor, not the ceiling). Grid ~125 gCO₂/kWh (2024-25 average, falling fast toward ~50 by 2030), so the electrified case looks better every year. Exported solar is credited against gas (CCGT) generation. Embodied carbon follows the Hoekstra framing: the car glider is ~equal for petrol and EV, with the battery the main difference (~75 kgCO₂e/kWh of cell). “Carbon payback” = one-off extra manufacturing carbon ÷ annual operational saving. <span class="pill">factors editable</span></p>
       </div>
     </div>
@@ -516,12 +533,19 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
+<script src="tools/solarmatching/model.js"></script>
 <script>
 const { createApp } = Vue;
 
+// Cache of half-hourly model runs, keyed on the model-relevant parameters.
+// compute() is evaluated for several scenarios per render (current, status quo
+// and each marginal flip), so identical parameter sets are reused rather than
+// re-simulated. Lives outside the reactive system; cleared on reset.
+const modelCache = new Map();
+
 const DEFAULTS = {
   // prices
-  elecRate:26.11, elecStanding:57.19, gasRate:7.33, gasStanding:29.04, offPeakRate:7, segRate:15,
+  elecRate:26.11, elecStanding:57.19, gasRate:7.33, gasStanding:29.04, segRate:15,
   // home energy
   gasTotal:11500, heatingPct:77, waterPct:20, cookingPct:3, boilerEff:0.90, elecBaseload:2700,
   // petrol car
@@ -529,14 +553,14 @@ const DEFAULTS = {
   // boiler
   boilerPrice:3000, boilerLife:15, boilerService:100, boilerRepairs:70,
   // EV
-  evEfficiency:3.7, evOffPeakFrac:0.9, evPrice:33500, evLife:12, evResidual:6000, evMaint:300, evBatteryKwh:64,
+  evEfficiency:3.7, evChargeStart:0, evChargeEnd:7, evPrice:33500, evLife:12, evResidual:6000, evMaint:300, evBatteryKwh:64,
   // heat pump
   scop:4.0, hpPrice:12000, busGrant:7500, hpLife:18, hpUpkeep:200, inductionEff:0.6,
   // solar
   solarKwp:4, genPerKwp:950, solarPrice:5500, solarLife:25, solarMaint:30,
   // battery
   batteryKwh:5, batteryPrice:4000, batteryLife:15, batteryUtil:0.8,
-  // advanced
+  // advanced — annual solar-matching estimate (used when the half-hourly model is off)
   daytimeFrac:0.40, directMatch:0.70,
   // carbon — operational emission factors
   petrolKgPerL:2.9,            // well-to-wheel: ~2.3 combustion + ~0.6 upstream
@@ -561,7 +585,12 @@ createApp({
   data(){
     return {
       p: JSON.parse(JSON.stringify(DEFAULTS)),
-      cfg: { ev:false, hp:false, solar:false, battery:false, smartTariff:false, disconnectGas:false },
+      cfg: { ev:false, hp:false, solar:false, battery:false, agile:false, disconnectGas:false },
+      // solar-matching engine: half-hourly simulation (model.js) by default,
+      // with the simple annual estimate available for comparison.
+      useHHModel: true,
+      modelReady: false,
+      usingSynthetic: false,
       konaChoice: 'petrol-new',
       konaPresets: {
         'petrol-new':  { ev:false, carPrice:27000, mpg:48, carResidual:4000, carLife:12, carMaint:650 },
@@ -580,9 +609,14 @@ createApp({
       ],
     };
   },
+  watch:{
+    // Agile pricing is inherently half-hourly, so it's only offered while the
+    // half-hourly model is on. Switching to the annual estimate turns it off.
+    useHHModel(on){ if(!on) this.cfg.agile = false; },
+  },
   computed:{
     current(){ return this.compute(this.cfg); },
-    statusQuo(){ return this.compute({ev:false,hp:false,solar:false,battery:false,smartTariff:false,disconnectGas:false}); },
+    statusQuo(){ return this.compute({ev:false,hp:false,solar:false,battery:false,agile:false,disconnectGas:false}); },
     saving(){ return this.statusQuo.allIn - this.current.allIn; },
     buildName(){
       const on=[];
@@ -621,11 +655,59 @@ createApp({
     co2(n){ return Math.round(n).toLocaleString('en-GB')+' kg'; },
     ann(price,residual,life){ return life>0 ? (price-residual)/life : 0; },
 
+    // Map the ledger's build + assumptions onto model.js parameters and run the
+    // half-hourly simulation, returning the annual solar / import / export flows.
+    // Results are memoised on the model-relevant parameters (see modelCache).
+    flowsHH(c, d){
+      const p = this.p;
+      const mp = {
+        solar_kWp: c.solar ? p.solarKwp : 0,
+        solar_kWh_per_kWp: p.genPerKwp,
+        // lights/appliances/cooking demand; induction cooking folds in here when
+        // the gas supply is disconnected.
+        lac_demand: p.elecBaseload + d.cookingElec,
+        heat_demand: c.hp ? d.heatDelivered : 0,   // model divides by SCOP internally
+        heatpump_scop: p.scop,
+        ev_mode: 'simulated',
+        ev_miles: c.ev ? p.mileage : 0,
+        ev_efficiency: p.evEfficiency,
+        ev_charge_power: 7,
+        ev_charge_start_hour: p.evChargeStart,
+        ev_charge_end_hour: p.evChargeEnd,
+        battery: { capacity: c.battery ? p.batteryKwh : 0 },
+        // Flat import/export rates feed the model's own flat-cost figure (unused
+        // here — the ledger applies its own rates); Agile figures come from the
+        // half-hourly dataset prices baked into the model.
+        import_rate: p.elecRate,
+        export_rate: p.segRate
+      };
+      const r = this.runModel(mp);
+      return {
+        solarGen:            r.annual.solar_kwh,
+        solarExport:         r.annual.export_kwh,
+        gridImport:          r.annual.import_kwh,
+        agileImportCost:     r.annual.agile_import_cost,
+        agileExportEarnings: r.annual.agile_export_earnings,
+        avgAgileImport:      r.annual.avg_agile_import_rate,
+        avgAgileExport:      r.annual.avg_agile_export_rate
+      };
+    },
+    runModel(mp){
+      const key = JSON.stringify(mp);
+      let r = modelCache.get(key);
+      if(!r){
+        if(modelCache.size > 500) modelCache.clear();
+        r = model.run(mp);
+        modelCache.set(key, r);
+      }
+      return r;
+    },
+
     marginalLabel(tech){
       // effect on all-in cost of flipping this technology, given the rest of the current build
       const flipped = Object.assign({}, this.cfg);
       flipped[tech] = !flipped[tech];
-      const here = this.compute(this.cfg).allIn;
+      const here = this.current.allIn;          // reuse the cached current build
       const there = this.compute(flipped).allIn;
       const delta = this.cfg[tech] ? (there - here)   // currently on: cost if removed minus now → +ve means it's saving you that much
                                    : (here - there);  // currently off: now minus cost-if-added → +ve means adding saves
@@ -644,27 +726,52 @@ createApp({
       const cookingElec = (c.hp && c.disconnectGas) ? (p.gasTotal*cookingFrac*p.inductionEff) : 0;
       const demand = p.elecBaseload + evElec + hpElec + cookingElec;
 
-      // ---- solar generation & self-consumption ----
-      const solarGen = c.solar ? p.solarKwp * p.genPerKwp : 0;
-      const daytimeDemand = demand * p.daytimeFrac;
-      const directSelf = Math.min(solarGen, daytimeDemand) * p.directMatch;
-      const surplus = Math.max(0, solarGen - directSelf);
-      const eveningDemand = Math.max(0, demand - directSelf);
-      const batteryThroughput = c.battery ? p.batteryKwh * 365 * p.batteryUtil : 0;
-      const batterySolarShift = Math.min(surplus, eveningDemand, batteryThroughput);
-      const solarSelf = directSelf + batterySolarShift;
-      const solarExport = Math.max(0, solarGen - solarSelf);
+      // ---- solar generation, self-consumption & grid import ----
+      // Two interchangeable engines produce the same flow figures (solarGen,
+      // solarSelf, solarExport, gridImport). The half-hourly simulation in
+      // model.js is the default; the original annualised estimate is kept behind
+      // the Advanced toggle so the two can be compared. The Agile tariff is
+      // priced half-hourly, so it always uses the simulation regardless of the
+      // toggle.
+      const useHH = (this.useHHModel || c.agile) && this.modelReady;
+      let solarGen, solarSelf, solarExport, gridImport;
+      let f = null;
 
-      // ---- grid import & off-peak shifting ----
-      const gridImport = Math.max(0, demand - solarSelf);
-      const batteryRemaining = Math.max(0, batteryThroughput - batterySolarShift);
-      let offPeakWanted = batteryRemaining;
-      if(c.ev) offPeakWanted += evElec * p.evOffPeakFrac;
-      const offPeak = c.smartTariff ? Math.min(offPeakWanted, gridImport) : 0;
-      const peakImport = gridImport - offPeak;
+      if(useHH){
+        // Half-hourly simulation: dispatch solar, battery and EV charging across
+        // a real year, then read the annual flow totals straight off the model.
+        f = this.flowsHH(c, { heatDelivered, cookingElec });
+        solarGen    = f.solarGen;
+        solarExport = f.solarExport;
+        gridImport  = f.gridImport;
+        solarSelf   = Math.max(0, solarGen - solarExport);
+      } else {
+        // Annualised estimate: daytime-match + battery-shift, no time resolution.
+        solarGen = c.solar ? p.solarKwp * p.genPerKwp : 0;
+        const daytimeDemand = demand * p.daytimeFrac;
+        const directSelf = Math.min(solarGen, daytimeDemand) * p.directMatch;
+        const surplus = Math.max(0, solarGen - directSelf);
+        const eveningDemand = Math.max(0, demand - directSelf);
+        const batteryThroughput = c.battery ? p.batteryKwh * 365 * p.batteryUtil : 0;
+        const batterySolarShift = Math.min(surplus, eveningDemand, batteryThroughput);
+        solarSelf = directSelf + batterySolarShift;
+        solarExport = Math.max(0, solarGen - solarSelf);
+        gridImport = Math.max(0, demand - solarSelf);
+      }
 
-      const importCost = (peakImport * p.elecRate + offPeak * p.offPeakRate) / 100;
-      const exportRevenue = solarExport * p.segRate / 100;
+      // ---- electricity cost ----
+      // Agile: half-hourly import cost / export earnings from the simulation.
+      // Otherwise: a flat unit rate on import and a flat export (SEG) rate.
+      let importCost, exportRevenue, avgAgileImport = null, avgAgileExport = null;
+      if(c.agile && f){
+        importCost    = f.agileImportCost;
+        exportRevenue = f.agileExportEarnings;
+        avgAgileImport = f.avgAgileImport;
+        avgAgileExport = f.avgAgileExport;
+      } else {
+        importCost    = gridImport * p.elecRate / 100;
+        exportRevenue = solarExport * p.segRate / 100;
+      }
       const elecStandingCost = p.elecStanding * 365 / 100;
 
       // ---- gas ----
@@ -736,7 +843,8 @@ createApp({
       ].filter(s=>s.value>0.5);
 
       return {
-        demand, evElec, hpElec, solarGen, solarSelf, solarExport, gridImport, offPeak,
+        demand, evElec, hpElec, solarGen, solarSelf, solarExport, gridImport,
+        avgAgileImport, avgAgileExport,
         selfPct: solarGen>0 ? Math.round(solarSelf/solarGen*100) : 0,
         importCost, exportRevenue, elecStandingCost, gas, petrol, running,
         carAsset, heatAsset, solarAsset, batteryAsset, assets, allIn, segments,
@@ -752,12 +860,23 @@ createApp({
     },
     resetAll(){
       this.p = JSON.parse(JSON.stringify(DEFAULTS));
-      this.cfg = { ev:false, hp:false, solar:false, battery:false, smartTariff:false, disconnectGas:false };
+      this.cfg = { ev:false, hp:false, solar:false, battery:false, agile:false, disconnectGas:false };
+      this.useHHModel = true;
       this.konaChoice = '';
+      modelCache.clear();
     },
   },
   mounted(){
     document.querySelector('#app').removeAttribute('v-cloak');
+    // Load the half-hourly dataset for the solar-matching model. model.load()
+    // falls back to a synthetic year if the file is missing, so this always
+    // resolves; until it does, compute() uses the annual estimate.
+    if(typeof model !== 'undefined'){
+      model.load('tools/solarmatching/solarmatching_data.json', () => {
+        this.usingSynthetic = model.usingSynthetic;
+        this.modelReady = true;
+      });
+    }
   }
 }).mount('#app');
 </script>
