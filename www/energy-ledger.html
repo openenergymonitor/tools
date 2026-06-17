@@ -298,6 +298,11 @@
           </select>
         </div>
 
+        <div class="subtoggle" v-if="cfg.battery && useHHModel && cfg.agile">
+          <label class="chk"><input type="checkbox" v-model="optimalDispatch">Optimal battery dispatch <span class="unit">Agile cost-optimised</span> <span v-if="optimalDispatch" class="pill" style="margin-left:2px;border-color:rgba(245,197,66,.45);color:var(--solar);background:rgba(245,197,66,.1);">slower simulation</span></label>
+        </div>
+        <p v-if="cfg.battery && useHHModel && cfg.agile && optimalDispatch" style="font-size:11px;color:var(--faint);margin:6px 2px 0;"><b>Optimal battery dispatch:</b> schedules the battery to minimise cost against the half-hourly Agile prices (charge when cheap, discharge / export when expensive) with perfect foresight, instead of the simple solar-surplus rule. </p>
+
         <div class="subtoggle" v-if="cfg.hp">
           <label class="chk"><input type="checkbox" v-model="cfg.disconnectGas">Disconnect gas entirely</label>
         </div>
@@ -405,9 +410,7 @@
             <label class="chk" style="padding:8px 0;"><input type="checkbox" v-model="useHHModel">Half-hourly simulation <span v-if="useHHModel && !modelReady" class="pill" style="margin-left:8px;">loading…</span><span v-else-if="useHHModel && usingSynthetic" class="pill" style="margin-left:8px;">demo data</span></label>
 
             <template v-if="useHHModel">
-              <p style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Dispatches solar, battery and EV charging across a real half-hourly year (from the solar-matching dataset). Self-consumption, import and export emerge from the timing rather than a fixed ratio. The EV charge window is set under <em>Electric vehicle</em>. The <b>Agile tariff</b> switch always uses this simulation, since it prices each half-hour against the dataset's wholesale-linked rates.</p>
-              <label class="chk" style="padding:8px 0;"><input type="checkbox" v-model="optimalDispatch">Optimal battery dispatch <span class="unit">Agile cost-optimised</span></label>
-              <p style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Schedules the battery to minimise cost against the half-hourly Agile prices (charge when cheap, discharge / export when expensive) with perfect foresight, instead of the simple solar-surplus rule. Best paired with the <b>Agile tariff</b> switch.</p>
+              <p style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Dispatches solar, battery and EV charging across a real half-hourly year (from the solar-matching dataset). Self-consumption, import and export emerge from the timing rather than a fixed ratio. The EV charge window is set under <em>Electric vehicle</em>. The <b>Agile tariff</b> switch always uses this simulation, since it prices each half-hour against the dataset's wholesale-linked rates. <em>Optimal battery dispatch</em> is set under <em>Build your home</em>, alongside the home battery.</p>
             </template>
             <template v-else>
               <div class="field"><label>Daytime share of demand <span class="unit">0–1</span></label><input type="number" step="0.05" v-model.number="p.daytimeFrac"></div>
@@ -618,6 +621,10 @@ createApp({
     // Agile pricing is inherently half-hourly, so it's only offered while the
     // half-hourly model is on. Switching to the annual estimate turns it off.
     useHHModel(on){ if(!on) this.cfg.agile = false; },
+    // Optimal dispatch only makes sense against Agile prices, and its checkbox
+    // is only shown while Agile is on — keep the state in sync so the slow
+    // cost-optimised solve never runs once Agile is switched off.
+    'cfg.agile'(on){ if(!on) this.optimalDispatch = false; },
   },
   computed:{
     current(){ return this.compute(this.cfg); },
