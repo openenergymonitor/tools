@@ -144,6 +144,13 @@ var model = {
                 discharge_max: 3.5,
                 charge_efficiency: 0.9,
                 discharge_efficiency: 0.9,
+                // Dispatch strategy: 'greedy' (per-interval heuristic + the
+                // scheduled windows below) or 'optimal' (globally near-optimal
+                // perfect-foresight DP over the half-hourly agile prices; the
+                // scheduled windows are then ignored — the DP subsumes them).
+                dispatch: 'greedy',
+                soc_levels: 100,   // SOC discretisation for 'optimal' (more = closer to LP)
+                cycle_cost: 0,     // battery wear charged per kWh discharged (p/kWh), 'optimal' only
                 // Forced peak discharge: empty remaining charge to load + grid in the window
                 force_discharge_enable: false,
                 force_discharge_start_hour: 16, // 4pm
@@ -216,6 +223,62 @@ var model = {
         p.battery.discharge_max = p.solar_kWp * 1000;
         let overnight_target_soc = p.battery.capacity * p.battery.overnight_charge_target_pct / 100;
 
+        // Pre-pass: solar generation (W) and total demand (W) per interval.
+        // Neither depends on battery state, so we build them once here and reuse
+        // them across every SOC-convergence pass and the optimal-dispatch DP.
+        let n_intervals = series[0].data.length;
+        let solar_w = new Array(n_intervals);
+        let demand_w = new Array(n_intervals);
+        let prepass_ev_today = 0;
+        let prepass_day = new Date(data_start_time).getDate();
+        for (var pi = 0; pi < n_intervals; pi++) {
+            let date = new Date(time_at(pi));
+            let hour = date.getHours();
+            let solarpv = series[0].data[pi] * solar_normalisation_factor * p.solar_kWp;
+            let lac = series[1].data[pi] * lac_normalisation_factor;
+            let heatpump = series[2].data[pi] * heatpump_normalisation_factor;
+            let ev = 0;
+            if (p.ev_mode == 'real') {
+                ev = measured_ev_at(pi);
+            } else {
+                if (date.getDate() != prepass_day) { prepass_day = date.getDate(); prepass_ev_today = 0; }
+                if (ev_daily_kwh > 0 &&
+                    hour >= p.ev_charge_start_hour && hour < p.ev_charge_end_hour &&
+                    prepass_ev_today < ev_daily_kwh) {
+                    ev = p.ev_charge_power * 1000;
+                    let ev_kwh = ev * power_to_kwh;
+                    if (prepass_ev_today + ev_kwh > ev_daily_kwh) {
+                        ev_kwh = ev_daily_kwh - prepass_ev_today;
+                        ev = ev_kwh / power_to_kwh;
+                    }
+                    prepass_ev_today += ev_kwh;
+                }
+            }
+            solar_w[pi] = solarpv;
+            demand_w[pi] = lac + heatpump + ev;
+        }
+
+        // Optimal dispatch: compute the whole-year schedule once, up front.
+        // Perfect foresight over the half-hourly agile import/export prices.
+        let optimal = (p.battery.dispatch === 'optimal' && p.battery.capacity > 0);
+        let dp_charge_w, dp_discharge_w, dp_soc;
+        if (optimal) {
+            let sched = optimiseBatteryDP(solar_w, demand_w, series[3].data, series[4].data, {
+                capacity: p.battery.capacity,
+                soc_levels: p.battery.soc_levels,
+                power_to_kwh: power_to_kwh,
+                charge_efficiency: p.battery.charge_efficiency,
+                discharge_efficiency: p.battery.discharge_efficiency,
+                charge_max: p.battery.charge_max,
+                discharge_max: p.battery.discharge_max,
+                cycle_cost: p.battery.cycle_cost,
+                initial_soc: p.battery.soc_start
+            });
+            dp_charge_w = sched.charge_w;
+            dp_discharge_w = sched.discharge_w;
+            dp_soc = sched.soc;
+        }
+
         // Result holder, (re)populated by each pass below.
         var result;
 
@@ -274,9 +337,6 @@ var model = {
             let month = new Date(data_start_time).getMonth();
             let month_start = data_start_time;
 
-            let ev_charged_today = 0;
-            let day = new Date(data_start_time).getDate();
-
             let bat = p.battery;
 
             // Charge the battery with up to `power` (W), capping SOC at `cap`
@@ -305,42 +365,15 @@ var model = {
                 return discharge;
             };
 
-            for (var i = 0; i < series[0].data.length; i++) {
+            for (var i = 0; i < n_intervals; i++) {
 
                 let time = time_at(i);
                 let date = new Date(time);
                 let hour = date.getHours();
 
-                // Solar generation and demand, scaled to the requested annual figures.
-                let solarpv = series[0].data[i] * solar_normalisation_factor * p.solar_kWp;
-                let lac = series[1].data[i] * lac_normalisation_factor;
-                let heatpump = series[2].data[i] * heatpump_normalisation_factor;
-
-                let ev = 0;
-                if (p.ev_mode == 'real') {
-                    // Measured EV demand: use the recorded half-hourly charging power directly
-                    ev = measured_ev_at(i);
-                } else {
-                    // Simulated EV demand: charge overnight at ev_charge_power until daily need met
-                    if (date.getDate() != day) {
-                        day = date.getDate();
-                        ev_charged_today = 0;
-                    }
-                    if (ev_daily_kwh > 0 &&
-                        hour >= p.ev_charge_start_hour && hour < p.ev_charge_end_hour &&
-                        ev_charged_today < ev_daily_kwh) {
-                        ev = p.ev_charge_power * 1000;
-                        let ev_kwh = ev * power_to_kwh;
-                        // Last interval only needs a partial charge to top up the day's demand
-                        if (ev_charged_today + ev_kwh > ev_daily_kwh) {
-                            ev_kwh = ev_daily_kwh - ev_charged_today;
-                            ev = ev_kwh / power_to_kwh;
-                        }
-                        ev_charged_today += ev_kwh;
-                    }
-                }
-
-                let demand = lac + heatpump + ev;
+                // Solar generation (W) and total demand (W), precomputed above.
+                let solarpv = solar_w[i];
+                let demand = demand_w[i];
 
                 // Agile import / export rates (p/kWh)
                 let import_rate = series[3].data[i];
@@ -358,7 +391,14 @@ var model = {
                 // Battery: each branch adjusts `balance` by the power actually
                 // charged (drawn from balance) or discharged (added to balance).
                 if (bat.capacity > 0) {
-                    if (in_force_discharge) {
+                    if (optimal) {
+                        // Pre-computed globally near-optimal dispatch (see
+                        // optimiseBatteryDP). charge/discharge are grid-side W;
+                        // SOC is taken straight from the optimised trajectory.
+                        balance -= dp_charge_w[i];
+                        balance += dp_discharge_w[i];
+                        battery_soc = dp_soc[i];
+                    } else if (in_force_discharge) {
                         // Forced peak discharge: empty remaining charge to load + grid
                         balance += discharge_battery(bat.discharge_max);
                     } else if (in_overnight_charge && battery_soc < overnight_target_soc) {
@@ -485,7 +525,7 @@ var model = {
             // Feed the final SOC back in for the next pass.
             battery_soc_start = battery_soc;
 
-        } while (result.battery_soc_end > 10 && run_count < max_runs);
+        } while (!optimal && result.battery_soc_end > 10 && run_count < max_runs);
 
         return result;
     }
@@ -590,10 +630,125 @@ function generateSyntheticData() {
     ];
 }
 
+// ---- optimal battery dispatch (dynamic programming) ----
+// Near-optimal perfect-foresight dispatch. State-of-charge is discretised into
+// `soc_levels` steps and a forward DP over the whole horizon finds the cheapest
+// schedule against the half-hourly agile prices. It converges to the LP optimum
+// as soc_levels grows, but is pure JS with no solver dependency.
+//
+// Why this captures most of the LP's value: a home battery cycles roughly daily,
+// so cross-horizon SOC coupling is weak (the LP optimiser itself splits the year
+// in half and barely loses anything). The DP handles the time-coupling, the
+// asymmetric charge/discharge efficiency and the cycle cost exactly — only the
+// SOC quantisation separates it from the LP optimum.
+//
+// All powers are grid-side watts, matching model.run()'s `balance` convention:
+// charge_w is drawn from balance (before charge losses), discharge_w is added to
+// balance (after discharge losses). Returns { charge_w, discharge_w, soc } arrays
+// with one entry per interval (soc is kWh at the end of each interval).
+function optimiseBatteryDP(solar_w, demand_w, import_rate, export_rate, opts) {
+    var N = solar_w.length;
+    var cap = opts.capacity;
+    var K = Math.max(2, Math.round(opts.soc_levels || 100));   // SOC steps
+    var nLev = K + 1;                                          // SOC levels (states)
+    var step = cap / K;                                        // kWh per level
+    var p2k = opts.power_to_kwh;                               // W * interval -> kWh
+    var ceff = opts.charge_efficiency;
+    var deff = opts.discharge_efficiency;
+    var pmaxCh = opts.charge_max;                              // W
+    var pmaxDch = opts.discharge_max;                          // W
+    var cycle = (opts.cycle_cost || 0) * 0.01;                 // £ per grid-side kWh discharged
+    var SOC_PEN = 1e-9;                                        // tie-break: prefer holding less
+
+    // Reachable SOC-level change per slot, bounded by the power limits.
+    var upLevels = Math.floor((pmaxCh * ceff * p2k) / step);   // charging raises SOC
+    var dnLevels = Math.floor((pmaxDch / deff * p2k) / step);  // discharging lowers SOC
+    if (upLevels < 1) upLevels = 1; if (upLevels > K) upLevels = K;
+    if (dnLevels < 1) dnLevels = 1; if (dnLevels > K) dnLevels = K;
+
+    // Battery grid power (W) and cycle cost (£) per SOC-level delta. Both depend
+    // only on the delta, not on the slot or the absolute SOC, so precompute once.
+    var dLo = -dnLevels, dHi = upLevels;
+    var dN = dHi - dLo + 1;
+    var batPower = new Float64Array(dN);   // >0 discharge (adds to balance), <0 charge
+    var cycleCost = new Float64Array(dN);
+    for (var d = dLo; d <= dHi; d++) {
+        var dsoc = d * step;               // cell-side kWh change
+        var di = d - dLo;
+        if (dsoc >= 0) {                   // charging (d == 0 -> idle, zero power)
+            var inKwh = dsoc / ceff;       // grid-side energy drawn
+            batPower[di] = -(inKwh / p2k);
+            cycleCost[di] = 0;
+        } else {                           // discharging
+            var outKwh = (-dsoc) * deff;   // grid-side energy delivered
+            batPower[di] = outKwh / p2k;
+            cycleCost[di] = cycle * outKwh;
+        }
+    }
+
+    // SOC tie-break penalty per level (nudges the solver off degenerate plateaus).
+    var pen = new Float64Array(nLev);
+    for (var s = 0; s < nLev; s++) pen[s] = SOC_PEN * s * step;
+
+    var INF = Infinity;
+    var dp = new Float64Array(nLev); dp.fill(INF);
+    var newdp = new Float64Array(nLev);
+    var s0 = Math.round((opts.initial_soc || 0) / step);
+    if (s0 < 0) s0 = 0; if (s0 > K) s0 = K;
+    dp[s0] = 0;
+
+    // choice[t*nLev + sp] = SOC level at the start of slot t that optimally
+    // reaches level sp at its end (for backtracking the schedule afterwards).
+    var choice = new Int16Array(N * nLev);
+
+    for (var t = 0; t < N; t++) {
+        newdp.fill(INF);
+        var base = t * nLev;
+        var net = solar_w[t] - demand_w[t];                     // W, before battery
+        var ir = import_rate[t] * 0.01, er = export_rate[t] * 0.01;  // £/kWh
+        for (var dd = dLo; dd <= dHi; dd++) {
+            var idx = dd - dLo;
+            var balance = net + batPower[idx];                  // W
+            // Grid cost for this slot: import costs, export earns (negative cost).
+            var slotCost = (balance < 0 ? (-balance) * p2k * ir : -(balance * p2k * er))
+                         + cycleCost[idx];
+            // Valid start levels s such that sp = s + dd stays within [0, K].
+            var sStart = dd > 0 ? 0 : -dd;
+            var sEnd = dd > 0 ? K - dd : K;
+            for (var ss = sStart; ss <= sEnd; ss++) {
+                var from = dp[ss];
+                if (from === INF) continue;
+                var sp = ss + dd;
+                var cand = from + slotCost + pen[sp];
+                if (cand < newdp[sp]) { newdp[sp] = cand; choice[base + sp] = ss; }
+            }
+        }
+        var tmp = dp; dp = newdp; newdp = tmp;   // swap rows
+    }
+
+    // Cheapest terminal SOC, then backtrack to recover the dispatch + trajectory.
+    var sBest = 0, best = INF;
+    for (var se = 0; se < nLev; se++) if (dp[se] < best) { best = dp[se]; sBest = se; }
+
+    var charge_w = new Float64Array(N);
+    var discharge_w = new Float64Array(N);
+    var soc = new Float64Array(N);
+    var cur = sBest;
+    for (var tb = N - 1; tb >= 0; tb--) {
+        var prev = choice[tb * nLev + cur];
+        var bp = batPower[(cur - prev) - dLo];
+        if (bp < 0) charge_w[tb] = -bp; else discharge_w[tb] = bp;
+        soc[tb] = cur * step;     // SOC at end of slot tb
+        cur = prev;
+    }
+    return { charge_w: charge_w, discharge_w: discharge_w, soc: soc };
+}
+
 // Expose the generator on the model so callers in either environment can reach
 // it (and so load()'s fallback works without a separate global script).
 model.generateSyntheticData = generateSyntheticData;
 model.mulberry32 = mulberry32;
+model.optimiseBatteryDP = optimiseBatteryDP;
 
 // Expose as a CommonJS module too, so the model can be unit-tested / reused
 // outside the browser. Harmless in the browser where module is undefined.

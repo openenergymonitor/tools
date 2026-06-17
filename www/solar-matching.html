@@ -229,22 +229,27 @@ table.data tfoot td{font-weight:600;border-top:2px solid var(--line-2);border-bo
               <slider-field label="Discharge eff." unit="" :min="0.7" :max="1" :step="0.01" :dp="2" v-model="p.battery.discharge_efficiency"></slider-field>
             </div>
             <div class="sub">
-              <toggle-field label="Charge overnight from the grid" v-model="p.battery.overnight_charge_enable"></toggle-field>
-              <template v-if="p.battery.overnight_charge_enable">
-                <div class="row2">
-                  <slider-field label="From" unit="h" :min="0" :max="23" :step="1" v-model="p.battery.overnight_charge_start_hour"></slider-field>
-                  <slider-field label="Until" unit="h" :min="1" :max="23" :step="1" v-model="p.battery.overnight_charge_end_hour"></slider-field>
-                </div>
-                <slider-field label="Charge up to" unit="%" :min="10" :max="100" :step="5" v-model="p.battery.overnight_charge_target_pct"></slider-field>
-              </template>
+              <toggle-field label="Optimal dispatch (Agile cost-optimised)" v-model="optimalDispatch"></toggle-field>
             </div>
-            <div class="sub">
-              <toggle-field label="Force discharge at peak" v-model="p.battery.force_discharge_enable"></toggle-field>
-              <div class="row2" v-if="p.battery.force_discharge_enable">
-                <slider-field label="From" unit="h" :min="0" :max="23" :step="1" v-model="p.battery.force_discharge_start_hour"></slider-field>
-                <slider-field label="Until" unit="h" :min="1" :max="23" :step="1" v-model="p.battery.force_discharge_end_hour"></slider-field>
+            <template v-if="!optimalDispatch">
+              <div class="sub">
+                <toggle-field label="Charge overnight from the grid" v-model="p.battery.overnight_charge_enable"></toggle-field>
+                <template v-if="p.battery.overnight_charge_enable">
+                  <div class="row2">
+                    <slider-field label="From" unit="h" :min="0" :max="23" :step="1" v-model="p.battery.overnight_charge_start_hour"></slider-field>
+                    <slider-field label="Until" unit="h" :min="1" :max="23" :step="1" v-model="p.battery.overnight_charge_end_hour"></slider-field>
+                  </div>
+                  <slider-field label="Charge up to" unit="%" :min="10" :max="100" :step="5" v-model="p.battery.overnight_charge_target_pct"></slider-field>
+                </template>
               </div>
-            </div>
+              <div class="sub">
+                <toggle-field label="Force discharge at peak" v-model="p.battery.force_discharge_enable"></toggle-field>
+                <div class="row2" v-if="p.battery.force_discharge_enable">
+                  <slider-field label="From" unit="h" :min="0" :max="23" :step="1" v-model="p.battery.force_discharge_start_hour"></slider-field>
+                  <slider-field label="Until" unit="h" :min="1" :max="23" :step="1" v-model="p.battery.force_discharge_end_hour"></slider-field>
+                </div>
+              </div>
+            </template>
           </template>
         </div>
       </section>
@@ -430,6 +435,13 @@ const app = createApp({
     p.battery.capacity = 5;
     p.solar_kWp = 4;
 
+    // Optimal-dispatch toggle: maps the boolean switch to the model's
+    // battery.dispatch string ('optimal' | 'greedy').
+    const optimalDispatch = computed({
+      get: () => p.battery.dispatch === 'optimal',
+      set: v => { p.battery.dispatch = v ? 'optimal' : 'greedy'; }
+    });
+
     const result = ref(null);
     let timer = null;
     const recompute = () => { if (loaded.value) result.value = Object.freeze(model.run(p)); };
@@ -594,7 +606,7 @@ const app = createApp({
 
     return {
       loaded, usingSynthetic, activeTariff, monthlyMetric, selectedMonth,
-      p, result, a, headline, balance, selfSuff, selfCons,
+      p, optimalDispatch, result, a, headline, balance, selfSuff, selfCons,
       daySeries, monthName, monthOptions, totals,
       dayCanvas, monthCanvas, ssCanvas, scCanvas,
       fmt0, fmt1, fmt2, money, pct

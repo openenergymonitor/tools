@@ -277,12 +277,16 @@
 
         <template v-if="battery.capacity>0">
           <div class="subhead">Battery scheduling</div>
-          <label class="chk"><input type="checkbox" v-model="battery.force_discharge_enable" @change="update">Discharge remaining battery to load &amp; grid during peak window</label>
-          <div class="field" v-if="battery.force_discharge_enable"><label>Discharge window</label><div class="grp-in"><input type="text" class="short" v-model.number="battery.force_discharge_start_hour" @change="update"><span class="unit">to</span><input type="text" class="short" v-model.number="battery.force_discharge_end_hour" @change="update"><span class="unit">h</span></div></div>
+          <label class="chk"><input type="checkbox" true-value="optimal" false-value="greedy" v-model="battery.dispatch" @change="update">Optimal dispatch &mdash; cost-optimised against Agile prices (overrides manual scheduling below)</label>
 
-          <label class="chk"><input type="checkbox" v-model="battery.overnight_charge_enable" @change="update">Recharge from grid overnight up to a target state of charge</label>
-          <div class="field" v-if="battery.overnight_charge_enable"><label>Charge window</label><div class="grp-in"><input type="text" class="short" v-model.number="battery.overnight_charge_start_hour" @change="update"><span class="unit">to</span><input type="text" class="short" v-model.number="battery.overnight_charge_end_hour" @change="update"><span class="unit">h</span></div></div>
-          <div class="field" v-if="battery.overnight_charge_enable"><label>Target state of charge</label><div class="grp-in"><input type="text" class="short" v-model.number="battery.overnight_charge_target_pct" @change="update"><span class="unit">%</span></div></div>
+          <template v-if="battery.dispatch!='optimal'">
+            <label class="chk"><input type="checkbox" v-model="battery.force_discharge_enable" @change="update">Discharge remaining battery to load &amp; grid during peak window</label>
+            <div class="field" v-if="battery.force_discharge_enable"><label>Discharge window</label><div class="grp-in"><input type="text" class="short" v-model.number="battery.force_discharge_start_hour" @change="update"><span class="unit">to</span><input type="text" class="short" v-model.number="battery.force_discharge_end_hour" @change="update"><span class="unit">h</span></div></div>
+
+            <label class="chk"><input type="checkbox" v-model="battery.overnight_charge_enable" @change="update">Recharge from grid overnight up to a target state of charge</label>
+            <div class="field" v-if="battery.overnight_charge_enable"><label>Charge window</label><div class="grp-in"><input type="text" class="short" v-model.number="battery.overnight_charge_start_hour" @change="update"><span class="unit">to</span><input type="text" class="short" v-model.number="battery.overnight_charge_end_hour" @change="update"><span class="unit">h</span></div></div>
+            <div class="field" v-if="battery.overnight_charge_enable"><label>Target state of charge</label><div class="grp-in"><input type="text" class="short" v-model.number="battery.overnight_charge_target_pct" @change="update"><span class="unit">%</span></div></div>
+          </template>
         </template>
       </div>
 
@@ -482,6 +486,11 @@ var app = new Vue({
             discharge_max: 3.5,
             charge_efficiency: 0.9,
             discharge_efficiency: 0.9,
+            // Dispatch: 'greedy' (manual scheduling below) or 'optimal'
+            // (cost-optimised against Agile prices; see model.js optimiseBatteryDP)
+            dispatch: 'greedy',
+            soc_levels: 100,
+            cycle_cost: 0,
             // Forced peak discharge: empty remaining charge to load + grid in the window
             force_discharge_enable: false,
             force_discharge_start_hour: 16, // 4pm

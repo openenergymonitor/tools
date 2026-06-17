@@ -406,6 +406,8 @@
 
             <template v-if="useHHModel">
               <p style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Dispatches solar, battery and EV charging across a real half-hourly year (from the solar-matching dataset). Self-consumption, import and export emerge from the timing rather than a fixed ratio. The EV charge window is set under <em>Electric vehicle</em>. The <b>Agile tariff</b> switch always uses this simulation, since it prices each half-hour against the dataset's wholesale-linked rates.</p>
+              <label class="chk" style="padding:8px 0;"><input type="checkbox" v-model="optimalDispatch">Optimal battery dispatch <span class="unit">Agile cost-optimised</span></label>
+              <p style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Schedules the battery to minimise cost against the half-hourly Agile prices (charge when cheap, discharge / export when expensive) with perfect foresight, instead of the simple solar-surplus rule. Best paired with the <b>Agile tariff</b> switch.</p>
             </template>
             <template v-else>
               <div class="field"><label>Daytime share of demand <span class="unit">0–1</span></label><input type="number" step="0.05" v-model.number="p.daytimeFrac"></div>
@@ -591,6 +593,7 @@ createApp({
       // solar-matching engine: half-hourly simulation (model.js) by default,
       // with the simple annual estimate available for comparison.
       useHHModel: true,
+      optimalDispatch: false,   // battery: cost-optimised Agile dispatch (model.js DP)
       modelReady: false,
       usingSynthetic: false,
       konaChoice: 'petrol-new',
@@ -676,7 +679,7 @@ createApp({
         ev_charge_power: 7,
         ev_charge_start_hour: p.evChargeStart,
         ev_charge_end_hour: p.evChargeEnd,
-        battery: { capacity: c.battery ? p.batteryKwh : 0 },
+        battery: { capacity: c.battery ? p.batteryKwh : 0, dispatch: this.optimalDispatch ? 'optimal' : 'greedy' },
         // Flat import/export rates feed the model's own flat-cost figure (unused
         // here — the ledger applies its own rates); Agile figures come from the
         // half-hourly dataset prices baked into the model.
