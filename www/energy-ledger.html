@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Household Energy Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#10151b;
+    --panel:#171e26;
+    --panel2:#1e2731;
+    --raise:#26313d;
+    --line:#2c3742;
+    --line2:#384654;
+    --text:#e7edf3;
+    --muted:#8a97a5;
+    --faint:#5f6c79;
+    /* energy-carrier palette — the one expressive system */
+    --petrol:#c2553a;
+    --gas:#ef9b3e;
+    --grid:#4aa3df;
+    --solar:#f5c542;
+    --battery:#54c08a;
+    --hp:#39b5ac;
+    --ev:#8a86f5;
+    --good:#54c08a;
+    --bad:#d8694d;
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:
+      radial-gradient(1200px 600px at 85% -10%, #1a2530 0%, rgba(26,37,48,0) 60%),
+      var(--ink);
+    color:var(--text);
+    font-family:"Inter",system-ui,sans-serif;
+    font-size:14px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{font-family:"JetBrains Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;}
+  h1,h2,h3,.display{font-family:"Space Grotesk",sans-serif;}
+  .wrap{max-width:1280px;margin:0 auto;padding:28px 22px 80px;}
+
+  /* ---- masthead ---- */
+  .masthead{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:24px;}
+  .brand .eyebrow{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--gas);margin:0 0 6px;}
+  .brand h1{font-size:30px;font-weight:700;margin:0;letter-spacing:-.01em;}
+  .brand p{margin:6px 0 0;color:var(--muted);max-width:46ch;font-size:13px;}
+
+  /* ---- hero ledger ---- */
+  .hero{background:linear-gradient(180deg,var(--panel) 0%,#141b22 100%);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin-bottom:26px;}
+  .hero-top{display:flex;justify-content:space-between;align-items:baseline;gap:18px;flex-wrap:wrap;margin-bottom:18px;}
+  .hero-headline{font-family:"Space Grotesk";font-size:15px;font-weight:500;color:var(--muted);}
+  .saving-badge{font-family:"JetBrains Mono";font-size:13px;font-weight:700;padding:7px 13px;border-radius:999px;border:1px solid var(--line2);white-space:nowrap;}
+  .saving-badge.pos{color:var(--good);border-color:rgba(84,192,138,.4);background:rgba(84,192,138,.08);}
+  .saving-badge.neg{color:var(--bad);border-color:rgba(216,105,77,.4);background:rgba(216,105,77,.08);}
+
+  .ledger-row{display:grid;grid-template-columns:130px 1fr 96px;align-items:center;gap:14px;margin:11px 0;}
+  .ledger-label{font-size:12px;color:var(--muted);}
+  .ledger-label b{display:block;color:var(--text);font-family:"Space Grotesk";font-size:13px;font-weight:600;}
+  .bar{height:34px;border-radius:7px;background:#0d1217;display:flex;overflow:hidden;border:1px solid var(--line);}
+  .seg{height:100%;transition:flex-grow .55s cubic-bezier(.22,.61,.36,1), background .3s;position:relative;}
+  .seg:first-child{border-top-left-radius:6px;border-bottom-left-radius:6px}
+  .ledger-total{font-family:"JetBrains Mono";font-weight:700;font-size:17px;text-align:right;}
+  .ledger-total span{display:block;font-size:10px;color:var(--faint);font-weight:400;letter-spacing:.05em;}
+
+  .legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:16px;padding-top:14px;border-top:1px dashed var(--line);}
+  .legend .lg{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);}
+  .dot{width:10px;height:10px;border-radius:3px;flex:none;}
+
+  /* ---- layout ---- */
+  .grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:22px;align-items:start;}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 18px 6px;margin-bottom:18px;}
+  .card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;}
+  .card-head h2{font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text);margin:0;}
+  .card-head .hint{font-size:11px;color:var(--faint);}
+
+  /* ---- technology switches ---- */
+  .builder{padding-bottom:18px;}
+  .tech{display:flex;align-items:center;gap:13px;padding:12px 0;border-top:1px solid var(--line);}
+  .tech:first-of-type{border-top:none;}
+  .tech .icon{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;font-family:"JetBrains Mono";font-weight:700;font-size:13px;color:#0d1217;flex:none;}
+  .tech .tx{flex:1;min-width:0;}
+  .tech .tx b{font-family:"Space Grotesk";font-weight:600;font-size:14px;}
+  .tech .tx small{display:block;color:var(--muted);font-size:11.5px;}
+  .tech .mg{font-family:"JetBrains Mono";font-size:12.5px;font-weight:700;text-align:right;white-space:nowrap;}
+  .tech .mg span{display:block;font-size:10px;color:var(--faint);font-weight:400;}
+
+  /* toggle */
+  .sw{position:relative;width:46px;height:26px;flex:none;cursor:pointer;}
+  .sw input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;}
+  .sw .track{position:absolute;inset:0;background:#2b3641;border-radius:999px;transition:background .2s;border:1px solid var(--line2);}
+  .sw .knob{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#aab6c2;transition:transform .2s, background .2s;}
+  .sw input:checked + .track{background:rgba(84,192,138,.32);border-color:var(--good);}
+  .sw input:checked + .track + .knob{transform:translateX(20px);background:var(--good);}
+  .sw input:focus-visible + .track{outline:2px solid var(--grid);outline-offset:2px;}
+
+  .subtoggle{display:flex;gap:18px;flex-wrap:wrap;padding:10px 0 2px;border-top:1px solid var(--line);margin-top:4px;}
+  .chk{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--muted);cursor:pointer;}
+  .chk input{width:16px;height:16px;accent-color:var(--good);cursor:pointer;}
+
+  /* ---- accordions / inputs ---- */
+  details{border-top:1px solid var(--line);}
+  details:first-of-type{border-top:none;}
+  summary{list-style:none;cursor:pointer;padding:13px 2px;display:flex;align-items:center;justify-content:space-between;font-family:"Space Grotesk";font-weight:600;font-size:13px;}
+  summary::-webkit-details-marker{display:none;}
+  summary .chev{color:var(--faint);transition:transform .2s;font-family:"JetBrains Mono";}
+  details[open] summary .chev{transform:rotate(90deg);}
+  .fields{padding:2px 2px 16px;}
+  .field{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;}
+  .field label{font-size:12.5px;color:var(--muted);flex:1;}
+  .field .unit{font-size:11px;color:var(--faint);font-family:"JetBrains Mono";margin-left:6px;}
+  .field input[type=number]{
+    width:108px;background:var(--ink);border:1px solid var(--line2);color:var(--text);
+    font-family:"JetBrains Mono";font-size:13px;font-weight:500;text-align:right;
+    padding:7px 9px;border-radius:7px;
+  }
+  .field input[type=number]:focus{outline:2px solid var(--grid);outline-offset:1px;border-color:var(--grid);}
+
+  .kona-select{
+    background:var(--ink);border:1px solid var(--line2);color:var(--text);
+    font-family:"JetBrains Mono";font-size:12px;padding:8px 10px;border-radius:8px;
+    max-width:210px;cursor:pointer;
+  }
+  .kona-select:focus{outline:2px solid var(--grid);outline-offset:1px;border-color:var(--grid);}
+
+  /* ---- results ---- */
+  .stat-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+  @media(max-width:480px){.stat-row{grid-template-columns:1fr 1fr}}
+  .stat{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:13px;}
+  .stat .k{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);}
+  .stat .v{font-family:"JetBrains Mono";font-weight:700;font-size:20px;margin-top:5px;}
+  .stat .s{font-size:11px;color:var(--muted);margin-top:2px;}
+
+  table.flows{width:100%;border-collapse:collapse;margin-top:4px;}
+  table.flows td{padding:7px 0;border-top:1px solid var(--line);font-size:13px;}
+  table.flows td:last-child{text-align:right;font-family:"JetBrains Mono";font-weight:500;}
+  table.flows tr:first-child td{border-top:none;}
+  table.flows .tag{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:9px;vertical-align:baseline;}
+  table.flows .grp{color:var(--faint);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;padding-top:14px;}
+  table.flows .sub{color:var(--muted);}
+  table.flows .tot td{font-weight:700;border-top:1.5px solid var(--line2);}
+  .credit{color:var(--good);}
+
+  .bartrack{height:8px;border-radius:5px;background:#0d1217;overflow:hidden;display:flex;margin-top:14px;border:1px solid var(--line);}
+  .bartrack .seg{transition:flex-grow .55s ease;}
+
+  .foot{margin-top:26px;color:var(--faint);font-size:11.5px;line-height:1.65;border-top:1px solid var(--line);padding-top:16px;}
+  .foot b{color:var(--muted);}
+  .reset{background:none;border:1px solid var(--line2);color:var(--muted);font-family:"JetBrains Mono";font-size:11px;padding:6px 11px;border-radius:7px;cursor:pointer;}
+  .reset:hover{color:var(--text);border-color:var(--text);}
+  .pill{font-family:"JetBrains Mono";font-size:10px;padding:2px 7px;border-radius:5px;border:1px solid var(--line2);color:var(--muted);}
+  a{color:var(--grid);}
+  @media (prefers-reduced-motion: reduce){*{transition:none !important;}}
+</style>
+</head>
+<body>
+<div id="app" class="wrap" v-cloak>
+
+  <header class="masthead">
+    <div class="brand">
+      <p class="eyebrow">UK Household · cost &amp; carbon ledger</p>
+      <h1>Household Energy Ledger</h1>
+      <p>Start from the fossil status quo, then switch on technologies in any order. Running costs <em>and</em> the assets you'd replace anyway are tracked together, so each step is compared fairly.</p>
+    </div>
+    <button class="reset" @click="resetAll">↺ reset assumptions</button>
+  </header>
+
+  <!-- HERO LEDGER -->
+  <section class="hero">
+    <div class="hero-top">
+      <div class="hero-headline">All-in annual cost — fossil status quo vs your current build</div>
+      <div class="saving-badge" :class="saving>=0?'pos':'neg'">
+        {{ saving>=0 ? '▼ saves ' : '▲ costs ' }}{{ gbp(Math.abs(saving)) }}/yr
+      </div>
+    </div>
+
+    <div class="ledger-row">
+      <div class="ledger-label"><b>Status quo</b>petrol + gas boiler</div>
+      <div class="bar">
+        <div v-for="s in statusQuo.segments" :key="s.key" class="seg"
+             :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+gbp(s.value)"></div>
+      </div>
+      <div class="ledger-total num">{{ gbp(statusQuo.allIn) }}<span>/year</span></div>
+    </div>
+
+    <div class="ledger-row">
+      <div class="ledger-label"><b>This build</b>{{ buildName }}</div>
+      <div class="bar">
+        <div v-for="s in current.segments" :key="s.key" class="seg"
+             :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+gbp(s.value)"></div>
+      </div>
+      <div class="ledger-total num">{{ gbp(current.allIn) }}<span>/year</span></div>
+    </div>
+
+    <div class="legend">
+      <div class="lg" v-for="l in legend" :key="l.label"><span class="dot" :style="{background:l.color}"></span>{{ l.label }}</div>
+    </div>
+  </section>
+
+  <!-- CARBON HERO LEDGER -->
+  <section class="hero">
+    <div class="hero-top">
+      <div class="hero-headline">Carbon — fossil status quo vs your current build <span class="pill" style="margin-left:8px;">operational + embodied</span></div>
+      <div class="saving-badge" :class="carbonSaving>=0?'pos':'neg'">
+        {{ carbonSaving>=0 ? '▼ cuts ' : '▲ adds ' }}{{ co2(Math.abs(carbonSaving)) }} CO₂e/yr
+      </div>
+    </div>
+
+    <div class="ledger-row">
+      <div class="ledger-label"><b>Status quo</b>petrol + gas boiler</div>
+      <div class="bar">
+        <div v-for="s in statusQuo.carbonSegments" :key="s.key" class="seg"
+             :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+co2(s.value)"></div>
+      </div>
+      <div class="ledger-total num">{{ co2(statusQuo.totalCO2) }}<span>CO₂e/yr</span></div>
+    </div>
+
+    <div class="ledger-row">
+      <div class="ledger-label"><b>This build</b>{{ buildName }}</div>
+      <div class="bar">
+        <div v-for="s in current.carbonSegments" :key="s.key" class="seg"
+             :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+co2(s.value)"></div>
+      </div>
+      <div class="ledger-total num">{{ co2(current.totalCO2) }}<span>CO₂e/yr</span></div>
+    </div>
+
+    <div class="legend">
+      <div class="lg"><span class="dot" style="background:var(--petrol)"></span>Petrol</div>
+      <div class="lg"><span class="dot" style="background:var(--gas)"></span>Gas (incl. upstream)</div>
+      <div class="lg"><span class="dot" style="background:var(--grid)"></span>Grid electricity</div>
+      <div class="lg"><span class="dot" style="background:var(--ev)"></span>Vehicle embodied</div>
+      <div class="lg"><span class="dot" style="background:var(--hp)"></span>Heat plant embodied</div>
+      <div class="lg"><span class="dot" style="background:var(--solar)"></span>Solar embodied</div>
+      <div class="lg"><span class="dot" style="background:var(--battery)"></span>Battery embodied</div>
+    </div>
+  </section>
+
+  <div class="grid">
+
+    <!-- LEFT: configuration -->
+    <div>
+      <div class="card builder">
+        <div class="card-head"><h2>Build your home</h2><span class="hint">marginal £/yr shows the effect of each step given the rest</span></div>
+
+        <div class="tech">
+          <div class="icon" style="background:var(--ev)">EV</div>
+          <div class="tx"><b>Electric vehicle</b><small>replaces the petrol car</small></div>
+          <div class="mg">{{ marginalLabel('ev') }}<span>marginal</span></div>
+          <label class="sw"><input type="checkbox" v-model="cfg.ev"><span class="track"></span><span class="knob"></span></label>
+        </div>
+
+        <div class="tech">
+          <div class="icon" style="background:var(--hp)">HP</div>
+          <div class="tx"><b>Heat pump</b><small>replaces the gas boiler</small></div>
+          <div class="mg">{{ marginalLabel('hp') }}<span>marginal</span></div>
+          <label class="sw"><input type="checkbox" v-model="cfg.hp"><span class="track"></span><span class="knob"></span></label>
+        </div>
+
+        <div class="tech">
+          <div class="icon" style="background:var(--solar)">PV</div>
+          <div class="tx"><b>Solar PV</b><small>{{ p.solarKwp }} kWp on the roof</small></div>
+          <div class="mg">{{ marginalLabel('solar') }}<span>marginal</span></div>
+          <label class="sw"><input type="checkbox" v-model="cfg.solar"><span class="track"></span><span class="knob"></span></label>
+        </div>
+
+        <div class="tech">
+          <div class="icon" style="background:var(--battery)">B</div>
+          <div class="tx"><b>Home battery</b><small>{{ p.batteryKwh }} kWh storage</small></div>
+          <div class="mg">{{ marginalLabel('battery') }}<span>marginal</span></div>
+          <label class="sw"><input type="checkbox" v-model="cfg.battery"><span class="track"></span><span class="knob"></span></label>
+        </div>
+
+        <div class="tech">
+          <div class="icon" style="background:var(--raise);color:var(--text);font-size:15px;">◆</div>
+          <div class="tx"><b>Hyundai Kona preset</b><small>loads real petrol / EV figures into the car cells</small></div>
+          <select v-model="konaChoice" @change="applyKona" class="kona-select">
+            <option value="">— choose —</option>
+            <option value="petrol-new">Petrol · new (~£27k · 48mpg)</option>
+            <option value="petrol-used">Petrol · used 30k mi (~£12.5k)</option>
+            <option value="ev-new">Electric · new 65kWh (~£33.5k)</option>
+            <option value="ev-used">Electric · used 64kWh (~£13.5k)</option>
+          </select>
+        </div>
+
+        <div class="subtoggle">
+          <label class="chk"><input type="checkbox" v-model="cfg.smartTariff">Smart tariff (cheap off-peak rate)</label>
+          <label class="chk" v-if="cfg.hp"><input type="checkbox" v-model="cfg.disconnectGas">Disconnect gas entirely</label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Assumptions</h2><span class="hint">all editable · mid-2026 figures</span></div>
+
+        <details open>
+          <summary>Energy prices &amp; tariff <span class="chev">›</span></summary>
+          <div class="fields">
+            <div class="field"><label>Electricity unit rate <span class="unit">p/kWh</span></label><input type="number" step="0.01" v-model.number="p.elecRate"></div>
+            <div class="field"><label>Electricity standing charge <span class="unit">p/day</span></label><input type="number" step="0.01" v-model.number="p.elecStanding"></div>
+            <div class="field"><label>Gas unit rate <span class="unit">p/kWh</span></label><input type="number" step="0.01" v-model.number="p.gasRate"></div>
+            <div class="field"><label>Gas standing charge <span class="unit">p/day</span></label><input type="number" step="0.01" v-model.number="p.gasStanding"></div>
+            <div class="field"><label>Off-peak rate (smart tariff) <span class="unit">p/kWh</span></label><input type="number" step="0.01" v-model.number="p.offPeakRate"></div>
+            <div class="field"><label>Export rate (SEG) <span class="unit">p/kWh</span></label><input type="number" step="0.01" v-model.number="p.segRate"></div>
+          </div>
+        </details>
+
+        <details>
+          <summary>Home energy use <span class="chev">›</span></summary>
+          <div class="fields">
+            <div class="field"><label>Annual gas use <span class="unit">kWh</span></label><input type="number" v-model.number="p.gasTotal"></div>
+            <div class="field"><label>— share for space heating <span class="unit">%</span></label><input type="number" step="1" v-model.number="p.heatingPct"></div>
+            <div class="field"><label>— share for hot water <span class="unit">%</span></label><input type="number" step="1" v-model.number="p.waterPct"></div>
+            <div class="field"><label>— share for cooking <span class="unit">%</span></label><input type="number" step="1" v-model.number="p.cookingPct"></div>
+            <div class="field"><label>Gas boiler efficiency <span class="unit">0–1</span></label><input type="number" step="0.01" v-model.number="p.boilerEff"></div>
+            <div class="field"><label>Electricity baseload <span class="unit">kWh</span></label><input type="number" v-model.number="p.elecBaseload"></div>
+          </div>
+        </details>
+
+        <details>
+          <summary>Petrol car <span class="chev">›</span></summary>
+          <div class="fields">
+            <div class="field"><label>Annual mileage <span class="unit">mi</span></label><input type="number" v-model.number="p.mileage"></div>
+            <div class="field"><label>Fuel economy <span class="unit">mpg</span></label><input type="number" v-model.number="p.mpg"></div>
+            <div class="field"><label>Petrol price <span class="unit">£/L</span></label><input type="number" step="0.01" v-model.number="p.petrolPrice"></div>
+            <div class="field"><label>Purchase price <span class="unit">£</span></label><input type="number" v-model.number="p.carPrice"></div>
+            <div class="field"><label>Ownership period <span class="unit">yrs</span></label><input type="number" v-model.number="p.carLife"></div>
+            <div class="field"><label>Resale value at end <span class="unit">£</span></label><input type="number" v-model.number="p.carResidual"></div>
+            <div class="field"><label>Maintenance / tax <span class="unit">£/yr</span></label><input type="number" v-model.number="p.carMaint"></div>
+          </div>
+        </details>
+
+        <details>
+          <summary>Gas boiler <span class="chev">›</span></summary>
+          <div class="fields">
+            <div class="field"><label>Replacement cost <span class="unit">£</span></label><input type="number" v-model.number="p.boilerPrice"></div>
+            <div class="field"><label>Lifespan <span class="unit">yrs</span></label><input type="number" v-model.number="p.boilerLife"></div>
+            <div class="field"><label>Annual service <span class="unit">£/yr</span></label><input type="number" v-model.number="p.boilerService"></div>
+            <div class="field"><label>Repairs allowance <span class="unit">£/yr</span></label><input type="number" v-model.number="p.boilerRepairs"></div>
+          </div>
+        </details>
+
+        <details>
+          <summary>Electric vehicle <span class="chev">›</span></summary>
+          <div class="fields">
+            <div class="field"><label>Efficiency <span class="unit">mi/kWh</span></label><input type="number" step="0.1" v-model.number="p.evEfficiency"></div>
+            <div class="field"><label>Share charged off-peak <span class="unit">0–1</span></label><input type="number" step="0.05" v-model.number="p.evOffPeakFrac"></div>
+            <div class="field"><label>Purchase price <span class="unit">£</span></label><input type="number" v-model.number="p.evPrice"></div>
+            <div class="field"><label>Ownership period <span class="unit">yrs</span></label><input type="number" v-model.number="p.evLife"></div>
+            <div class="field"><label>Resale value at end <span class="unit">£</span></label><input type="number" v-model.number="p.evResidual"></div>
+            <div class="field"><label>Maintenance / tax <span class="unit">£/yr</span></label><input type="number" v-model.number="p.evMaint"></div>
+            <div class="field"><label>Battery capacity <span class="unit">kWh</span></label><input type="number" v-model.number="p.evBatteryKwh"></div>
+          </div>
+        </details>
+
+        <details>
+          <summary>Heat pump <span class="chev">›</span></summary>
+          <div class="fields">
+            <div class="field"><label>Seasonal COP <span class="unit">SCOP</span></label><input type="number" step="0.1" v-model.number="p.scop"></div>
+            <div class="field"><label>Install cost (gross) <span class="unit">£</span></label><input type="number" v-model.number="p.hpPrice"></div>
+            <div class="field"><label>Grant (BUS) <span class="unit">£</span></label><input type="number" v-model.number="p.busGrant"></div>
+            <div class="field"><label>Lifespan <span class="unit">yrs</span></label><input type="number" v-model.number="p.hpLife"></div>
+            <div class="field"><label>Service + repairs <span class="unit">£/yr</span></label><input type="number" v-model.number="p.hpUpkeep"></div>
+            <div class="field"><label>Induction-hob efficiency factor <span class="unit">×</span></label><input type="number" step="0.05" v-model.number="p.inductionEff"></div>
+          </div>
+        </details>
+
+        <details>
+          <summary>Solar PV <span class="chev">›</span></summary>
+          <div class="fields">
+            <div class="field"><label>System size <span class="unit">kWp</span></label><input type="number" step="0.5" v-model.number="p.solarKwp"></div>
+            <div class="field"><label>Yield <span class="unit">kWh/kWp/yr</span></label><input type="number" v-model.number="p.genPerKwp"></div>
+            <div class="field"><label>Install cost <span class="unit">£</span></label><input type="number" v-model.number="p.solarPrice"></div>
+            <div class="field"><label>Lifespan <span class="unit">yrs</span></label><input type="number" v-model.number="p.solarLife"></div>
+            <div class="field"><label>Upkeep (inverter etc.) <span class="unit">£/yr</span></label><input type="number" v-model.number="p.solarMaint"></div>
+          </div>
+        </details>
+
+        <details>
+          <summary>Battery <span class="chev">›</span></summary>
+          <div class="fields">
+            <div class="field"><label>Usable capacity <span class="unit">kWh</span></label><input type="number" step="0.5" v-model.number="p.batteryKwh"></div>
+            <div class="field"><label>Install cost <span class="unit">£</span></label><input type="number" v-model.number="p.batteryPrice"></div>
+            <div class="field"><label>Lifespan <span class="unit">yrs</span></label><input type="number" v-model.number="p.batteryLife"></div>
+            <div class="field"><label>Annual cycling utilisation <span class="unit">0–1</span></label><input type="number" step="0.05" v-model.number="p.batteryUtil"></div>
+          </div>
+        </details>
+
+        <details>
+          <summary>Advanced · solar matching <span class="chev">›</span></summary>
+          <div class="fields">
+            <div class="field"><label>Daytime share of demand <span class="unit">0–1</span></label><input type="number" step="0.05" v-model.number="p.daytimeFrac"></div>
+            <div class="field"><label>Hour-by-hour match factor <span class="unit">0–1</span></label><input type="number" step="0.05" v-model.number="p.directMatch"></div>
+          </div>
+        </details>
+
+        <details>
+          <summary>Carbon · operational factors <span class="chev">›</span></summary>
+          <div class="fields">
+            <div class="field"><label>Petrol (well-to-wheel) <span class="unit">kg/L</span></label><input type="number" step="0.05" v-model.number="p.petrolKgPerL"></div>
+            <div class="field"><label>Gas combustion <span class="unit">kg/kWh</span></label><input type="number" step="0.001" v-model.number="p.gasCombustionKg"></div>
+            <div class="field"><label>Gas upstream uplift <span class="unit">%</span></label><input type="number" step="1" v-model.number="p.gasUpstreamPct"></div>
+            <div class="field"><label>Grid intensity (average) <span class="unit">g/kWh</span></label><input type="number" v-model.number="p.gridIntensity"></div>
+            <div class="field"><label>Exported solar displaces <span class="unit">g/kWh</span></label><input type="number" v-model.number="p.marginalIntensity"></div>
+          </div>
+        </details>
+
+        <details>
+          <summary>Carbon · embodied factors <span class="chev">›</span></summary>
+          <div class="fields">
+            <div class="field"><label>Car glider (ex-battery) <span class="unit">kgCO₂e</span></label><input type="number" v-model.number="p.gliderEmbodied"></div>
+            <div class="field"><label>Battery cell <span class="unit">kg/kWh</span></label><input type="number" v-model.number="p.batteryCO2PerKwh"></div>
+            <div class="field"><label>Vehicle carbon amortised over <span class="unit">yrs</span></label><input type="number" v-model.number="p.vehicleLifeCarbon"></div>
+            <div class="field"><label>Gas boiler manufacture <span class="unit">kgCO₂e</span></label><input type="number" v-model.number="p.boilerEmbodied"></div>
+            <div class="field"><label>Heat pump manufacture <span class="unit">kgCO₂e</span></label><input type="number" v-model.number="p.hpEmbodied"></div>
+            <div class="field"><label>Solar lifecycle intensity <span class="unit">g/kWh</span></label><input type="number" v-model.number="p.solarLifecycleCO2"></div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <!-- RIGHT: results -->
+    <div>
+      <div class="card">
+        <div class="card-head"><h2>This build · the numbers</h2></div>
+        <div class="stat-row">
+          <div class="stat"><div class="k">All-in / yr</div><div class="v">{{ gbp(current.allIn) }}</div><div class="s">running + assets</div></div>
+          <div class="stat"><div class="k">vs status quo</div><div class="v" :style="{color: saving>=0?'var(--good)':'var(--bad)'}">{{ saving>=0?'−':'+' }}{{ gbp(Math.abs(saving)) }}</div><div class="s">per year</div></div>
+          <div class="stat"><div class="k">Extra upfront</div><div class="v">{{ gbp(extraUpfront) }}</div><div class="s">over like-for-like</div></div>
+        </div>
+
+        <table class="flows">
+          <tr><td class="grp" colspan="2">Running costs</td></tr>
+          <tr v-if="!cfg.ev"><td><span class="tag" style="background:var(--petrol)"></span>Petrol</td><td class="num">{{ gbp(current.petrol) }}</td></tr>
+          <tr><td><span class="tag" style="background:var(--gas)"></span>Gas{{ cfg.hp && !cfg.disconnectGas ? ' (cooking only)' : '' }}</td><td class="num">{{ gbp(current.gas) }}</td></tr>
+          <tr><td><span class="tag" style="background:var(--grid)"></span>Electricity import</td><td class="num">{{ gbp(current.importCost) }}</td></tr>
+          <tr v-if="current.exportRevenue>0"><td class="sub"><span class="tag" style="background:var(--solar)"></span>Solar export credit</td><td class="num credit">−{{ gbp(current.exportRevenue) }}</td></tr>
+          <tr><td class="sub">Electricity standing charge</td><td class="num">{{ gbp(current.elecStandingCost) }}</td></tr>
+          <tr class="tot"><td>Running subtotal</td><td class="num">{{ gbp(current.running) }}</td></tr>
+
+          <tr><td class="grp" colspan="2">Annualised assets</td></tr>
+          <tr><td><span class="tag" :style="{background: cfg.ev?'var(--ev)':'var(--petrol)'}"></span>{{ cfg.ev?'EV':'Petrol car' }}</td><td class="num">{{ gbp(current.carAsset) }}</td></tr>
+          <tr><td><span class="tag" :style="{background: cfg.hp?'var(--hp)':'var(--gas)'}"></span>{{ cfg.hp?'Heat pump':'Gas boiler' }}</td><td class="num">{{ gbp(current.heatAsset) }}</td></tr>
+          <tr v-if="cfg.solar"><td><span class="tag" style="background:var(--solar)"></span>Solar PV</td><td class="num">{{ gbp(current.solarAsset) }}</td></tr>
+          <tr v-if="cfg.battery"><td><span class="tag" style="background:var(--battery)"></span>Battery</td><td class="num">{{ gbp(current.batteryAsset) }}</td></tr>
+          <tr class="tot"><td>Assets subtotal</td><td class="num">{{ gbp(current.assets) }}</td></tr>
+
+          <tr class="tot"><td>All-in total</td><td class="num">{{ gbp(current.allIn) }}</td></tr>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>This build · carbon</h2><span class="hint">kgCO₂e per year</span></div>
+        <div class="stat-row">
+          <div class="stat"><div class="k">CO₂e / yr</div><div class="v">{{ co2(current.totalCO2) }}</div><div class="s">operational + embodied</div></div>
+          <div class="stat"><div class="k">vs status quo</div><div class="v" :style="{color: carbonSaving>=0?'var(--good)':'var(--bad)'}">{{ carbonSaving>=0?'−':'+' }}{{ co2(Math.abs(carbonSaving)) }}</div><div class="s">per year</div></div>
+          <div class="stat"><div class="k">Carbon payback</div><div class="v">{{ carbonPayback===null ? '—' : carbonPayback.toFixed(1) }}<span v-if="carbonPayback!==null" style="font-size:12px;color:var(--faint);"> yrs</span></div><div class="s">debt vs op. saving</div></div>
+        </div>
+
+        <table class="flows">
+          <tr><td class="grp" colspan="2">Operational</td></tr>
+          <tr v-if="!cfg.ev"><td><span class="tag" style="background:var(--petrol)"></span>Petrol</td><td class="num">{{ co2(current.petrolCO2) }}</td></tr>
+          <tr><td><span class="tag" style="background:var(--gas)"></span>Gas{{ cfg.hp && !cfg.disconnectGas ? ' (cooking)' : '' }}</td><td class="num">{{ co2(current.gasCO2) }}</td></tr>
+          <tr><td><span class="tag" style="background:var(--grid)"></span>Grid electricity</td><td class="num">{{ co2(current.gridCO2) }}</td></tr>
+          <tr v-if="current.exportCO2Credit>0"><td class="sub"><span class="tag" style="background:var(--solar)"></span>Exported solar (displaces gas)</td><td class="num credit">−{{ co2(current.exportCO2Credit) }}</td></tr>
+          <tr class="tot"><td>Operational subtotal</td><td class="num">{{ co2(current.opCO2) }}</td></tr>
+
+          <tr><td class="grp" colspan="2">Embodied (annualised)</td></tr>
+          <tr><td><span class="tag" :style="{background: cfg.ev?'var(--ev)':'var(--petrol)'}"></span>{{ cfg.ev?'EV (glider + battery)':'Petrol car' }}</td><td class="num">{{ co2(current.carCO2) }}</td></tr>
+          <tr><td><span class="tag" :style="{background: cfg.hp?'var(--hp)':'var(--gas)'}"></span>{{ cfg.hp?'Heat pump':'Gas boiler' }}</td><td class="num">{{ co2(current.heatCO2) }}</td></tr>
+          <tr v-if="cfg.solar"><td><span class="tag" style="background:var(--solar)"></span>Solar PV</td><td class="num">{{ co2(current.solarCO2) }}</td></tr>
+          <tr v-if="cfg.battery"><td><span class="tag" style="background:var(--battery)"></span>Battery</td><td class="num">{{ co2(current.batteryCO2) }}</td></tr>
+          <tr class="tot"><td>Embodied subtotal</td><td class="num">{{ co2(current.embCO2) }}</td></tr>
+
+          <tr class="tot"><td>Total CO₂e</td><td class="num">{{ co2(current.totalCO2) }}</td></tr>
+        </table>
+        <p v-if="extraEmbodiedTotal>0" style="font-size:11.5px;color:var(--muted);margin:12px 2px 2px;">
+          Switching adds ~{{ co2(extraEmbodiedTotal) }} of one-off manufacturing carbon (the “carbon debt”), repaid by lower running emissions in <b>{{ carbonPayback===null ? 'n/a' : carbonPayback.toFixed(1)+' years' }}</b> — after which it's all saving.
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Electricity flows</h2><span class="hint">the co-benefit engine</span></div>
+        <table class="flows">
+          <tr><td>Total electricity demand</td><td class="num">{{ kwh(current.demand) }}</td></tr>
+          <tr class="sub"><td>— household baseload</td><td class="num">{{ kwh(p.elecBaseload) }}</td></tr>
+          <tr class="sub" v-if="cfg.ev"><td>— EV charging</td><td class="num">{{ kwh(current.evElec) }}</td></tr>
+          <tr class="sub" v-if="cfg.hp"><td>— heat pump</td><td class="num">{{ kwh(current.hpElec) }}</td></tr>
+          <tr v-if="cfg.solar"><td><span class="tag" style="background:var(--solar)"></span>Solar generated</td><td class="num">{{ kwh(current.solarGen) }}</td></tr>
+          <tr v-if="cfg.solar"><td class="sub">— self-consumed ({{ current.selfPct }}%)</td><td class="num credit">{{ kwh(current.solarSelf) }}</td></tr>
+          <tr v-if="cfg.solar"><td class="sub">— exported</td><td class="num">{{ kwh(current.solarExport) }}</td></tr>
+          <tr class="tot"><td>Grid import</td><td class="num">{{ kwh(current.gridImport) }}</td></tr>
+          <tr v-if="cfg.smartTariff && current.offPeak>0"><td class="sub">— at off-peak rate</td><td class="num">{{ kwh(current.offPeak) }}</td></tr>
+        </table>
+        <div v-if="cfg.solar" class="bartrack" :title="'Self-consumed vs exported'">
+          <div class="seg" :style="{flexGrow:current.solarSelf, background:'var(--battery)'}"></div>
+          <div class="seg" :style="{flexGrow:Math.max(current.solarExport,0.001), background:'var(--solar)'}"></div>
+        </div>
+        <p v-if="cfg.solar" style="font-size:11.5px;color:var(--muted);margin:10px 2px 4px;">
+          {{ current.selfPct }}% of your solar is used at home. Adding load (EV, heat pump) or a battery pushes this up — every self-consumed kWh is worth the {{ p.elecRate }}p import rate you avoid, versus only {{ p.segRate }}p if exported.
+        </p>
+      </div>
+
+      <div class="foot">
+        <p><b>How to read this.</b> Lumpy purchases (a car, a boiler) are spread evenly over their life as an annual equivalent, so options compare like-for-like. The fossil status quo already carries a car and a boiler you'd replace anyway — switching to an EV or heat pump swaps one asset cost for another rather than adding to it. “Extra upfront” is the cash needed today for the new kit beyond a like-for-like petrol-car / boiler replacement.</p>
+        <p style="margin-top:10px;"><b>Simplifications.</b> Solar self-consumption uses a transparent daytime-match + battery-shift model (tune it under <em>Advanced</em>); off-peak shifting assumes a smart tariff moves EV charging and battery throughput to the cheap rate. No discounting / time-value of money yet, and insurance is treated as roughly neutral between petrol and EV. Prices are a mid-2026 snapshot and unusually high. <span class="pill">v1 · back of the envelope</span></p>
+        <p style="margin-top:10px;"><b>Carbon basis.</b> Petrol ~2.9 kgCO₂e/L well-to-wheel; gas 0.183 kgCO₂e/kWh combustion plus an upstream/methane uplift (default +20%, GWP100 — the evidence suggests this is the floor, not the ceiling). Grid ~125 gCO₂/kWh (2024-25 average, falling fast toward ~50 by 2030), so the electrified case looks better every year. Exported solar is credited against gas (CCGT) generation. Embodied carbon follows the Hoekstra framing: the car glider is ~equal for petrol and EV, with the battery the main difference (~75 kgCO₂e/kWh of cell). “Carbon payback” = one-off extra manufacturing carbon ÷ annual operational saving. <span class="pill">factors editable</span></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
+<script>
+const { createApp } = Vue;
+
+const DEFAULTS = {
+  // prices
+  elecRate:26.11, elecStanding:57.19, gasRate:7.33, gasStanding:29.04, offPeakRate:7, segRate:15,
+  // home energy
+  gasTotal:11500, heatingPct:77, waterPct:20, cookingPct:3, boilerEff:0.90, elecBaseload:2700,
+  // petrol car
+  mileage:12000, mpg:48, petrolPrice:1.55, carPrice:27000, carLife:12, carResidual:4000, carMaint:650,
+  // boiler
+  boilerPrice:3000, boilerLife:15, boilerService:100, boilerRepairs:70,
+  // EV
+  evEfficiency:3.7, evOffPeakFrac:0.9, evPrice:33500, evLife:12, evResidual:6000, evMaint:300, evBatteryKwh:64,
+  // heat pump
+  scop:4.0, hpPrice:12000, busGrant:7500, hpLife:18, hpUpkeep:200, inductionEff:0.6,
+  // solar
+  solarKwp:4, genPerKwp:950, solarPrice:5500, solarLife:25, solarMaint:30,
+  // battery
+  batteryKwh:5, batteryPrice:4000, batteryLife:15, batteryUtil:0.8,
+  // advanced
+  daytimeFrac:0.40, directMatch:0.70,
+  // carbon — operational emission factors
+  petrolKgPerL:2.9,            // well-to-wheel: ~2.3 combustion + ~0.6 upstream
+  gasCombustionKg:0.183,       // DEFRA 2025 combustion, kgCO2e/kWh
+  gasUpstreamPct:20,           // upstream/methane uplift on combustion (GWP100, UK pipe+LNG mix)
+  gridIntensity:43,            // gCO2/kWh, UK generation average (125 g/kWh in 2024-25 but falling towards 15 g/kWh by 2040 = next 15 yrs average ~43 g/kWh) 
+  marginalIntensity:400,       // gCO2/kWh, gas (CCGT) displaced by exported solar
+  // carbon — embodied factors
+  gliderEmbodied:6500,         // kgCO2e to build a car ex-battery (≈ same for petrol & EV) https://theicct.org/publication/electric-cars-life-cycle-analysis-emissions-europe-jul25/
+  batteryCO2PerKwh:75,         // kgCO2e per kWh of cell (IVL central 61-100)
+  vehicleLifeCarbon:20,        // yrs to amortise vehicle embodied carbon over (from ICCT report above)
+  boilerEmbodied:150,          // kgCO2e to manufacture a gas boiler (hp embodied carbon scaled by boiler weight of 30-40kg)
+  hpEmbodied:735,              // kgCO2e to manufacture a heat pump incl. refrigerant (~190 kg)
+                               // https://www.kiwa.com/globalassets/germany/veroffentlichte-epds/2023/1123/epd-kiwa-ee-273-en.pdf/ = 735 kg for 7 kW arotherm
+                               // https://www.raponline.org/blog/why-i-replaced-my-new-gas-boiler-with-a-heat-pump/ = 1560 kg for full install.
+  solarLifecycleCO2:30,        // gCO2e/kWh lifecycle (manufacturing of panels) https://www.linkedin.com/pulse/rapid-fall-solars-embodied-carbon-chris-worboys/
+};
+
+const LITRES_PER_GALLON = 4.54609;
+
+createApp({
+  data(){
+    return {
+      p: JSON.parse(JSON.stringify(DEFAULTS)),
+      cfg: { ev:false, hp:false, solar:false, battery:false, smartTariff:false, disconnectGas:false },
+      konaChoice: 'petrol-new',
+      konaPresets: {
+        'petrol-new':  { ev:false, carPrice:27000, mpg:48, carResidual:4000, carLife:12, carMaint:650 },
+        'petrol-used': { ev:false, carPrice:12500, mpg:48, carResidual:1500, carLife:10, carMaint:750 },
+        'ev-new':      { ev:true,  evPrice:33500, evEfficiency:3.7, evResidual:6000, evLife:12, evMaint:300 },
+        'ev-used':     { ev:true,  evPrice:13500, evEfficiency:4.0, evResidual:2000, evLife:10, evMaint:300 },
+      },
+      legend:[
+        {label:'Petrol', color:'var(--petrol)'},
+        {label:'Gas', color:'var(--gas)'},
+        {label:'Grid electricity', color:'var(--grid)'},
+        {label:'Solar PV', color:'var(--solar)'},
+        {label:'Battery', color:'var(--battery)'},
+        {label:'Heat pump', color:'var(--hp)'},
+        {label:'EV', color:'var(--ev)'},
+      ],
+    };
+  },
+  computed:{
+    current(){ return this.compute(this.cfg); },
+    statusQuo(){ return this.compute({ev:false,hp:false,solar:false,battery:false,smartTariff:false,disconnectGas:false}); },
+    saving(){ return this.statusQuo.allIn - this.current.allIn; },
+    buildName(){
+      const on=[];
+      if(this.cfg.ev)on.push('EV'); if(this.cfg.hp)on.push('heat pump');
+      if(this.cfg.solar)on.push('solar'); if(this.cfg.battery)on.push('battery');
+      return on.length? on.join(' + ') : 'nothing switched on yet';
+    },
+    extraUpfront(){
+      // cash today for new kit beyond a like-for-like petrol-car / boiler replacement
+      let x=0;
+      if(this.cfg.ev) x += this.p.evPrice - this.p.carPrice;
+      if(this.cfg.hp) x += (this.p.hpPrice - this.p.busGrant) - this.p.boilerPrice;
+      if(this.cfg.solar) x += this.p.solarPrice;
+      if(this.cfg.battery) x += this.p.batteryPrice;
+      return x;
+    },
+    carbonSaving(){ return this.statusQuo.totalCO2 - this.current.totalCO2; },
+    extraEmbodiedTotal(){
+      // one-time extra manufacturing carbon (the "carbon debt") vs like-for-like replacement
+      const p=this.p; let x=0;
+      if(this.cfg.ev) x += p.evBatteryKwh * p.batteryCO2PerKwh;                       // EV's extra = its battery
+      if(this.cfg.hp) x += p.hpEmbodied - p.boilerEmbodied;                           // HP minus the boiler anyway
+      if(this.cfg.solar) x += p.solarLifecycleCO2 * (p.solarKwp*p.genPerKwp) * p.solarLife / 1000;
+      if(this.cfg.battery) x += p.batteryKwh * p.batteryCO2PerKwh;
+      return x;
+    },
+    carbonPayback(){
+      const annualOpSaving = this.statusQuo.opCO2 - this.current.opCO2;
+      if(annualOpSaving <= 0) return null;
+      return this.extraEmbodiedTotal / annualOpSaving;
+    },
+  },
+  methods:{
+    gbp(n){ return '£'+Math.round(n).toLocaleString('en-GB'); },
+    kwh(n){ return Math.round(n).toLocaleString('en-GB')+' kWh'; },
+    co2(n){ return Math.round(n).toLocaleString('en-GB')+' kg'; },
+    ann(price,residual,life){ return life>0 ? (price-residual)/life : 0; },
+
+    marginalLabel(tech){
+      // effect on all-in cost of flipping this technology, given the rest of the current build
+      const flipped = Object.assign({}, this.cfg);
+      flipped[tech] = !flipped[tech];
+      const here = this.compute(this.cfg).allIn;
+      const there = this.compute(flipped).allIn;
+      const delta = this.cfg[tech] ? (there - here)   // currently on: cost if removed minus now → +ve means it's saving you that much
+                                   : (here - there);  // currently off: now minus cost-if-added → +ve means adding saves
+      const sign = delta>=0 ? '−' : '+';
+      return sign + this.gbp(Math.abs(delta));
+    },
+
+    compute(c){
+      const p=this.p;
+      const heatingFrac=p.heatingPct/100, waterFrac=p.waterPct/100, cookingFrac=p.cookingPct/100;
+
+      // ---- electricity demand ----
+      const evElec = c.ev ? p.mileage / p.evEfficiency : 0;
+      const heatDelivered = p.gasTotal * (heatingFrac + waterFrac) * p.boilerEff;
+      const hpElec = c.hp ? heatDelivered / p.scop : 0;
+      const cookingElec = (c.hp && c.disconnectGas) ? (p.gasTotal*cookingFrac*p.inductionEff) : 0;
+      const demand = p.elecBaseload + evElec + hpElec + cookingElec;
+
+      // ---- solar generation & self-consumption ----
+      const solarGen = c.solar ? p.solarKwp * p.genPerKwp : 0;
+      const daytimeDemand = demand * p.daytimeFrac;
+      const directSelf = Math.min(solarGen, daytimeDemand) * p.directMatch;
+      const surplus = Math.max(0, solarGen - directSelf);
+      const eveningDemand = Math.max(0, demand - directSelf);
+      const batteryThroughput = c.battery ? p.batteryKwh * 365 * p.batteryUtil : 0;
+      const batterySolarShift = Math.min(surplus, eveningDemand, batteryThroughput);
+      const solarSelf = directSelf + batterySolarShift;
+      const solarExport = Math.max(0, solarGen - solarSelf);
+
+      // ---- grid import & off-peak shifting ----
+      const gridImport = Math.max(0, demand - solarSelf);
+      const batteryRemaining = Math.max(0, batteryThroughput - batterySolarShift);
+      let offPeakWanted = batteryRemaining;
+      if(c.ev) offPeakWanted += evElec * p.evOffPeakFrac;
+      const offPeak = c.smartTariff ? Math.min(offPeakWanted, gridImport) : 0;
+      const peakImport = gridImport - offPeak;
+
+      const importCost = (peakImport * p.elecRate + offPeak * p.offPeakRate) / 100;
+      const exportRevenue = solarExport * p.segRate / 100;
+      const elecStandingCost = p.elecStanding * 365 / 100;
+
+      // ---- gas ----
+      let gas=0;
+      if(c.hp){
+        if(!c.disconnectGas){ gas = (p.gasTotal*cookingFrac*p.gasRate)/100 + p.gasStanding*365/100; }
+      } else {
+        gas = (p.gasTotal*p.gasRate)/100 + p.gasStanding*365/100;
+      }
+
+      // ---- petrol ----
+      const petrol = c.ev ? 0 : (p.mileage/p.mpg)*LITRES_PER_GALLON*p.petrolPrice;
+
+      const running = importCost - exportRevenue + elecStandingCost + gas + petrol;
+
+      // ---- assets (annualised) ----
+      const carAsset = c.ev ? (this.ann(p.evPrice,p.evResidual,p.evLife)+p.evMaint)
+                            : (this.ann(p.carPrice,p.carResidual,p.carLife)+p.carMaint);
+      const heatAsset = c.hp ? (this.ann(p.hpPrice-p.busGrant,0,p.hpLife)+p.hpUpkeep)
+                             : (this.ann(p.boilerPrice,0,p.boilerLife)+p.boilerService+p.boilerRepairs);
+      const solarAsset = c.solar ? (this.ann(p.solarPrice,0,p.solarLife)+p.solarMaint) : 0;
+      const batteryAsset = c.battery ? this.ann(p.batteryPrice,0,p.batteryLife) : 0;
+      const assets = carAsset+heatAsset+solarAsset+batteryAsset;
+
+      const allIn = running + assets;
+
+      // ---- carbon: operational (kgCO2e/yr) ----
+      const petrolLitres = c.ev ? 0 : (p.mileage/p.mpg)*LITRES_PER_GALLON;
+      let gasKwhBurned;
+      if(c.hp){ gasKwhBurned = c.disconnectGas ? 0 : p.gasTotal*cookingFrac; }
+      else { gasKwhBurned = p.gasTotal; }
+      const gasFactor = p.gasCombustionKg * (1 + p.gasUpstreamPct/100);   // combustion + upstream methane
+      const petrolCO2 = petrolLitres * p.petrolKgPerL;
+      const gasCO2 = gasKwhBurned * gasFactor;
+      const gridCO2 = gridImport * p.gridIntensity / 1000;               // g → kg
+      const exportCO2Credit = solarExport * p.marginalIntensity / 1000;  // displaces gas generation
+      const opCO2 = petrolCO2 + gasCO2 + gridCO2 - exportCO2Credit;
+
+      // ---- carbon: embodied, amortised over each asset's life (kgCO2e/yr) ----
+      const carCO2 = c.ev ? (p.gliderEmbodied + p.evBatteryKwh*p.batteryCO2PerKwh)/p.vehicleLifeCarbon
+                          : (p.gliderEmbodied)/p.vehicleLifeCarbon;
+      const heatCO2 = c.hp ? p.hpEmbodied/p.hpLife : p.boilerEmbodied/p.boilerLife;
+      const solarCO2 = c.solar ? (p.solarLifecycleCO2 * solarGen / 1000) : 0;   // lifecycle intensity × annual gen
+      const batteryCO2 = c.battery ? (p.batteryKwh*p.batteryCO2PerKwh)/p.batteryLife : 0;
+      const embCO2 = carCO2 + heatCO2 + solarCO2 + batteryCO2;
+
+      const totalCO2 = opCO2 + embCO2;
+      const netGridCO2 = Math.max(0, gridCO2 - exportCO2Credit);
+      const carbonSegments=[
+        {key:'petrol', label:'Petrol', color:'var(--petrol)', value: petrolCO2},
+        {key:'gas', label:'Gas', color:'var(--gas)', value: gasCO2},
+        {key:'grid', label:'Grid electricity', color:'var(--grid)', value: netGridCO2},
+        {key:'car', label: c.ev?'EV embodied':'Car embodied', color: c.ev?'var(--ev)':'var(--petrol)', value: carCO2},
+        {key:'heat', label: c.hp?'Heat pump embodied':'Boiler embodied', color: c.hp?'var(--hp)':'var(--gas)', value: heatCO2},
+        {key:'solar', label:'Solar embodied', color:'var(--solar)', value: solarCO2},
+        {key:'battery', label:'Battery embodied', color:'var(--battery)', value: batteryCO2},
+      ].filter(s=>s.value>0.5);
+
+      // ---- ledger segments (sum to allIn) ----
+      const netElec = Math.max(0, importCost + elecStandingCost - exportRevenue);
+      const segments=[
+        {key:'petrol', label:'Petrol', color:'var(--petrol)', value: petrol},
+        {key:'gas', label:'Gas', color:'var(--gas)', value: gas},
+        {key:'elec', label:'Grid electricity', color:'var(--grid)', value: netElec},
+        {key:'car', label: c.ev?'EV asset':'Car asset', color: c.ev?'var(--ev)':'var(--petrol)', value: carAsset},
+        {key:'heat', label: c.hp?'Heat pump asset':'Boiler asset', color: c.hp?'var(--hp)':'var(--gas)', value: heatAsset},
+        {key:'solar', label:'Solar asset', color:'var(--solar)', value: solarAsset},
+        {key:'battery', label:'Battery asset', color:'var(--battery)', value: batteryAsset},
+      ].filter(s=>s.value>0.5);
+
+      return {
+        demand, evElec, hpElec, solarGen, solarSelf, solarExport, gridImport, offPeak,
+        selfPct: solarGen>0 ? Math.round(solarSelf/solarGen*100) : 0,
+        importCost, exportRevenue, elecStandingCost, gas, petrol, running,
+        carAsset, heatAsset, solarAsset, batteryAsset, assets, allIn, segments,
+        petrolCO2, gasCO2, gridCO2, exportCO2Credit, opCO2,
+        carCO2, heatCO2, solarCO2, batteryCO2, embCO2, totalCO2, carbonSegments,
+      };
+    },
+    applyKona(){
+      const k = this.konaPresets[this.konaChoice];
+      if(!k) return;
+      this.cfg.ev = k.ev;                                   // EV variant turns the car electric, petrol turns it back
+      Object.keys(k).forEach(key => { if(key !== 'ev') this.p[key] = k[key]; });
+    },
+    resetAll(){
+      this.p = JSON.parse(JSON.stringify(DEFAULTS));
+      this.cfg = { ev:false, hp:false, solar:false, battery:false, smartTariff:false, disconnectGas:false };
+      this.konaChoice = '';
+    },
+  },
+  mounted(){
+    document.querySelector('#app').removeAttribute('v-cloak');
+  }
+}).mount('#app');
+</script>
+<style>[v-cloak]{display:none}</style>
+</body>
+</html>

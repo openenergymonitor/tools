@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solar Matching — home energy & tariff explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#E9EDEC; --surface:#FBFCFB; --surface-2:#F1F4F3; --inset:#EEF2F1;
+  --ink:#16201E; --ink-soft:#46544F; --muted:#7E8C87; --line:#D9E0DE; --line-2:#C7D1CE;
+  --solar:#E29A22; --solar-deep:#B5760C; --solar-fill:rgba(226,154,34,.16);
+  --demand:#2B3A55; --import:#D44F31; --export:#149182; --battery:#6C5AC9; --ev:#2C7DA0;
+  --good:#149182;
+  --r:14px; --r-sm:9px;
+  --shadow:0 1px 2px rgba(22,32,30,.05), 0 8px 26px -14px rgba(22,32,30,.18);
+  --font-d:"Bricolage Grotesque",system-ui,sans-serif;
+  --font-b:"Inter",system-ui,sans-serif;
+  --font-m:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font-b);
+  font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(circle at 18% -10%,rgba(226,154,34,.10),transparent 42%),radial-gradient(circle at 110% 8%,rgba(20,145,130,.07),transparent 45%);
+  background-attachment:fixed;}
+[hidden]{display:none!important}
+.mono{font-family:var(--font-m);font-feature-settings:"tnum" 1;font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--font-m);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:500}
+
+.masthead{max-width:1320px;margin:0 auto;padding:28px 24px 8px;
+  display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:14px}
+.brand-mark{width:42px;height:42px;flex:none}
+.brand h1{font-family:var(--font-d);font-weight:800;font-size:27px;line-height:1;margin:0;letter-spacing:-.02em}
+.brand .tag{display:block;margin-top:5px;color:var(--ink-soft);font-size:13.5px;max-width:40ch}
+.tariff-toggle{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px}
+.seg button{font-family:var(--font-m);font-size:12px;letter-spacing:.04em;border:0;background:transparent;color:var(--ink-soft);
+  padding:7px 16px;border-radius:999px;cursor:pointer;transition:background .15s,color .15s;text-transform:uppercase}
+.seg button.active{background:var(--ink);color:#fff}
+.seg.solar button.active{background:var(--solar-deep)}
+.seg-cap{font-size:11px;color:var(--muted)}
+.synth-note{max-width:1320px;margin:6px auto 0;padding:0 24px}
+.synth-note .pill{display:inline-flex;gap:8px;align-items:center;background:rgba(226,154,34,.12);
+  border:1px solid rgba(181,118,12,.3);color:var(--solar-deep);border-radius:999px;padding:5px 12px;font-size:12.5px}
+.synth-note .pill b{font-weight:600}
+
+.layout{max-width:1320px;margin:0 auto;padding:18px 24px 64px;display:grid;
+  grid-template-columns:344px minmax(0,1fr);gap:22px;align-items:start}
+.controls{position:sticky;top:18px;display:flex;flex-direction:column;gap:14px}
+@media (max-width:980px){ .layout{grid-template-columns:1fr} .controls{position:static} }
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.panel-head{display:flex;align-items:center;gap:10px;padding:14px 16px 10px}
+.panel-head .dot{width:9px;height:9px;border-radius:3px;flex:none}
+.panel-head h2{font-family:var(--font-d);font-weight:700;font-size:15px;margin:0;letter-spacing:-.01em}
+.panel-head .k{margin-left:auto;font-family:var(--font-m);font-size:11.5px;color:var(--muted)}
+.panel-body{padding:4px 16px 16px;display:flex;flex-direction:column;gap:14px}
+.dot.solar{background:var(--solar)} .dot.demand{background:var(--demand)}
+.dot.ev{background:var(--ev)} .dot.battery{background:var(--battery)} .dot.tariff{background:var(--import)}
+
+.field-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:7px}
+.field-label{font-size:13px;color:var(--ink-soft);font-weight:500}
+.field-val{font-family:var(--font-m);font-weight:600;font-size:15px;color:var(--ink)}
+.field-val i{font-style:normal;color:var(--muted);font-weight:400;font-size:12px;margin-left:2px}
+.field-hint{margin-top:5px;font-size:11.5px;color:var(--muted);line-height:1.4}
+.slider{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:99px;background:var(--line-2);outline:none;margin:2px 0;cursor:pointer}
+.slider::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--surface);border:2px solid var(--solar-deep);box-shadow:0 1px 4px rgba(22,32,30,.25);cursor:pointer;transition:transform .12s}
+.slider::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--surface);border:2px solid var(--solar-deep);box-shadow:0 1px 4px rgba(22,32,30,.25);cursor:pointer}
+.slider:hover::-webkit-slider-thumb{transform:scale(1.08)}
+.slider:focus-visible{box-shadow:0 0 0 3px rgba(226,154,34,.3)}
+.subseg{display:inline-flex;background:var(--inset);border:1px solid var(--line);border-radius:8px;padding:2px;gap:2px}
+.subseg button{font-family:var(--font-m);font-size:11.5px;border:0;background:transparent;color:var(--ink-soft);padding:6px 12px;border-radius:6px;cursor:pointer;text-transform:uppercase;letter-spacing:.03em}
+.subseg button.active{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(22,32,30,.12)}
+.toggle{display:flex;align-items:center;gap:10px;background:none;border:0;padding:0;cursor:pointer;font-family:var(--font-b);text-align:left}
+.toggle-track{width:38px;height:22px;border-radius:99px;background:var(--line-2);position:relative;transition:background .18s;flex:none}
+.toggle-knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .18s}
+.toggle.on .toggle-track{background:var(--battery)}
+.toggle.on .toggle-knob{transform:translateX(16px)}
+.toggle-label{font-size:13px;color:var(--ink-soft);font-weight:500}
+.toggle:focus-visible .toggle-track{box-shadow:0 0 0 3px rgba(108,90,201,.3)}
+.sub{padding:12px 0 2px;border-top:1px dashed var(--line);display:flex;flex-direction:column;gap:13px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.note-inline{font-size:12px;color:var(--muted);background:var(--inset);border-radius:var(--r-sm);padding:10px 12px;line-height:1.45}
+
+.results{display:flex;flex-direction:column;gap:22px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.card-pad{padding:20px 22px}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.card-head h3{font-family:var(--font-d);font-weight:700;font-size:17px;margin:0;letter-spacing:-.01em}
+
+.hero{padding:24px 26px 22px;position:relative;overflow:hidden}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1.25fr) auto;gap:30px;align-items:center}
+@media (max-width:620px){.hero-grid{grid-template-columns:1fr;gap:20px}}
+.cost-figure{font-family:var(--font-m);font-weight:600;font-size:clamp(44px,8vw,66px);line-height:.95;letter-spacing:-.02em;margin-top:10px}
+.cost-sub{margin-top:10px;color:var(--ink-soft);font-size:14px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.cost-sub .alt{font-family:var(--font-m);color:var(--ink);font-weight:500}
+.save-badge{display:inline-flex;align-items:center;gap:8px;margin-top:16px;background:rgba(20,145,130,.1);border:1px solid rgba(20,145,130,.28);color:var(--export);border-radius:999px;padding:7px 14px;font-size:13.5px}
+.save-badge .big{font-family:var(--font-m);font-weight:600;font-size:17px}
+.save-badge.neg{background:rgba(212,79,49,.1);border-color:rgba(212,79,49,.28);color:var(--import)}
+.rings{display:flex;gap:22px}
+.ring{display:flex;flex-direction:column;align-items:center;gap:8px;width:124px}
+.ring-box{position:relative;width:120px;height:120px}
+.ring .cap{font-size:12px;color:var(--ink-soft);text-align:center;line-height:1.3}
+
+.balance{margin-top:22px;padding-top:20px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:16px}
+.bal-row .bal-top{display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink-soft);margin-bottom:6px;gap:10px;flex-wrap:wrap}
+.bal-bar{height:14px;border-radius:7px;overflow:hidden;display:flex;background:var(--inset)}
+.bal-bar span{height:100%;transition:width .35s cubic-bezier(.4,0,.2,1)}
+.bal-legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--ink-soft);margin-top:8px}
+.bal-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:middle}
+
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface);box-shadow:var(--shadow)}
+.tile{padding:16px 18px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.tile .t-lab{font-size:12px;color:var(--muted);margin-bottom:6px}
+.tile .t-val{font-family:var(--font-m);font-weight:600;font-size:22px;letter-spacing:-.01em}
+.tile .t-val i{font-style:normal;font-size:13px;color:var(--muted);font-weight:400;margin-left:3px}
+.tile .t-sub{font-size:11.5px;color:var(--ink-soft);margin-top:3px}
+
+.chart-box{position:relative;height:300px;margin-top:14px}
+@media (max-width:520px){.chart-box{height:240px}}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-soft);margin-top:12px;align-items:center}
+.legend .lg{display:inline-flex;align-items:center;gap:7px}
+.legend .sw{width:14px;height:10px;border-radius:3px;display:inline-block}
+.legend .sw.line{height:0;border-top:2.5px solid;width:16px;border-radius:0}
+.month-pick{display:inline-flex;align-items:center;gap:8px}
+.month-pick select{font-family:var(--font-m);font-size:13px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:6px 10px;cursor:pointer}
+
+.tbl-wrap{overflow-x:auto;margin-top:6px}
+table.data{width:100%;border-collapse:collapse;font-family:var(--font-m);font-size:12.5px}
+table.data th,table.data td{padding:9px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
+table.data th{font-weight:500;color:var(--muted);font-size:11px;letter-spacing:.05em;text-transform:uppercase}
+table.data th:first-child,table.data td:first-child{text-align:left}
+table.data tbody tr:hover{background:var(--inset)}
+table.data tfoot td{font-weight:600;border-top:2px solid var(--line-2);border-bottom:0;color:var(--ink)}
+.cell-imp{color:var(--import)} .cell-exp{color:var(--export)}
+.foot{max-width:1320px;margin:0 auto;padding:8px 24px 40px;color:var(--muted);font-size:12px;line-height:1.5}
+.loading{display:flex;align-items:center;justify-content:center;min-height:50vh;color:var(--muted);font-family:var(--font-m);gap:12px}
+.spin{width:18px;height:18px;border:2px solid var(--line-2);border-top-color:var(--solar);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header class="masthead">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+        <path d="M3 34 H45" stroke="var(--line-2)" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 34 A18 18 0 0 1 42 34" stroke="var(--solar)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <circle cx="24" cy="20.5" r="7" fill="var(--solar)"/>
+        <g stroke="var(--solar-deep)" stroke-width="2" stroke-linecap="round">
+          <path d="M24 6 V10"/><path d="M10 20.5 H6"/><path d="M42 20.5 H38"/><path d="M13 9.5 l2.6 2.6"/><path d="M35 9.5 l-2.6 2.6"/>
+        </g>
+        <path d="M19 41 l4-5 4 5" stroke="var(--export)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div>
+        <h1>Solar Matching</h1>
+        <span class="tag">See how solar, a battery, your heat pump, EV and time-of-use pricing reshape a year of home energy.</span>
+      </div>
+    </div>
+    <div class="tariff-toggle">
+      <span class="seg-cap">Show results on</span>
+      <div class="seg solar">
+        <button :class="{active: activeTariff==='flat'}" @click="activeTariff='flat'">Flat rate</button>
+        <button :class="{active: activeTariff==='agile'}" @click="activeTariff='agile'">Agile</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="synth-note" v-if="usingSynthetic">
+    <span class="pill"><b>Demo data</b> · the live dataset wasn’t found, so a realistic synthetic year is in use. Drop in <span class="mono">solarmatching_data.json</span> to model your own.</span>
+  </div>
+
+  <div class="loading" v-if="!a"><span class="spin"></span> Building your energy year…</div>
+
+  <div class="layout" v-if="a">
+
+    <aside class="controls">
+      <section class="panel">
+        <div class="panel-head"><span class="dot solar"></span><h2>Solar array</h2><span class="k">PV generation</span></div>
+        <div class="panel-body">
+          <slider-field label="Array size" unit="kWp" :min="0" :max="15" :step="0.25" :dp="2" v-model="p.solar_kWp" hint="Peak DC capacity of the panels."></slider-field>
+          <slider-field label="Annual yield" unit="kWh/kWp" :min="600" :max="1150" :step="10" v-model="p.solar_kWh_per_kWp" hint="Expected generation per kWp — depends on roof pitch, orientation and location."></slider-field>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><span class="dot demand"></span><h2>Home demand</h2><span class="k">consumption</span></div>
+        <div class="panel-body">
+          <slider-field label="Lights, appliances & cooking" unit="kWh/yr" :min="500" :max="6000" :step="10" v-model="p.lac_demand"></slider-field>
+          <slider-field label="Heat demand" unit="kWh/yr" :min="0" :max="25000" :step="50" v-model="p.heat_demand" hint="Annual heat delivered to the home."></slider-field>
+          <slider-field label="Heat pump SCOP" unit="" :min="1" :max="5" :step="0.1" :dp="1" v-model="p.heatpump_scop" hint="Seasonal efficiency — heat out per unit of electricity in."></slider-field>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><span class="dot ev"></span><h2>Electric vehicle</h2></div>
+        <div class="panel-body">
+          <div class="subseg" role="group" aria-label="EV charging source">
+            <button :class="{active:p.ev_mode==='simulated'}" @click="p.ev_mode='simulated'">Simulated</button>
+            <button :class="{active:p.ev_mode==='real'}" @click="p.ev_mode='real'">Measured</button>
+          </div>
+          <template v-if="p.ev_mode==='simulated'">
+            <slider-field label="Annual mileage" unit="mi" :min="0" :max="30000" :step="500" v-model="p.ev_miles"></slider-field>
+            <slider-field label="Efficiency" unit="mi/kWh" :min="2" :max="6" :step="0.1" :dp="1" v-model="p.ev_efficiency"></slider-field>
+            <slider-field label="Charge rate" unit="kW" :min="1.4" :max="22" :step="0.1" :dp="1" v-model="p.ev_charge_power"></slider-field>
+            <div class="row2">
+              <slider-field label="Charge from" unit="h" :min="0" :max="23" :step="1" v-model="p.ev_charge_start_hour"></slider-field>
+              <slider-field label="Charge until" unit="h" :min="1" :max="23" :step="1" v-model="p.ev_charge_end_hour"></slider-field>
+            </div>
+          </template>
+          <div class="note-inline" v-else>Using the recorded half-hourly charging power from the dataset. The annual EV total is fixed by the measurements.</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><span class="dot battery"></span><h2>Battery</h2><span class="k">storage</span></div>
+        <div class="panel-body">
+          <slider-field label="Capacity" unit="kWh" :min="0" :max="30" :step="0.5" :dp="1" v-model="p.battery.capacity" hint="Set to 0 for no battery."></slider-field>
+          <template v-if="p.battery.capacity>0">
+            <slider-field label="Starting charge" unit="kWh" :min="0" :max="p.battery.capacity" :step="0.5" :dp="1" v-model="p.battery.soc_start"></slider-field>
+            <div class="row2">
+              <slider-field label="Charge eff." unit="" :min="0.7" :max="1" :step="0.01" :dp="2" v-model="p.battery.charge_efficiency"></slider-field>
+              <slider-field label="Discharge eff." unit="" :min="0.7" :max="1" :step="0.01" :dp="2" v-model="p.battery.discharge_efficiency"></slider-field>
+            </div>
+            <div class="sub">
+              <toggle-field label="Charge overnight from the grid" v-model="p.battery.overnight_charge_enable"></toggle-field>
+              <template v-if="p.battery.overnight_charge_enable">
+                <div class="row2">
+                  <slider-field label="From" unit="h" :min="0" :max="23" :step="1" v-model="p.battery.overnight_charge_start_hour"></slider-field>
+                  <slider-field label="Until" unit="h" :min="1" :max="23" :step="1" v-model="p.battery.overnight_charge_end_hour"></slider-field>
+                </div>
+                <slider-field label="Charge up to" unit="%" :min="10" :max="100" :step="5" v-model="p.battery.overnight_charge_target_pct"></slider-field>
+              </template>
+            </div>
+            <div class="sub">
+              <toggle-field label="Force discharge at peak" v-model="p.battery.force_discharge_enable"></toggle-field>
+              <div class="row2" v-if="p.battery.force_discharge_enable">
+                <slider-field label="From" unit="h" :min="0" :max="23" :step="1" v-model="p.battery.force_discharge_start_hour"></slider-field>
+                <slider-field label="Until" unit="h" :min="1" :max="23" :step="1" v-model="p.battery.force_discharge_end_hour"></slider-field>
+              </div>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><span class="dot tariff"></span><h2>Flat-rate tariff</h2><span class="k">comparison</span></div>
+        <div class="panel-body">
+          <slider-field label="Import price" unit="p/kWh" :min="5" :max="50" :step="0.5" :dp="1" v-model="p.import_rate"></slider-field>
+          <slider-field label="Export price" unit="p/kWh" :min="0" :max="30" :step="0.5" :dp="1" v-model="p.export_rate"></slider-field>
+          <div class="note-inline">Agile import &amp; export prices come from the half-hourly dataset and update automatically.</div>
+        </div>
+      </section>
+    </aside>
+
+    <main class="results">
+
+      <section class="card hero">
+        <div class="hero-grid">
+          <div>
+            <div class="eyebrow">Net annual cost · {{ activeTariff==='agile' ? 'Agile tariff' : 'Flat-rate tariff' }}</div>
+            <div class="cost-figure" :style="{color: headline.cost<0 ? 'var(--export)' : 'var(--ink)'}">{{ money(headline.cost) }}</div>
+            <div class="cost-sub">
+              <span v-if="headline.cost<0">a net credit across the year</span>
+              <span v-else>to import power for the year</span>
+              <span>·</span>
+              <span>{{ headline.otherLabel }} <span class="alt">{{ money(headline.other) }}</span></span>
+            </div>
+            <div class="save-badge" :class="{neg: headline.saving<0}">
+              <span class="big">{{ pct(Math.abs(headline.saving),1) }}</span>
+              <span>{{ headline.saving>=0 ? 'cheaper than no solar or battery' : 'more than no solar or battery' }}</span>
+            </div>
+          </div>
+          <div class="rings">
+            <div class="ring">
+              <div class="ring-box"><canvas ref="ssCanvas"></canvas></div>
+              <span class="cap">Self-sufficiency<br>demand met on-site</span>
+            </div>
+            <div class="ring">
+              <div class="ring-box"><canvas ref="scCanvas"></canvas></div>
+              <span class="cap">Self-consumption<br>solar used, not exported</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="balance" v-if="balance">
+          <div class="bal-row">
+            <div class="bal-top"><span>Where your {{ fmt0(a.demand_kwh) }} kWh of demand comes from</span>
+              <span class="mono">{{ fmt0(balance.fromLocal) }} on-site · {{ fmt0(balance.imp) }} grid</span></div>
+            <div class="bal-bar">
+              <span :style="{width:balance.demandLocalPc+'%',background:'var(--solar)'}"></span>
+              <span :style="{width:balance.demandImportPc+'%',background:'var(--import)'}"></span>
+            </div>
+            <div class="bal-legend"><span><i style="background:var(--solar)"></i>Solar &amp; battery</span><span><i style="background:var(--import)"></i>Grid import</span></div>
+          </div>
+          <div class="bal-row">
+            <div class="bal-top"><span>Where your {{ fmt0(a.solar_kwh) }} kWh of solar goes</span>
+              <span class="mono">{{ fmt0(balance.selfUsed) }} used · {{ fmt0(balance.ex) }} exported</span></div>
+            <div class="bal-bar">
+              <span :style="{width:balance.solarSelfPc+'%',background:'var(--demand)'}"></span>
+              <span :style="{width:balance.solarExportPc+'%',background:'var(--export)'}"></span>
+            </div>
+            <div class="bal-legend"><span><i style="background:var(--demand)"></i>Used at home</span><span><i style="background:var(--export)"></i>Exported to grid</span></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="tiles">
+        <div class="tile"><div class="t-lab">Solar generated</div><div class="t-val">{{ fmt0(a.solar_kwh) }}<i>kWh</i></div><div class="t-sub">{{ fmt2(p.solar_kWp) }} kWp array</div></div>
+        <div class="tile"><div class="t-lab">Total demand</div><div class="t-val">{{ fmt0(a.demand_kwh) }}<i>kWh</i></div><div class="t-sub">home · heat · transport</div></div>
+        <div class="tile"><div class="t-lab">Grid import</div><div class="t-val" style="color:var(--import)">{{ fmt0(a.import_kwh) }}<i>kWh</i></div><div class="t-sub">avg {{ fmt1(a.avg_agile_import_rate) }} p/kWh on Agile</div></div>
+        <div class="tile"><div class="t-lab">Grid export</div><div class="t-val" style="color:var(--export)">{{ fmt0(a.export_kwh) }}<i>kWh</i></div><div class="t-sub">avg {{ fmt1(a.avg_agile_export_rate) }} p/kWh on Agile</div></div>
+        <div class="tile"><div class="t-lab">Heat pump electricity</div><div class="t-val">{{ fmt0(a.heatpump_elec_kwh) }}<i>kWh</i></div><div class="t-sub">at SCOP {{ fmt1(p.heatpump_scop) }}</div></div>
+        <div class="tile"><div class="t-lab">EV electricity</div><div class="t-val">{{ fmt0(a.ev_elec_kwh) }}<i>kWh</i></div><div class="t-sub">{{ p.ev_mode==='real' ? 'measured' : fmt0(p.ev_miles)+' mi/yr' }}</div></div>
+      </div>
+
+      <section class="card card-pad">
+        <div class="card-head">
+          <div><div class="eyebrow">Average day · half-hourly</div><h3>A typical day in {{ monthName }}</h3></div>
+          <label class="month-pick">
+            <span class="eyebrow" style="letter-spacing:.1em">Month</span>
+            <select v-model.number="selectedMonth"><option v-for="o in monthOptions" :value="o.m">{{ o.label }}</option></select>
+          </label>
+        </div>
+        <div v-if="daySeries">
+          <div class="chart-box"><canvas ref="dayCanvas"></canvas></div>
+          <div class="legend">
+            <span class="lg"><span class="sw" style="background:var(--solar)"></span>Solar</span>
+            <span class="lg"><span class="sw line" style="border-color:var(--demand)"></span>Demand</span>
+            <span class="lg" v-if="daySeries.hasBattery"><span class="sw line" style="border-color:var(--battery);border-style:dashed"></span>Battery charge (to {{ fmt1(daySeries.maxSoc) }} kWh)</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card card-pad">
+        <div class="card-head">
+          <div><div class="eyebrow">Month by month</div><h3>{{ monthlyMetric==='cost' ? 'Cost across the year' : 'Energy flows across the year' }}</h3></div>
+          <div class="subseg">
+            <button :class="{active:monthlyMetric==='cost'}" @click="monthlyMetric='cost'">Cost</button>
+            <button :class="{active:monthlyMetric==='energy'}" @click="monthlyMetric='energy'">Energy</button>
+          </div>
+        </div>
+        <div>
+          <div class="chart-box"><canvas ref="monthCanvas"></canvas></div>
+          <div class="legend" v-if="monthlyMetric==='cost'">
+            <span class="lg"><span class="sw" style="background:var(--muted)"></span>Flat rate</span>
+            <span class="lg"><span class="sw" style="background:var(--solar)"></span>Agile</span>
+          </div>
+          <div class="legend" v-else>
+            <span class="lg"><span class="sw" style="background:var(--import)"></span>Import</span>
+            <span class="lg"><span class="sw" style="background:var(--export)"></span>Export</span>
+            <span class="lg"><span class="sw" style="background:var(--solar)"></span>Solar</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card card-pad">
+        <div class="card-head"><div><div class="eyebrow">The numbers</div><h3>Monthly breakdown</h3></div></div>
+        <div class="tbl-wrap">
+          <table class="data">
+            <thead><tr><th>Month</th><th>Solar</th><th>Demand</th><th>Import</th><th>Export</th><th>Agile £</th><th>Flat £</th><th>Batt SOC</th></tr></thead>
+            <tbody>
+              <tr v-for="row in result.monthly.table" :key="row.m">
+                <td>{{ row.month }}</td><td>{{ fmt0(row.solar_kwh) }}</td><td>{{ fmt0(row.demand_kwh) }}</td>
+                <td class="cell-imp">{{ fmt0(row.import_kwh) }}</td><td class="cell-exp">{{ fmt0(row.export_kwh) }}</td>
+                <td>{{ money(row.agile_cost) }}</td><td>{{ money(row.flat_cost) }}</td><td>{{ fmt1(row.soc) }}</td>
+              </tr>
+            </tbody>
+            <tfoot v-if="totals">
+              <tr><td>Total</td><td>{{ fmt0(totals.solar_kwh) }}</td><td>{{ fmt0(totals.demand_kwh) }}</td>
+                <td class="cell-imp">{{ fmt0(totals.import_kwh) }}</td><td class="cell-exp">{{ fmt0(totals.export_kwh) }}</td>
+                <td>{{ money(totals.agile_cost) }}</td><td>{{ money(totals.flat_cost) }}</td><td>—</td></tr>
+            </tfoot>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <footer class="foot" v-if="a">
+    Self-sufficiency is the share of demand met without importing; self-consumption is the share of generation used on-site. Savings compare against meeting all demand from the grid with no solar or battery, on the same tariff. The monthly table reflects each completed month in the dataset.
+  </footer>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="tools/solarmatching/model.js"></script>
+<script>
+const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue;
+
+// design-token palette (canvas can't read CSS vars)
+const C = {
+  solar:'#E29A22', solarDeep:'#B5760C', solarFill:'rgba(226,154,34,.18)',
+  demand:'#2B3A55', imp:'#D44F31', exp:'#149182', battery:'#6C5AC9',
+  inset:'#EAEEED', line:'#D9E0DE', muted:'#7E8C87', ink:'#16201E', inkSoft:'#46544F'
+};
+
+if (typeof Chart !== 'undefined') {
+  Chart.defaults.font.family = "'IBM Plex Mono', ui-monospace, monospace";
+  Chart.defaults.font.size = 11;
+  Chart.defaults.color = C.muted;
+  Chart.defaults.animation = false;
+  Chart.defaults.maintainAspectRatio = false;
+  Chart.defaults.plugins.legend.display = false;
+  Chart.defaults.plugins.tooltip.backgroundColor = C.ink;
+  Chart.defaults.plugins.tooltip.padding = 10;
+  Chart.defaults.plugins.tooltip.cornerRadius = 8;
+  Chart.defaults.plugins.tooltip.titleFont = { family:"'IBM Plex Mono', monospace", size:11, weight:'600' };
+  Chart.defaults.plugins.tooltip.bodyFont = { family:"'IBM Plex Mono', monospace", size:12 };
+  Chart.defaults.plugins.tooltip.boxPadding = 5;
+}
+
+const app = createApp({
+  setup() {
+    const loaded = ref(false);
+    const usingSynthetic = ref(false);
+    const activeTariff = ref('agile');
+    const monthlyMetric = ref('cost');
+    const selectedMonth = ref(7);
+
+    const p = reactive(JSON.parse(JSON.stringify(model.defaultParams())));
+    p.battery.capacity = 5;
+    p.solar_kWp = 4;
+
+    const result = ref(null);
+    let timer = null;
+    const recompute = () => { if (loaded.value) result.value = Object.freeze(model.run(p)); };
+    const schedule = () => { clearTimeout(timer); timer = setTimeout(recompute, 90); };
+    watch(p, schedule, { deep: true });
+
+    // canvas refs
+    const dayCanvas = ref(null), monthCanvas = ref(null), ssCanvas = ref(null), scCanvas = ref(null);
+
+    onMounted(() => {
+      model.load('tools/solarmatching/solarmatching_data.json', () => {
+        loaded.value = true;
+        usingSynthetic.value = model.usingSynthetic;
+        recompute();
+        const tbl = result.value.monthly.table;
+        if (tbl && tbl.length) {
+          const jun = tbl.find(r => r.m === 7) || tbl.find(r => r.m === 6) || tbl[0];
+          selectedMonth.value = jun.m;
+        }
+      });
+    });
+
+    const a = computed(() => result.value ? result.value.annual : null);
+
+    // ---- formatting ----
+    const fmt0 = n => (n == null || !isFinite(n)) ? '—' : Math.round(n).toLocaleString('en-GB');
+    const fmt2 = n => (n == null || !isFinite(n)) ? '—' : Number(n).toLocaleString('en-GB',{maximumFractionDigits:2});
+    const fmt1 = n => (n == null || !isFinite(n)) ? '—' : (Math.round(n*10)/10).toLocaleString('en-GB',{minimumFractionDigits:1,maximumFractionDigits:1});
+    const money = n => { if (n == null || !isFinite(n)) return '—'; const v = Math.round(n); return (v < 0 ? '−£' : '£') + Math.abs(v).toLocaleString('en-GB'); };
+    const pct = (n,dp=0) => (n == null || !isFinite(n)) ? '—' : (dp? fmt1(n): fmt0(n)) + '%';
+    const clamp = (n,lo,hi) => Math.max(lo, Math.min(hi, n));
+
+    const headline = computed(() => {
+      if (!a.value) return {};
+      const isAgile = activeTariff.value === 'agile';
+      return { cost: isAgile ? a.value.agile_cost : a.value.cost, other: isAgile ? a.value.cost : a.value.agile_cost,
+        otherLabel: isAgile ? 'Flat-rate equivalent' : 'Agile equivalent', saving: isAgile ? a.value.agile_saving : a.value.saving };
+    });
+
+    const balance = computed(() => {
+      if (!a.value) return null;
+      const d = a.value.demand_kwh, imp = a.value.import_kwh, fromLocal = Math.max(0, d - imp);
+      const s = a.value.solar_kwh, ex = a.value.export_kwh, selfUsed = Math.max(0, s - ex);
+      return { demandLocalPc: clamp(100*fromLocal/(d||1),0,100), demandImportPc: clamp(100*Math.min(imp,d)/(d||1),0,100),
+        solarSelfPc: s>0 ? clamp(100*selfUsed/s,0,100) : 0, solarExportPc: s>0 ? clamp(100*ex/s,0,100) : 0,
+        fromLocal, imp, selfUsed, ex };
+    });
+
+    const selfSuff = computed(() => a.value ? clamp(a.value.prc_from_solar,0,100) : 0);
+    const selfCons = computed(() => a.value ? clamp(a.value.prc_self_consumption,0,100) : 0);
+
+    // ---- average-day series for selected month (Chart.js points) ----
+    const daySeries = computed(() => {
+      if (!result.value) return null;
+      const sd = result.value.solar_data, dd = result.value.demand_data, oc = result.value.soc_data;
+      const start = model.data_start_time, iv = model.interval*1000;
+      const sumS = new Array(96).fill(0), sumD = new Array(96).fill(0), sumO = new Array(96).fill(0), cnt = new Array(96).fill(0);
+      for (let i=0;i<sd.length;i++){
+        const dt = new Date(start + i*iv);
+        if (dt.getMonth()+1 !== selectedMonth.value) continue;
+        const slot = dt.getHours()*4 + Math.floor(dt.getMinutes()/15);
+        sumS[slot]+=sd[i]; sumD[slot]+=dd[i]; sumO[slot]+=oc[i]; cnt[slot]++;
+      }
+      const solar=[],demand=[],soc=[]; let firstSun=-1,lastSun=-1;
+      for (let s=0;s<96;s++){ const c=cnt[s]||1; const x=s*0.25;
+        const sv=sumS[s]/c/1000; solar.push({x,y:sv}); demand.push({x,y:sumD[s]/c/1000}); soc.push({x,y:sumO[s]/c});
+        if(sv>0.01){ if(firstSun<0) firstSun=x; lastSun=x; } }
+      const cap = p.battery.capacity;
+      const maxSoc = cap>0 ? cap : Math.max(0.1, ...soc.map(o=>o.y));
+      return { solar, demand, soc, hasBattery: cap>0, maxSoc,
+        dawn: firstSun<0?6:firstSun, dusk: lastSun<0?18:lastSun };
+    });
+
+    const monthName = computed(() => { const r = result.value; if (!r) return '';
+      const row = r.monthly.table.find(t=>t.m===selectedMonth.value); return row ? row.month : ''; });
+    const monthOptions = computed(() => result.value ? result.value.monthly.table.map(t=>({m:t.m,label:t.month})) : []);
+
+    const totals = computed(() => { const r = result.value; if (!r) return null;
+      return r.monthly.table.reduce((acc,row)=>{ ['solar_kwh','demand_kwh','import_kwh','export_kwh','agile_cost','flat_cost'].forEach(k=>acc[k]+=row[k]); return acc; },
+        {solar_kwh:0,demand_kwh:0,import_kwh:0,export_kwh:0,agile_cost:0,flat_cost:0}); });
+
+    // ================= Chart.js =================
+    let dayInst=null, monthInst=null, ssInst=null, scInst=null;
+
+    const gaugeText = { id:'gaugeText', afterDraw(c){
+      const {ctx} = c; const ar = c.chartArea; if(!ar) return;
+      const cx=(ar.left+ar.right)/2, cy=(ar.top+ar.bottom)/2;
+      ctx.save(); ctx.font='600 21px "IBM Plex Mono", monospace'; ctx.fillStyle=C.ink;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(Math.round(c.$val||0)+'%', cx, cy); ctx.restore();
+    }};
+    const daylightBand = { id:'daylightBand', beforeDatasetsDraw(c){
+      const x=c.scales.x, ar=c.chartArea; if(!x||!ar||c.$dawn==null) return;
+      const a0=x.getPixelForValue(c.$dawn), a1=x.getPixelForValue(c.$dusk);
+      c.ctx.save(); c.ctx.fillStyle='rgba(226,154,34,.07)'; c.ctx.fillRect(a0,ar.top,a1-a0,ar.bottom-ar.top); c.ctx.restore();
+    }};
+
+    function gaugeCfg(val,color){ return {
+      type:'doughnut',
+      data:{ datasets:[{ data:[clamp(val,0,100), 100-clamp(val,0,100)], backgroundColor:[color,C.inset], borderWidth:0 }] },
+      options:{ cutout:'76%', rotation:0, plugins:{ tooltip:{enabled:false} }, events:[] },
+      plugins:[gaugeText]
+    };}
+
+    function dayCfg(){ const d=daySeries.value;
+      const ds=[
+        { label:'Solar', data:d.solar, borderColor:C.solar, backgroundColor:C.solarFill, fill:'origin',
+          borderWidth:2, pointRadius:0, tension:0.35, yAxisID:'y' },
+        { label:'Demand', data:d.demand, borderColor:C.demand, backgroundColor:'transparent', fill:false,
+          borderWidth:2.2, pointRadius:0, tension:0.35, yAxisID:'y' },
+        { label:'Battery', data:d.soc, borderColor:C.battery, backgroundColor:'transparent', fill:false,
+          borderWidth:2, borderDash:[5,4], pointRadius:0, tension:0.3, yAxisID:'y1', hidden:!d.hasBattery }
+      ];
+      return { type:'line', data:{datasets:ds}, options:{
+        interaction:{ mode:'index', intersect:false },
+        scales:{
+          x:{ type:'linear', min:0, max:24, grid:{ color:C.line }, border:{display:false},
+            ticks:{ stepSize:6, callback:v=> v+':00' }, title:{display:true,text:'hour',color:C.muted,font:{size:10}} },
+          y:{ beginAtZero:true, grid:{ color:C.line }, border:{display:false},
+            title:{display:true,text:'kW',color:C.muted,font:{size:10}} },
+          y1:{ position:'right', beginAtZero:true, max:d.maxSoc, display:d.hasBattery,
+            grid:{ drawOnChartArea:false }, border:{display:false},
+            ticks:{ color:C.battery }, title:{display:true,text:'SOC kWh',color:C.battery,font:{size:10}} }
+        },
+        plugins:{ tooltip:{ callbacks:{
+          title:items=>{ const v=items[0].parsed.x; const h=Math.floor(v); const m=Math.round((v-h)*60); return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'); },
+          label:ctx=> ctx.dataset.label+': '+fmt2(ctx.parsed.y)+(ctx.dataset.yAxisID==='y1'?' kWh':' kW')
+        }}}
+      }, plugins:[daylightBand] };
+    }
+
+    function monthCfg(){ const rows=result.value.monthly.table; const labels=rows.map(r=>r.month); let datasets;
+      if(monthlyMetric.value==='cost'){
+        datasets=[ { label:'Flat rate', data:rows.map(r=>r.flat_cost), backgroundColor:C.muted },
+                   { label:'Agile', data:rows.map(r=>r.agile_cost), backgroundColor:C.solar } ];
+      } else {
+        datasets=[ { label:'Import', data:rows.map(r=>r.import_kwh), backgroundColor:C.imp },
+                   { label:'Export', data:rows.map(r=>r.export_kwh), backgroundColor:C.exp },
+                   { label:'Solar', data:rows.map(r=>r.solar_kwh), backgroundColor:C.solar } ];
+      }
+      datasets.forEach(d=>{ d.borderRadius=3; d.borderSkipped=false; d.maxBarThickness=26; });
+      const isCost = monthlyMetric.value==='cost';
+      return { type:'bar', data:{labels,datasets}, options:{
+        scales:{ x:{ grid:{display:false}, border:{display:false} },
+          y:{ beginAtZero:true, grid:{color:C.line}, border:{display:false},
+            ticks:{ callback:v=> isCost? ('£'+v) : v } } },
+        plugins:{ tooltip:{ callbacks:{ label:ctx=> ctx.dataset.label+': '+(isCost? money(ctx.parsed.y) : fmt0(ctx.parsed.y)+' kWh') } } }
+      }};
+    }
+
+    function destroyAll(){ [dayInst,monthInst,ssInst,scInst].forEach(c=>c&&c.destroy()); dayInst=monthInst=ssInst=scInst=null; }
+    function render(){
+      if (typeof Chart==='undefined' || !result.value || !dayCanvas.value) return;
+      destroyAll();
+      ssInst = new Chart(ssCanvas.value, gaugeCfg(selfSuff.value, C.solar)); ssInst.$val=selfSuff.value;
+      scInst = new Chart(scCanvas.value, gaugeCfg(selfCons.value, C.exp)); scInst.$val=selfCons.value;
+      ssInst.update(); scInst.update();
+      dayInst = new Chart(dayCanvas.value, dayCfg()); dayInst.$dawn=daySeries.value.dawn; dayInst.$dusk=daySeries.value.dusk; dayInst.update();
+      monthInst = new Chart(monthCanvas.value, monthCfg());
+    }
+    watch([result, selectedMonth, monthlyMetric], async () => { await nextTick(); render(); }, { flush:'post' });
+
+    return {
+      loaded, usingSynthetic, activeTariff, monthlyMetric, selectedMonth,
+      p, result, a, headline, balance, selfSuff, selfCons,
+      daySeries, monthName, monthOptions, totals,
+      dayCanvas, monthCanvas, ssCanvas, scCanvas,
+      fmt0, fmt1, fmt2, money, pct
+    };
+  }
+});
+
+app.component('slider-field', {
+  props: ['label','hint','unit','min','max','step','modelValue','dp'],
+  emits: ['update:modelValue'],
+  computed: { disp(){ const d=this.dp||0; return Number(this.modelValue).toLocaleString('en-GB',{minimumFractionDigits:d,maximumFractionDigits:d}); } },
+  template: `
+    <div class="field">
+      <div class="field-top"><label class="field-label">{{label}}</label>
+        <span class="field-val">{{disp}}<i v-if="unit">{{unit}}</i></span></div>
+      <input type="range" class="slider" :min="min" :max="max" :step="step" :value="modelValue"
+        @input="$emit('update:modelValue', Number($event.target.value))">
+      <div class="field-hint" v-if="hint">{{hint}}</div>
+    </div>`
+});
+app.component('toggle-field', {
+  props: ['label','modelValue'], emits: ['update:modelValue'],
+  template: `
+    <button class="toggle" :class="{on: modelValue}" role="switch" :aria-checked="modelValue?'true':'false'"
+      @click="$emit('update:modelValue', !modelValue)">
+      <span class="toggle-track"><span class="toggle-knob"></span></span>
+      <span class="toggle-label">{{label}}</span>
+    </button>`
+});
+app.mount('#app');
+
+</script>
+
+</body>
+</html>
