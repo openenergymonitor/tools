@@ -64,7 +64,7 @@
   table.grid{border-collapse:separate;border-spacing:3px;width:100%;}
   table.grid th,table.grid td{padding:8px 6px;text-align:center;font-size:12.5px;border-radius:6px;}
   table.grid thead th{color:var(--muted);font-weight:600;font-family:"Space Grotesk";background:var(--panel2);}
-  table.grid td{font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums;color:#0d1217;font-weight:600;}
+  table.grid td{font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums;color:var(--text);font-weight:600;}
   th.rowhead{text-align:right;color:var(--text);font-weight:600;background:var(--panel2);white-space:nowrap;padding-right:12px;min-width:96px;}
   th.rowhead small{display:block;color:var(--faint);font-weight:500;font-size:10.5px;font-family:"JetBrains Mono";}
   th.rowhead em{display:block;color:var(--hp);font-style:normal;font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-family:"JetBrains Mono";}
@@ -92,9 +92,8 @@
       half-hourly model. Vary the home's <span style="color:var(--solar)">solar</span> and
       <span style="color:var(--battery)">battery</span> capacity below and watch how the picture changes.</p>
     <div class="assump">
-      <span class="chip"><b>10,040 kWh</b> delivered heat/yr</span>
       <span class="chip">on an <b>Agile</b> tariff</span>
-      <span class="chip">gas <b>7.33p/kWh</b>, boiler <b>90%</b></span>
+      <span class="chip">gas <b>7.33p/kWh</b>, boiler <b>85%</b></span>
       <span class="chip">capital discounted at <b>3%/yr</b></span>
     </div>
   </div>
@@ -109,6 +108,11 @@
       <label>Battery <span class="val battery" id="batteryVal">5 kWh</span></label>
       <input type="range" id="battery" min="0" max="20" step="1" value="5">
       <div class="scale"><span>0</span><span>10</span><span>20 kWh</span></div>
+    </div>
+    <div class="ctrl" style="grid-column:1/-1">
+      <label>Heat delivered <span class="val" id="heatVal" style="color:var(--hp)">10,000 kWh</span></label>
+      <input type="range" id="heat" min="4000" max="25000" step="500" value="10000">
+      <div class="scale"><span>4k</span><span>14k</span><span>25k kWh/yr</span></div>
     </div>
     <div class="presets" style="grid-column:1/-1">
       <button data-s="0" data-b="0">No solar / battery</button>
@@ -125,14 +129,6 @@
   </div>
   <p class="warn" id="warn">⚠ Live dataset not found — using synthetic year (shape is indicative only).</p>
   <div class="context" id="context">loading model…</div>
-
-  <!-- per-kWh framing -->
-  <div class="card">
-    <h2>The race is per kWh of heat delivered</h2>
-    <p class="sub">A heat pump beats gas when its electricity ÷ SCOP undercuts gas ÷ boiler efficiency.
-      The Agile average moves a little with solar/battery as the import/export mix shifts.</p>
-    <table class="mini"><tbody id="perkwh"></tbody></table>
-  </div>
 
   <div class="legend">
     <span><i class="sw" style="background:rgba(84,192,138,.8)"></i> heat pump saves money</span>
@@ -161,11 +157,11 @@
 </div>
 
 <script src="tools/solarmatching/model.js?v=2"></script>
-<script src="tools/solarmatching/ledger.js?v=1"></script>
+<script src="tools/solarmatching/ledger.js?v=2"></script>
 <script>
 (function(){
   var SCOPS = [1.0,1.5,2.0,2.5,3.0,3.5,4.0,4.5,5.0];
-  var GROSS = [0,1500,3000,4500,6000,7500,9000,10500,12000,13500,15000];
+  var GROSS = [6000,7500,9000,10500,12000,13500,15000,16500,18000,19500];
 
   // memoised model runner (keys include solar/battery/scop, so no need to clear)
   var cache = new Map();
@@ -180,7 +176,12 @@
     {p:p, useHHModel:true, modelReady:true, optimalDispatch:OPTIMAL, runModel:runModel}); }
 
   function makeP(solar, battery){ var p = JSON.parse(JSON.stringify(ledger.DEFAULTS));
-    p.solarKwp = solar; p.batteryKwh = battery; return p; }
+    p.solarKwp = solar; p.batteryKwh = battery;
+    p.boilerEff = 0.85;
+    // back-solve gasTotal so the ledger's derived delivered heat matches the slider
+    var heat = parseFloat(el('heat').value);
+    p.gasTotal = heat / ((p.heatingPct + p.waterPct) / 100 * p.boilerEff);
+    return p; }
   function baseFlags(solar, battery){ var f=['agile'];
     if(solar>0) f.push('solar'); if(battery>0) f.push('battery'); return f; }
 
@@ -194,6 +195,21 @@
 
   function money(v){ return (v>=0?'+£':'−£') + Math.abs(Math.round(v)).toLocaleString('en-GB'); }
 
+  // WCAG relative luminance, used to pick a readable text colour for each heat-map
+  // cell. The fill is a translucent green/red composited over the dark card; faint
+  // cells stay dark and need light text, vivid cells need dark ink.
+  var CARD_BG = [22, 28, 35];   // approx card background behind the cells
+  function lin(c){ c /= 255; return c <= 0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4); }
+  function relLum(r,g,b){ return 0.2126*lin(r) + 0.7152*lin(g) + 0.0722*lin(b); }
+  function cellStyle(v, a){
+    var base = v >= 0 ? [84,192,138] : [216,105,77];   // --good / --bad
+    var R = base[0]*a + CARD_BG[0]*(1-a),
+        G = base[1]*a + CARD_BG[1]*(1-a),
+        B = base[2]*a + CARD_BG[2]*(1-a);
+    var fg = relLum(R,G,B) > 0.18 ? '#0d1217' : '#eef3f8';
+    return 'background:rgba('+base[0]+','+base[1]+','+base[2]+','+a.toFixed(3)+');color:'+fg;
+  }
+
   function buildTable(solar, battery, grant, maxAbs){
     var h = '<table class="grid"><thead><tr><th class="rowhead">' +
       (grant ? 'Gross install<small>net after £'+grant.toLocaleString()+'</small>' : 'Gross install') + '</th>';
@@ -206,37 +222,20 @@
         (isDef ? '<em>typical</em>' : '') + '</th>';
       SCOPS.forEach(function(s){
         var v = hpMarg(solar, battery, gc, grant, s);
-        var a = Math.min(0.85, 0.10 + 0.75*Math.abs(v)/maxAbs);
-        var bg = v>=0 ? 'rgba(84,192,138,'+a.toFixed(3)+')' : 'rgba(216,105,77,'+a.toFixed(3)+')';
-        h += '<td style="background:'+bg+'">'+money(v)+'</td>';
+        var a = Math.min(0.90, 0.16 + 0.74*Math.abs(v)/maxAbs);
+        h += '<td style="'+cellStyle(v, a)+'">'+money(v)+'</td>';
       });
       h += '</tr>';
     });
     return h + '</tbody></table>';
   }
 
-  function renderPerKwh(p, agileAvg){
-    var gasPerKwh = p.gasRate / p.boilerEff;
-    var rows = [
-      ['Gas boiler', gasPerKwh, 'gas'],
-      ['Heat pump · SCOP 2 · flat', p.elecRate/2, 'hp'],
-      ['Heat pump · SCOP 3 · flat', p.elecRate/3, 'hp'],
-      ['Heat pump · SCOP 4 · flat', p.elecRate/4, 'hp'],
-      ['Heat pump · SCOP 4 · Agile', agileAvg/4, 'hp'],
-      ['Heat pump · SCOP 5 · flat', p.elecRate/5, 'hp'],
-    ];
-    return rows.map(function(r){
-      var lbl=r[0], v=r[1], c=r[2], beats=v<=gasPerKwh;
-      var tag = c==='gas' ? '<span class="tag gas">baseline</span>'
-        : (beats ? '<span class="tag good">cheaper than gas</span>' : '<span class="tag bad">dearer than gas</span>');
-      return '<tr><td>'+lbl+'</td><td class="num">'+v.toFixed(2)+'p</td><td>'+tag+'</td></tr>';
-    }).join('');
-  }
 
   function el(id){ return document.getElementById(id); }
   function updateLabels(){
     el('solarVal').textContent = parseFloat(el('solar').value).toFixed(1)+' kWp';
     el('batteryVal').textContent = parseFloat(el('battery').value)+' kWh';
+    el('heatVal').textContent = parseInt(el('heat').value,10).toLocaleString()+' kWh';
   }
 
   function render(){
@@ -250,14 +249,17 @@
     var p = makeP(solar, battery); p.scop = 4;
     var full = run(baseFlags(solar, battery).concat('hp'), p);
     var agileAvg = full.avgAgileImport || run(['agile'], p).avgAgileImport;
+    var gbp = function(x){ return '£' + Math.round(x).toLocaleString(); };
+    var solarCost = solar > 0 ? ledger.solarCapital(p) : 0;
+    var batteryCost = battery > 0 ? ledger.batteryCapital(p) : 0;
     document.getElementById('context').innerHTML =
       'Build: <b>'+solar.toFixed(1)+' kWp</b> solar + <b>'+battery+' kWh</b> battery + heat pump (SCOP 4) on Agile &nbsp;·&nbsp; ' +
       'solar gen <b>'+Math.round(full.solarGen).toLocaleString()+' kWh</b> &nbsp;·&nbsp; ' +
       'self-consumed <b>'+full.selfPct+'%</b> &nbsp;·&nbsp; ' +
       'grid import <b>'+Math.round(full.gridImport).toLocaleString()+' kWh</b> &nbsp;·&nbsp; ' +
-      'avg Agile import <b>'+agileAvg.toFixed(1)+'p</b>';
-
-    document.getElementById('perkwh').innerHTML = renderPerKwh(p, agileAvg);
+      'avg Agile import <b>'+agileAvg.toFixed(1)+'p</b>' +
+      (solarCost ? ' &nbsp;·&nbsp; solar install <b style="color:var(--solar)">'+gbp(solarCost)+'</b>' : '') +
+      (batteryCost ? ' &nbsp;·&nbsp; battery install <b style="color:var(--battery)">'+gbp(batteryCost)+'</b>' : '');
 
     // shared colour scale across both tables for this setting
     var maxAbs = 1;
@@ -288,6 +290,7 @@
 
   el('solar').addEventListener('input', requestRender);
   el('battery').addEventListener('input', requestRender);
+  el('heat').addEventListener('input', requestRender);
   el('optimal').addEventListener('change', requestRender);
   Array.prototype.forEach.call(document.querySelectorAll('.presets button'), function(b){
     b.addEventListener('click', function(){

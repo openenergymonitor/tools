@@ -409,7 +409,9 @@
           <div class="fields">
             <div class="field"><label>System size <span class="unit">kWp</span></label><input type="number" step="0.5" v-model.number="p.solarKwp"></div>
             <div class="field"><label>Yield <span class="unit">kWh/kWp/yr</span></label><input type="number" v-model.number="p.genPerKwp"></div>
-            <div class="field"><label>Install cost <span class="unit">£</span></label><input type="number" v-model.number="p.solarPrice"></div>
+            <div class="field"><label>Base install <span class="unit">£</span></label><input type="number" v-model.number="p.solarFixed"></div>
+            <div class="field"><label>Marginal <span class="unit">£/kWp</span></label><input type="number" v-model.number="p.solarPerKwp"></div>
+            <div class="field"><label>Install cost <span class="unit">£</span></label><input type="number" :value="Math.round(solarCapital)" disabled></div>
             <div class="field"><label>Lifespan <span class="unit">yrs</span></label><input type="number" v-model.number="p.solarLife"></div>
             <div class="field"><label>Upkeep (inverter etc.) <span class="unit">£/yr</span></label><input type="number" v-model.number="p.solarMaint"></div>
           </div>
@@ -419,7 +421,9 @@
           <summary>Battery <span class="chev">›</span></summary>
           <div class="fields">
             <div class="field"><label>Usable capacity <span class="unit">kWh</span></label><input type="number" step="0.5" v-model.number="p.batteryKwh"></div>
-            <div class="field"><label>Install cost <span class="unit">£</span></label><input type="number" v-model.number="p.batteryPrice"></div>
+            <div class="field"><label>Base install <span class="unit">£</span></label><input type="number" v-model.number="p.batteryFixed"></div>
+            <div class="field"><label>Marginal <span class="unit">£/kWh</span></label><input type="number" v-model.number="p.batteryPerKwh"></div>
+            <div class="field"><label>Install cost <span class="unit">£</span></label><input type="number" :value="Math.round(batteryCapital)" disabled></div>
             <div class="field"><label>Lifespan <span class="unit">yrs</span></label><input type="number" v-model.number="p.batteryLife"></div>
           </div>
         </details>
@@ -562,7 +566,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
 <script src="tools/solarmatching/model.js?v=2"></script>
-<script src="tools/solarmatching/ledger.js?v=1"></script>
+<script src="tools/solarmatching/ledger.js?v=2"></script>
 <script>
 const { createApp } = Vue;
 
@@ -639,10 +643,13 @@ createApp({
       let x=0;
       if(this.cfg.ev) x += this.p.evPrice - this.p.carPrice;
       if(this.cfg.hp) x += (this.p.hpPrice - this.p.busGrant) - this.p.boilerPrice;
-      if(this.cfg.solar) x += this.p.solarPrice;
-      if(this.cfg.battery) x += this.p.batteryPrice;
+      if(this.cfg.solar) x += this.solarCapital;
+      if(this.cfg.battery) x += this.batteryCapital;
       return x;
     },
+    // gross install cost, scaled with system size (fixed + marginal per unit)
+    solarCapital(){ return ledger.solarCapital(this.p); },
+    batteryCapital(){ return ledger.batteryCapital(this.p); },
     carbonSaving(){ return this.statusQuo.totalCO2 - this.current.totalCO2; },
     // shared linear scale for the carbon bars (mirrors costScaleMax)
     carbonScaleMax(){ return Math.max(this.statusQuo.totalCO2, this.current.totalCO2, 1); },

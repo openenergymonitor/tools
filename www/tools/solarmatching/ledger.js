@@ -40,10 +40,15 @@
         evEfficiency: 3.7, evChargeStart: 0, evChargeEnd: 7, evPrice: 33500, evLife: 12, evResidual: 6000, evMaint: 300, evBatteryKwh: 64,
         // heat pump
         scop: 4.0, hpPrice: 12000, busGrant: 7500, hpLife: 18, hpUpkeep: 200, inductionEff: 0.6,
-        // solar
-        solarKwp: 4, genPerKwp: 950, solarPrice: 5500, solarLife: 25, solarMaint: 30,
-        // battery
-        batteryKwh: 5, batteryPrice: 4000, batteryLife: 15, batteryUtil: 0.8,
+        // solar — install cost modelled as a fixed component (scaffolding, inverter,
+        // design, MCS, labour) plus a marginal £/kWp for panels & mounting, so the
+        // £/kWp falls with system size. Fit to Octopus quotes: 5 kWp £7.5k, 8 kWp
+        // £10.9k, 16.4 kWp £18k.
+        solarKwp: 4, genPerKwp: 950, solarFixed: 3200, solarPerKwp: 900, solarLife: 25, solarMaint: 30,
+        // battery — fixed component (hybrid inverter, install) plus a marginal £/kWh
+        // for cells, so the £/kWh falls with capacity. Anchored to a 13.5 kWh
+        // Powerwall add-on (~£4.1k) with a 5 kWh budget add-on (~£1.2k) as the floor.
+        batteryKwh: 5, batteryFixed: 500, batteryPerKwh: 270, batteryLife: 15, batteryUtil: 0.8,
         // discounting — real (above-inflation) discount rate, %/yr, applied to capital
         discountRate: 3,
         // advanced — annual solar-matching estimate (used when the half-hourly model is off)
@@ -75,6 +80,17 @@
         var crf = r * Math.pow(1 + r, life) / (Math.pow(1 + r, life) - 1);   // capital recovery factor
         var pvResidual = residual / Math.pow(1 + r, life);                   // resale received at end of life
         return crf * (price - pvResidual);
+    }
+
+    // Capacity-dependent capital cost: a fixed install component plus a marginal
+    // per-unit rate. Because the fixed part is spread over more capacity, the
+    // effective £/kWp (solar) and £/kWh (battery) fall as the system grows —
+    // economies of scale. Returns the gross install price (pre-discounting).
+    function solarCapital(p) {
+        return (p.solarFixed || 0) + (p.solarPerKwp || 0) * p.solarKwp;
+    }
+    function batteryCapital(p) {
+        return (p.batteryFixed || 0) + (p.batteryPerKwh || 0) * p.batteryKwh;
     }
 
     // Map the ledger's build + assumptions onto model.js parameters and run the
@@ -187,8 +203,8 @@
                             : (ann(p, p.carPrice, p.carResidual, p.carLife) + p.carMaint);
         var heatAsset = c.hp ? (ann(p, p.hpPrice - p.busGrant, 0, p.hpLife) + p.hpUpkeep)
                              : (ann(p, p.boilerPrice, 0, p.boilerLife) + p.boilerService + p.boilerRepairs);
-        var solarAsset = c.solar ? (ann(p, p.solarPrice, 0, p.solarLife) + p.solarMaint) : 0;
-        var batteryAsset = c.battery ? ann(p, p.batteryPrice, 0, p.batteryLife) : 0;
+        var solarAsset = c.solar ? (ann(p, solarCapital(p), 0, p.solarLife) + p.solarMaint) : 0;
+        var batteryAsset = c.battery ? ann(p, batteryCapital(p), 0, p.batteryLife) : 0;
         var assets = carAsset + heatAsset + solarAsset + batteryAsset;
 
         var allIn = running + assets;
@@ -266,6 +282,8 @@
         LITRES_PER_GALLON: LITRES_PER_GALLON,
         DEFAULTS: DEFAULTS,
         ann: ann,
+        solarCapital: solarCapital,
+        batteryCapital: batteryCapital,
         flowsHH: flowsHH,
         compute: compute,
         flipCfg: flipCfg,
