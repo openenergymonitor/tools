@@ -50,6 +50,41 @@
   .status{font-family:"JetBrains Mono";font-size:11.5px;color:var(--hp);white-space:nowrap;}
   .status.busy{color:var(--gas);}
 
+  /* ---- tariff & prices ---- */
+  .prices{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px 26px;border-top:1px solid var(--line);margin-top:18px;padding-top:16px;}
+  .prices .agilebox{display:inline-flex;align-items:center;gap:9px;font-family:"Space Grotesk";font-weight:600;font-size:13px;color:var(--text);cursor:pointer;padding-bottom:7px;}
+  .prices .agilebox input{width:16px;height:16px;accent-color:var(--hp);cursor:pointer;}
+  .prices .field{display:flex;flex-direction:column;gap:6px;}
+  .prices .field label{font-family:"Space Grotesk";font-weight:600;font-size:12px;color:var(--muted);}
+  .prices .field label .unit{font-family:"JetBrains Mono";font-weight:500;color:var(--faint);}
+  .prices input[type=number]{width:96px;background:var(--ink);border:1px solid var(--line2);border-radius:8px;color:var(--text);font-family:"JetBrains Mono";font-size:14px;font-weight:700;padding:7px 9px;}
+  .prices input[type=number]:focus{outline:none;border-color:var(--hp);}
+  .prices input[type=number]:disabled{opacity:.35;cursor:not-allowed;}
+
+  /* metric segmented slider — switches the table cells between the two views */
+  .metric-wrap{display:flex;flex-direction:column;gap:6px;align-items:flex-end;}
+  .segmented{position:relative;display:grid;grid-template-columns:1fr 1fr;width:max-content;
+    background:var(--ink);border:1px solid var(--line2);border-radius:999px;padding:3px;
+    box-shadow:inset 0 1px 3px rgba(0,0,0,.4);}
+  .segmented input{position:absolute;width:0;height:0;opacity:0;margin:0;pointer-events:none;}
+  .segmented .thumb{position:absolute;top:3px;bottom:3px;left:3px;right:50%;
+    background:linear-gradient(180deg,#3ec3ba,var(--hp));border-radius:999px;
+    box-shadow:0 1px 6px rgba(0,0,0,.45);
+    transition:left .26s cubic-bezier(.4,.05,.2,1),right .26s cubic-bezier(.4,.05,.2,1);}
+  .segmented.on-payback .thumb{left:50%;right:3px;}
+  .segmented label{position:relative;z-index:1;display:block;text-align:center;
+    padding:5px 14px;border-radius:999px;cursor:pointer;user-select:none;white-space:nowrap;
+    font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:12px;
+    color:var(--muted);transition:color .2s;}
+  .segmented #m-saving:checked ~ label[for="m-saving"],
+  .segmented #m-payback:checked ~ label[for="m-payback"]{color:#06231f;}
+  .metric-wrap .hint{color:var(--muted);font-weight:400;font-size:11px;font-family:"Inter";text-align:right;}
+
+  /* card header — title block on the left, metric toggle pinned top-right */
+  .cardhead{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;flex-wrap:wrap;margin-bottom:16px;}
+  .cardhead h2{margin:0 0 4px;}
+  .cardhead .sub{margin:0;}
+
   .context{display:flex;flex-wrap:wrap;gap:8px 22px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 18px;margin:14px 0 24px;font-size:12.5px;color:var(--muted);}
   .context b{color:var(--text);font-family:"JetBrains Mono";font-weight:600;}
   .warn{color:var(--gas);font-size:12.5px;margin:8px 0 0;display:none;}
@@ -92,8 +127,8 @@
       half-hourly model. Vary the home's <span style="color:var(--solar)">solar</span> and
       <span style="color:var(--battery)">battery</span> capacity below and watch how the picture changes.</p>
     <div class="assump">
-      <span class="chip">on an <b>Agile</b> tariff</span>
-      <span class="chip">gas <b>7.33p/kWh</b>, boiler <b>85%</b></span>
+      <span class="chip" id="chipTariff">on an <b>Agile</b> tariff</span>
+      <span class="chip">gas <b id="chipGas">7.33p/kWh</b>, boiler <b>85%</b></span>
       <span class="chip">capital discounted at <b>3%/yr</b></span>
     </div>
   </div>
@@ -122,23 +157,44 @@
       <button data-s="10" data-b="20">Max 10 kWp + 20 kWh</button>
     </div>
     <div class="toggle">
-      <label><input type="checkbox" id="optimal">Optimal (cost-minimising) battery dispatch
+      <label><input type="checkbox" id="optimal">Optimal battery dispatch
         <span class="hint">perfect-foresight arbitrage against Agile prices — slower</span></label>
       <span class="status" id="status"></span>
+    </div>
+    <div class="prices">
+      <label class="agilebox"><input type="checkbox" id="agile" checked> Agile tariff</label>
+      <div class="field">
+        <label for="elecRate">Flat electric <span class="unit">p/kWh</span></label>
+        <input type="number" id="elecRate" min="0" max="100" step="0.01" value="26.11" disabled>
+      </div>
+      <div class="field">
+        <label for="gasRate">Gas price <span class="unit">p/kWh</span></label>
+        <input type="number" id="gasRate" min="0" max="50" step="0.01" value="7.33">
+      </div>
     </div>
   </div>
   <p class="warn" id="warn">⚠ Live dataset not found — using synthetic year (shape is indicative only).</p>
   <div class="context" id="context">loading model…</div>
 
-  <div class="legend">
-    <span><i class="sw" style="background:rgba(84,192,138,.8)"></i> heat pump saves money</span>
-    <span><i class="sw" style="background:rgba(216,105,77,.8)"></i> heat pump loses money</span>
-    <span>stronger colour = bigger effect · <b style="color:var(--hp)">outlined row</b> = typical £12k install</span>
-  </div>
+  <div class="legend" id="legend"></div>
 
   <div class="card">
-    <h2>Table 1 — With the £7,500 BUS grant</h2>
-    <p class="sub">Rows show the installer's gross price; the small figure is what you finance after the grant.</p>
+    <div class="cardhead">
+      <div>
+        <h2>Table 1 — With the £7,500 BUS grant</h2>
+        <p class="sub">Rows show the installer's gross price; the small figure is what you finance after the grant.</p>
+      </div>
+      <div class="metric-wrap">
+        <div class="segmented" id="metric">
+          <span class="thumb"></span>
+          <input type="radio" name="metric" id="m-saving" value="saving" checked>
+          <label for="m-saving">Saving</label>
+          <input type="radio" name="metric" id="m-payback" value="payback">
+          <label for="m-payback">Payback</label>
+        </div>
+        <span class="hint" id="metricHint">£/yr the heat pump saves vs the gas boiler (inc capital)</span>
+      </div>
+    </div>
     <div class="tablescroll" id="t1"></div>
   </div>
 
@@ -169,6 +225,8 @@
     if(!r){ if(cache.size>800) cache.clear(); r = model.run(mp); cache.set(k,r); } return r; }
 
   var OPTIMAL = false;   // battery dispatch mode, driven by the toggle
+  var PAYBACK = false;   // cell metric: false = annual saving, true = payback years
+  var AGILE = true;      // tariff: true = half-hourly Agile, false = flat elecRate
 
   function cfg(flags){ var c={ev:0,hp:0,solar:0,battery:0,agile:0,disconnectGas:0};
     flags.forEach(function(f){c[f]=1;}); if(c.hp)c.disconnectGas=1; return c; }
@@ -178,22 +236,51 @@
   function makeP(solar, battery){ var p = JSON.parse(JSON.stringify(ledger.DEFAULTS));
     p.solarKwp = solar; p.batteryKwh = battery;
     p.boilerEff = 0.85;
+    // user-set prices (gas always; flat elec rate used when Agile is off)
+    var g = parseFloat(el('gasRate').value);  if(isFinite(g)) p.gasRate = g;
+    var e = parseFloat(el('elecRate').value); if(isFinite(e)) p.elecRate = e;
     // back-solve gasTotal so the ledger's derived delivered heat matches the slider
     var heat = parseFloat(el('heat').value);
     p.gasTotal = heat / ((p.heatingPct + p.waterPct) / 100 * p.boilerEff);
     return p; }
-  function baseFlags(solar, battery){ var f=['agile'];
+  function baseFlags(solar, battery){ var f = AGILE ? ['agile'] : [];
     if(solar>0) f.push('solar'); if(battery>0) f.push('battery'); return f; }
 
-  function hpMarg(solar, battery, grossCost, grant, scop){
+  // One cell's economics. `saving` is the annualised marginal (+ = HP saves vs gas,
+  // capital discounted, matching the rest of the model). `payback` is the simple
+  // payback time: the heat pump's extra upfront cash (net of grant, vs a new boiler)
+  // divided by the annual operating saving (energy + upkeep, capital stripped out).
+  function hpCell(solar, battery, grossCost, grant, scop){
     var p = makeP(solar, battery); p.scop = scop; p.hpPrice = grossCost; p.busGrant = grant;
     var base = baseFlags(solar, battery);
     var wo = run(base, p);
     var w  = run(base.concat('hp'), p);
-    return wo.allIn - w.allIn;       // + = HP saves vs gas boiler
+    var saving = wo.allIn - w.allIn;                       // + = HP saves vs gas boiler
+    // strip the annualised capital back out to get the pure operating saving
+    var hpCap = ledger.ann(p, p.hpPrice - p.busGrant, 0, p.hpLife);
+    var boCap = ledger.ann(p, p.boilerPrice, 0, p.boilerLife);
+    var opSaving = saving + (hpCap - boCap);               // energy + upkeep saving, no capital
+    var upfront = (p.hpPrice - p.busGrant) - p.boilerPrice;// extra cash up front vs a new boiler
+    var payback;
+    if(opSaving >= 0){
+      payback = (upfront <= 0) ? 0 : upfront / opSaving;   // ahead from day one, or normal simple payback
+    } else {
+      // cheaper to run is false: any upfront head-start erodes by |opSaving| each year
+      var crossover = upfront / opSaving;                  // year the cumulative position turns negative
+      payback = (upfront >= 0)          ? Infinity         // behind from day one and worsening — never
+              : (crossover >= p.hpLife) ? 0                // head-start outlasts the unit — ahead for its whole life
+              :                          -crossover;       // ahead until this year, behind after → "good Ny"
+    }
+    return { saving:saving, payback:payback, life:p.hpLife };
   }
 
   function money(v){ return (v>=0?'+£':'−£') + Math.abs(Math.round(v)).toLocaleString('en-GB'); }
+  function fmtPayback(y){
+    if(!isFinite(y)) return 'never';
+    if(y === 0)      return 'now';
+    var n = Math.abs(y), s = n.toFixed(n<10?1:0)+' y';     // y<0 = ahead until n years, behind after
+    return y < 0 ? '>  '+s : s;
+  }
 
   // WCAG relative luminance, used to pick a readable text colour for each heat-map
   // cell. The fill is a translucent green/red composited over the dark card; faint
@@ -201,13 +288,22 @@
   var CARD_BG = [22, 28, 35];   // approx card background behind the cells
   function lin(c){ c /= 255; return c <= 0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4); }
   function relLum(r,g,b){ return 0.2126*lin(r) + 0.7152*lin(g) + 0.0722*lin(b); }
-  function cellStyle(v, a){
-    var base = v >= 0 ? [84,192,138] : [216,105,77];   // --good / --bad
+  function paint(base, a){
+    a = Math.max(0.16, Math.min(0.90, a));
     var R = base[0]*a + CARD_BG[0]*(1-a),
         G = base[1]*a + CARD_BG[1]*(1-a),
         B = base[2]*a + CARD_BG[2]*(1-a);
     var fg = relLum(R,G,B) > 0.18 ? '#0d1217' : '#eef3f8';
     return 'background:rgba('+base[0]+','+base[1]+','+base[2]+','+a.toFixed(3)+');color:'+fg;
+  }
+  function cellStyle(v, a){ return paint(v >= 0 ? [84,192,138] : [216,105,77], a); }
+  // payback heat-map: green if it recoups within the heat pump's own life, red beyond
+  // (or never). Shorter payback → stronger green; longer / never → stronger red.
+  function paybackStyle(yrs, life){
+    if(!isFinite(yrs)) return paint([216,105,77], 0.90);
+    if(yrs < 0)        return paint([216,105,77], 0.16 + 0.74*(1 - Math.min(1, -yrs/life)));  // "good Ny": sooner crossover = stronger red
+    if(yrs <= life)    return paint([84,192,138], 0.16 + 0.74*(1 - yrs/life));
+    return paint([216,105,77], 0.16 + 0.74*Math.min(1, (yrs-life)/life));
   }
 
   function buildTable(solar, battery, grant, maxAbs){
@@ -221,9 +317,13 @@
         (grant ? '<small>'+(net<0?'−£'+Math.abs(net).toLocaleString():'£'+net.toLocaleString())+'</small>' : '') +
         (isDef ? '<em>typical</em>' : '') + '</th>';
       SCOPS.forEach(function(s){
-        var v = hpMarg(solar, battery, gc, grant, s);
-        var a = Math.min(0.90, 0.16 + 0.74*Math.abs(v)/maxAbs);
-        h += '<td style="'+cellStyle(v, a)+'">'+money(v)+'</td>';
+        var c = hpCell(solar, battery, gc, grant, s);
+        if(PAYBACK){
+          h += '<td style="'+paybackStyle(c.payback, c.life)+'">'+fmtPayback(c.payback)+'</td>';
+        } else {
+          var a = Math.min(0.90, 0.16 + 0.74*Math.abs(c.saving)/maxAbs);
+          h += '<td style="'+cellStyle(c.saving, a)+'">'+money(c.saving)+'</td>';
+        }
       });
       h += '</tr>';
     });
@@ -238,8 +338,24 @@
     el('heatVal').textContent = parseInt(el('heat').value,10).toLocaleString()+' kWh';
   }
 
+  var LEGEND_SAVING =
+    '<span><i class="sw" style="background:rgba(84,192,138,.8)"></i> heat pump saves money</span>' +
+    '<span><i class="sw" style="background:rgba(216,105,77,.8)"></i> heat pump loses money</span>' +
+    '<span>stronger colour = bigger effect · <b style="color:var(--hp)">outlined row</b> = typical £12k install</span>';
+  var LEGEND_PAYBACK =
+    '<span><i class="sw" style="background:rgba(84,192,138,.8)"></i> recoups within its lifetime</span>' +
+    '<span><i class="sw" style="background:rgba(216,105,77,.8)"></i> beyond its lifetime, never, or <b>good Ny</b> = ahead only N years</span>' +
+    '<span>shorter payback = stronger green · <b style="color:var(--hp)">outlined row</b> = typical £12k install</span>';
+
   function render(){
     OPTIMAL = el('optimal').checked;
+    PAYBACK = el('m-payback').checked;
+    AGILE = el('agile').checked;
+    el('elecRate').disabled = AGILE;           // flat rate is only used when Agile is off
+    el('chipTariff').innerHTML = AGILE ? 'on an <b>Agile</b> tariff'
+      : 'on a <b>flat ' + parseFloat(el('elecRate').value).toFixed(2) + 'p/kWh</b> tariff';
+    el('chipGas').textContent = parseFloat(el('gasRate').value).toFixed(2) + 'p/kWh';
+    el('legend').innerHTML = PAYBACK ? LEGEND_PAYBACK : LEGEND_SAVING;
     var t0 = performance.now();
     var solar = parseFloat(el('solar').value);
     var battery = parseFloat(el('battery').value);
@@ -248,23 +364,27 @@
     // build context readout: the base+HP build at the typical £12k / SCOP4 install
     var p = makeP(solar, battery); p.scop = 4;
     var full = run(baseFlags(solar, battery).concat('hp'), p);
-    var agileAvg = full.avgAgileImport || run(['agile'], p).avgAgileImport;
     var gbp = function(x){ return '£' + Math.round(x).toLocaleString(); };
     var solarCost = solar > 0 ? ledger.solarCapital(p) : 0;
     var batteryCost = battery > 0 ? ledger.batteryCapital(p) : 0;
+    var tariff = AGILE ? 'Agile' : 'a flat '+parseFloat(el('elecRate').value).toFixed(2)+'p tariff';
+    var importBit = AGILE
+      ? 'avg Agile import <b>'+(full.avgAgileImport || run(['agile'], p).avgAgileImport).toFixed(1)+'p</b>'
+      : 'flat import <b>'+parseFloat(el('elecRate').value).toFixed(2)+'p</b>';
     document.getElementById('context').innerHTML =
-      'Build: <b>'+solar.toFixed(1)+' kWp</b> solar + <b>'+battery+' kWh</b> battery + heat pump (SCOP 4) on Agile &nbsp;·&nbsp; ' +
+      'Build: <b>'+solar.toFixed(1)+' kWp</b> solar + <b>'+battery+' kWh</b> battery + heat pump (SCOP 4) on '+tariff+' &nbsp;·&nbsp; ' +
       'solar gen <b>'+Math.round(full.solarGen).toLocaleString()+' kWh</b> &nbsp;·&nbsp; ' +
       'self-consumed <b>'+full.selfPct+'%</b> &nbsp;·&nbsp; ' +
       'grid import <b>'+Math.round(full.gridImport).toLocaleString()+' kWh</b> &nbsp;·&nbsp; ' +
-      'avg Agile import <b>'+agileAvg.toFixed(1)+'p</b>' +
+      importBit +
       (solarCost ? ' &nbsp;·&nbsp; solar install <b style="color:var(--solar)">'+gbp(solarCost)+'</b>' : '') +
       (batteryCost ? ' &nbsp;·&nbsp; battery install <b style="color:var(--battery)">'+gbp(batteryCost)+'</b>' : '');
 
-    // shared colour scale across both tables for this setting
+    // shared colour scale across both tables for this setting (saving mode only;
+    // payback mode scales each cell against the heat pump's lifetime instead)
     var maxAbs = 1;
-    [7500,0].forEach(function(g){ GROSS.forEach(function(gc){ SCOPS.forEach(function(s){
-      maxAbs = Math.max(maxAbs, Math.abs(hpMarg(solar, battery, gc, g, s))); }); }); });
+    if(!PAYBACK){ [7500,0].forEach(function(g){ GROSS.forEach(function(gc){ SCOPS.forEach(function(s){
+      maxAbs = Math.max(maxAbs, Math.abs(hpCell(solar, battery, gc, g, s).saving)); }); }); }); }
 
     el('t1').innerHTML = buildTable(solar, battery, 7500, maxAbs);
     el('t2').innerHTML = buildTable(solar, battery, 0, maxAbs);
@@ -280,6 +400,12 @@
   // seconds). Debounced so dragging a slider only resolves once it settles.
   var timer = null;
   function requestRender(){
+    // instant visual feedback for the metric slider (the heavy solve is debounced)
+    var pb = el('m-payback').checked;
+    el('metric').classList.toggle('on-payback', pb);
+    el('metricHint').textContent = pb
+      ? 'years to recoup the heat pump’s extra upfront cost from running savings'
+      : '£/yr the heat pump saves vs the gas boiler';
     updateLabels();
     var status = el('status');
     status.className = 'status busy';
@@ -292,6 +418,10 @@
   el('battery').addEventListener('input', requestRender);
   el('heat').addEventListener('input', requestRender);
   el('optimal').addEventListener('change', requestRender);
+  el('metric').addEventListener('change', requestRender);
+  el('agile').addEventListener('change', requestRender);
+  el('gasRate').addEventListener('input', requestRender);
+  el('elecRate').addEventListener('input', requestRender);
   Array.prototype.forEach.call(document.querySelectorAll('.presets button'), function(b){
     b.addEventListener('click', function(){
       el('solar').value = b.dataset.s;
