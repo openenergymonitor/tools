@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Heat pump · install cost × SCOP (live)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#10151b; --panel:#171e26; --panel2:#1e2731; --line:#2c3742; --line2:#384654;
+    --text:#e7edf3; --muted:#8a97a5; --faint:#5f6c79;
+    --gas:#ef9b3e; --grid:#4aa3df; --solar:#f5c542; --battery:#54c08a; --hp:#39b5ac; --ev:#8a86f5;
+    --good:#54c08a; --bad:#d8694d;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:radial-gradient(1200px 600px at 85% -10%, #1a2530 0%, rgba(26,37,48,0) 60%), var(--ink);
+    color:var(--text); font-family:"Inter",system-ui,sans-serif; font-size:14px; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{font-family:"JetBrains Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;}
+  h1,h2,h3,.display{font-family:"Space Grotesk",sans-serif;}
+  .wrap{max-width:1180px;margin:0 auto;padding:30px 22px 90px;}
+  .eyebrow{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--hp);margin:0 0 8px;}
+  h1{font-size:30px;font-weight:700;margin:0;letter-spacing:-.01em;}
+  .lede{margin:10px 0 0;color:var(--muted);max-width:72ch;font-size:14px;}
+  .masthead{border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:26px;}
+  .assump{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 0;}
+  .chip{font-size:12px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px 12px;}
+  .chip b{color:var(--text);font-weight:600;}
+
+  /* ---- controls ---- */
+  .controls{display:grid;grid-template-columns:1fr 1fr;gap:26px;background:linear-gradient(180deg,var(--panel) 0%,#141b22 100%);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin-bottom:8px;}
+  @media(max-width:720px){.controls{grid-template-columns:1fr}}
+  .ctrl label{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;color:var(--muted);font-family:"Space Grotesk";font-weight:600;margin-bottom:8px;}
+  .ctrl label .val{font-family:"JetBrains Mono";font-size:15px;font-weight:700;}
+  .ctrl .val.solar{color:var(--solar);} .ctrl .val.battery{color:var(--battery);}
+  input[type=range]{width:100%;accent-color:var(--hp);height:4px;}
+  .ctrl .scale{display:flex;justify-content:space-between;font-size:10.5px;color:var(--faint);font-family:"JetBrains Mono";margin-top:4px;}
+  .presets{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}
+  .presets button{font-family:"JetBrains Mono";font-size:11.5px;color:var(--text);background:var(--panel2);border:1px solid var(--line2);border-radius:999px;padding:5px 12px;cursor:pointer;}
+  .presets button:hover{border-color:var(--hp);color:var(--hp);}
+  .toggle{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:14px;border-top:1px solid var(--line);margin-top:18px;padding-top:16px;flex-wrap:wrap;}
+  .toggle label{display:inline-flex;align-items:center;gap:10px;font-family:"Space Grotesk";font-weight:600;font-size:13px;color:var(--text);cursor:pointer;}
+  .toggle input{width:16px;height:16px;accent-color:var(--hp);cursor:pointer;}
+  .toggle .hint{color:var(--muted);font-weight:400;font-size:11.5px;font-family:"Inter";}
+  .status{font-family:"JetBrains Mono";font-size:11.5px;color:var(--hp);white-space:nowrap;}
+  .status.busy{color:var(--gas);}
+
+  .context{display:flex;flex-wrap:wrap;gap:8px 22px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 18px;margin:14px 0 24px;font-size:12.5px;color:var(--muted);}
+  .context b{color:var(--text);font-family:"JetBrains Mono";font-weight:600;}
+  .warn{color:var(--gas);font-size:12.5px;margin:8px 0 0;display:none;}
+
+  .card{background:linear-gradient(180deg,var(--panel) 0%,#141b22 100%);border:1px solid var(--line);border-radius:14px;padding:22px 22px 18px;margin:24px 0;}
+  .card h2{font-size:19px;margin:0 0 4px;}
+  .card .sub{color:var(--muted);font-size:13px;margin:0 0 16px;}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:14px;}
+  .legend span{display:inline-flex;align-items:center;gap:7px;}
+  .sw{width:22px;height:12px;border-radius:3px;display:inline-block;}
+
+  table.grid{border-collapse:separate;border-spacing:3px;width:100%;}
+  table.grid th,table.grid td{padding:8px 6px;text-align:center;font-size:12.5px;border-radius:6px;}
+  table.grid thead th{color:var(--muted);font-weight:600;font-family:"Space Grotesk";background:var(--panel2);}
+  table.grid td{font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums;color:#0d1217;font-weight:600;}
+  th.rowhead{text-align:right;color:var(--text);font-weight:600;background:var(--panel2);white-space:nowrap;padding-right:12px;min-width:96px;}
+  th.rowhead small{display:block;color:var(--faint);font-weight:500;font-size:10.5px;font-family:"JetBrains Mono";}
+  th.rowhead em{display:block;color:var(--hp);font-style:normal;font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-family:"JetBrains Mono";}
+  tr.def th.rowhead, tr.def td{outline:1.5px solid var(--hp);outline-offset:-1px;}
+  .tablescroll{overflow-x:auto;}
+
+  table.mini{border-collapse:collapse;width:100%;max-width:560px;}
+  table.mini td{padding:8px 10px;border-bottom:1px solid var(--line);font-size:13px;}
+  table.mini td:first-child{color:var(--text);}
+  .tag{font-size:11px;padding:2px 9px;border-radius:999px;font-weight:600;}
+  .tag.good{color:var(--good);background:rgba(84,192,138,.12);}
+  .tag.bad{color:var(--bad);background:rgba(216,105,77,.12);}
+  .tag.gas{color:var(--gas);background:rgba(239,155,62,.12);}
+  .foot{margin-top:34px;color:var(--faint);font-size:12px;border-top:1px solid var(--line);padding-top:16px;}
+  a{color:var(--hp);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <p class="eyebrow">UK Household · heat-pump co-benefits · live model</p>
+    <h1>Heat pump: install cost × SCOP</h1>
+    <p class="lede">Each cell is the heat pump's marginal saving (£/yr vs keeping the gas boiler), computed live on a
+      half-hourly model. Vary the home's <span style="color:var(--solar)">solar</span> and
+      <span style="color:var(--battery)">battery</span> capacity below and watch how the picture changes.</p>
+    <div class="assump">
+      <span class="chip"><b>10,040 kWh</b> delivered heat/yr</span>
+      <span class="chip">on an <b>Agile</b> tariff</span>
+      <span class="chip">gas <b>7.33p/kWh</b>, boiler <b>90%</b></span>
+      <span class="chip">capital discounted at <b>3%/yr</b></span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="ctrl">
+      <label>Solar PV <span class="val solar" id="solarVal">4.0 kWp</span></label>
+      <input type="range" id="solar" min="0" max="10" step="0.5" value="4">
+      <div class="scale"><span>0</span><span>5</span><span>10 kWp</span></div>
+    </div>
+    <div class="ctrl">
+      <label>Battery <span class="val battery" id="batteryVal">5 kWh</span></label>
+      <input type="range" id="battery" min="0" max="20" step="1" value="5">
+      <div class="scale"><span>0</span><span>10</span><span>20 kWh</span></div>
+    </div>
+    <div class="presets" style="grid-column:1/-1">
+      <button data-s="0" data-b="0">No solar / battery</button>
+      <button data-s="4" data-b="0">4 kWp solar only</button>
+      <button data-s="4" data-b="5">4 kWp + 5 kWh</button>
+      <button data-s="6" data-b="10">6 kWp + 10 kWh</button>
+      <button data-s="10" data-b="20">Max 10 kWp + 20 kWh</button>
+    </div>
+    <div class="toggle">
+      <label><input type="checkbox" id="optimal">Optimal (cost-minimising) battery dispatch
+        <span class="hint">perfect-foresight arbitrage against Agile prices — slower</span></label>
+      <span class="status" id="status"></span>
+    </div>
+  </div>
+  <p class="warn" id="warn">⚠ Live dataset not found — using synthetic year (shape is indicative only).</p>
+  <div class="context" id="context">loading model…</div>
+
+  <!-- per-kWh framing -->
+  <div class="card">
+    <h2>The race is per kWh of heat delivered</h2>
+    <p class="sub">A heat pump beats gas when its electricity ÷ SCOP undercuts gas ÷ boiler efficiency.
+      The Agile average moves a little with solar/battery as the import/export mix shifts.</p>
+    <table class="mini"><tbody id="perkwh"></tbody></table>
+  </div>
+
+  <div class="legend">
+    <span><i class="sw" style="background:rgba(84,192,138,.8)"></i> heat pump saves money</span>
+    <span><i class="sw" style="background:rgba(216,105,77,.8)"></i> heat pump loses money</span>
+    <span>stronger colour = bigger effect · <b style="color:var(--hp)">outlined row</b> = typical £12k install</span>
+  </div>
+
+  <div class="card">
+    <h2>Table 1 — With the £7,500 BUS grant</h2>
+    <p class="sub">Rows show the installer's gross price; the small figure is what you finance after the grant.</p>
+    <div class="tablescroll" id="t1"></div>
+  </div>
+
+  <div class="card">
+    <h2>Table 2 — With no grant</h2>
+    <p class="sub">Same installs, grant removed — you finance the full gross price.</p>
+    <div class="tablescroll" id="t2"></div>
+  </div>
+
+  <p class="foot">Live from the household energy-ledger model
+    (<span class="num">model.js</span> + <span class="num">ledger.js</span>), real half-hourly year at 15-min resolution.
+    A heat pump here also disconnects the gas supply (induction cooking included). Solar &amp; battery asset costs
+    cancel out of the heat-pump marginal, so only their energy interaction moves these tables. Figures annualised,
+    capital discounted at 3%/yr real.</p>
+
+</div>
+
+<script src="tools/solarmatching/model.js?v=2"></script>
+<script src="tools/solarmatching/ledger.js?v=1"></script>
+<script>
+(function(){
+  var SCOPS = [1.0,1.5,2.0,2.5,3.0,3.5,4.0,4.5,5.0];
+  var GROSS = [0,1500,3000,4500,6000,7500,9000,10500,12000,13500,15000];
+
+  // memoised model runner (keys include solar/battery/scop, so no need to clear)
+  var cache = new Map();
+  function runModel(mp){ var k = JSON.stringify(mp); var r = cache.get(k);
+    if(!r){ if(cache.size>800) cache.clear(); r = model.run(mp); cache.set(k,r); } return r; }
+
+  var OPTIMAL = false;   // battery dispatch mode, driven by the toggle
+
+  function cfg(flags){ var c={ev:0,hp:0,solar:0,battery:0,agile:0,disconnectGas:0};
+    flags.forEach(function(f){c[f]=1;}); if(c.hp)c.disconnectGas=1; return c; }
+  function run(flags, p){ return ledger.compute(cfg(flags),
+    {p:p, useHHModel:true, modelReady:true, optimalDispatch:OPTIMAL, runModel:runModel}); }
+
+  function makeP(solar, battery){ var p = JSON.parse(JSON.stringify(ledger.DEFAULTS));
+    p.solarKwp = solar; p.batteryKwh = battery; return p; }
+  function baseFlags(solar, battery){ var f=['agile'];
+    if(solar>0) f.push('solar'); if(battery>0) f.push('battery'); return f; }
+
+  function hpMarg(solar, battery, grossCost, grant, scop){
+    var p = makeP(solar, battery); p.scop = scop; p.hpPrice = grossCost; p.busGrant = grant;
+    var base = baseFlags(solar, battery);
+    var wo = run(base, p);
+    var w  = run(base.concat('hp'), p);
+    return wo.allIn - w.allIn;       // + = HP saves vs gas boiler
+  }
+
+  function money(v){ return (v>=0?'+£':'−£') + Math.abs(Math.round(v)).toLocaleString('en-GB'); }
+
+  function buildTable(solar, battery, grant, maxAbs){
+    var h = '<table class="grid"><thead><tr><th class="rowhead">' +
+      (grant ? 'Gross install<small>net after £'+grant.toLocaleString()+'</small>' : 'Gross install') + '</th>';
+    SCOPS.forEach(function(s){ h += '<th>SCOP '+s.toFixed(1)+'</th>'; });
+    h += '</tr></thead><tbody>';
+    GROSS.forEach(function(gc){
+      var isDef = gc===12000, net = gc-grant;
+      h += '<tr class="'+(isDef?'def':'')+'"><th class="rowhead">£'+gc.toLocaleString() +
+        (grant ? '<small>'+(net<0?'−£'+Math.abs(net).toLocaleString():'£'+net.toLocaleString())+'</small>' : '') +
+        (isDef ? '<em>typical</em>' : '') + '</th>';
+      SCOPS.forEach(function(s){
+        var v = hpMarg(solar, battery, gc, grant, s);
+        var a = Math.min(0.85, 0.10 + 0.75*Math.abs(v)/maxAbs);
+        var bg = v>=0 ? 'rgba(84,192,138,'+a.toFixed(3)+')' : 'rgba(216,105,77,'+a.toFixed(3)+')';
+        h += '<td style="background:'+bg+'">'+money(v)+'</td>';
+      });
+      h += '</tr>';
+    });
+    return h + '</tbody></table>';
+  }
+
+  function renderPerKwh(p, agileAvg){
+    var gasPerKwh = p.gasRate / p.boilerEff;
+    var rows = [
+      ['Gas boiler', gasPerKwh, 'gas'],
+      ['Heat pump · SCOP 2 · flat', p.elecRate/2, 'hp'],
+      ['Heat pump · SCOP 3 · flat', p.elecRate/3, 'hp'],
+      ['Heat pump · SCOP 4 · flat', p.elecRate/4, 'hp'],
+      ['Heat pump · SCOP 4 · Agile', agileAvg/4, 'hp'],
+      ['Heat pump · SCOP 5 · flat', p.elecRate/5, 'hp'],
+    ];
+    return rows.map(function(r){
+      var lbl=r[0], v=r[1], c=r[2], beats=v<=gasPerKwh;
+      var tag = c==='gas' ? '<span class="tag gas">baseline</span>'
+        : (beats ? '<span class="tag good">cheaper than gas</span>' : '<span class="tag bad">dearer than gas</span>');
+      return '<tr><td>'+lbl+'</td><td class="num">'+v.toFixed(2)+'p</td><td>'+tag+'</td></tr>';
+    }).join('');
+  }
+
+  function el(id){ return document.getElementById(id); }
+  function updateLabels(){
+    el('solarVal').textContent = parseFloat(el('solar').value).toFixed(1)+' kWp';
+    el('batteryVal').textContent = parseFloat(el('battery').value)+' kWh';
+  }
+
+  function render(){
+    OPTIMAL = el('optimal').checked;
+    var t0 = performance.now();
+    var solar = parseFloat(el('solar').value);
+    var battery = parseFloat(el('battery').value);
+    updateLabels();
+
+    // build context readout: the base+HP build at the typical £12k / SCOP4 install
+    var p = makeP(solar, battery); p.scop = 4;
+    var full = run(baseFlags(solar, battery).concat('hp'), p);
+    var agileAvg = full.avgAgileImport || run(['agile'], p).avgAgileImport;
+    document.getElementById('context').innerHTML =
+      'Build: <b>'+solar.toFixed(1)+' kWp</b> solar + <b>'+battery+' kWh</b> battery + heat pump (SCOP 4) on Agile &nbsp;·&nbsp; ' +
+      'solar gen <b>'+Math.round(full.solarGen).toLocaleString()+' kWh</b> &nbsp;·&nbsp; ' +
+      'self-consumed <b>'+full.selfPct+'%</b> &nbsp;·&nbsp; ' +
+      'grid import <b>'+Math.round(full.gridImport).toLocaleString()+' kWh</b> &nbsp;·&nbsp; ' +
+      'avg Agile import <b>'+agileAvg.toFixed(1)+'p</b>';
+
+    document.getElementById('perkwh').innerHTML = renderPerKwh(p, agileAvg);
+
+    // shared colour scale across both tables for this setting
+    var maxAbs = 1;
+    [7500,0].forEach(function(g){ GROSS.forEach(function(gc){ SCOPS.forEach(function(s){
+      maxAbs = Math.max(maxAbs, Math.abs(hpMarg(solar, battery, gc, g, s))); }); }); });
+
+    el('t1').innerHTML = buildTable(solar, battery, 7500, maxAbs);
+    el('t2').innerHTML = buildTable(solar, battery, 0, maxAbs);
+
+    var ms = Math.round(performance.now() - t0);
+    var status = el('status');
+    status.className = 'status';
+    status.textContent = (OPTIMAL ? 'optimal dispatch' : 'greedy dispatch') + ' · ' + ms + ' ms';
+  }
+
+  // Update labels instantly for snappy feedback, show a "computing" state, then
+  // defer the heavy solve so the browser can paint first (optimal can take a few
+  // seconds). Debounced so dragging a slider only resolves once it settles.
+  var timer = null;
+  function requestRender(){
+    updateLabels();
+    var status = el('status');
+    status.className = 'status busy';
+    status.textContent = el('optimal').checked ? '⏳ computing optimal dispatch…' : '⏳ computing…';
+    clearTimeout(timer);
+    timer = setTimeout(render, 90);
+  }
+
+  el('solar').addEventListener('input', requestRender);
+  el('battery').addEventListener('input', requestRender);
+  el('optimal').addEventListener('change', requestRender);
+  Array.prototype.forEach.call(document.querySelectorAll('.presets button'), function(b){
+    b.addEventListener('click', function(){
+      el('solar').value = b.dataset.s;
+      el('battery').value = b.dataset.b;
+      requestRender();
+    });
+  });
+
+  // load the half-hourly dataset (falls back to a synthetic year), then render
+  model.load('tools/solarmatching/solarmatching_data.json', function(){
+    if(model.usingSynthetic) el('warn').style.display='block';
+    render();
+  });
+})();
+</script>
+</body>
+</html>

@@ -562,6 +562,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
 <script src="tools/solarmatching/model.js?v=2"></script>
+<script src="tools/solarmatching/ledger.js?v=1"></script>
 <script>
 const { createApp } = Vue;
 
@@ -571,45 +572,11 @@ const { createApp } = Vue;
 // re-simulated. Lives outside the reactive system; cleared on reset.
 const modelCache = new Map();
 
-const DEFAULTS = {
-  // prices
-  elecRate:26.11, elecStanding:57.19, gasRate:7.33, gasStanding:29.04, segRate:15,
-  // home energy
-  gasTotal:11500, heatingPct:77, waterPct:20, cookingPct:3, boilerEff:0.90, elecBaseload:2700,
-  // petrol car
-  mileage:12000, mpg:48, petrolPrice:1.55, carPrice:27000, carLife:12, carResidual:4000, carMaint:650,
-  // boiler
-  boilerPrice:3000, boilerLife:15, boilerService:100, boilerRepairs:70,
-  // EV
-  evEfficiency:3.7, evChargeStart:0, evChargeEnd:7, evPrice:33500, evLife:12, evResidual:6000, evMaint:300, evBatteryKwh:64,
-  // heat pump
-  scop:4.0, hpPrice:12000, busGrant:7500, hpLife:18, hpUpkeep:200, inductionEff:0.6,
-  // solar
-  solarKwp:4, genPerKwp:950, solarPrice:5500, solarLife:25, solarMaint:30,
-  // battery
-  batteryKwh:5, batteryPrice:4000, batteryLife:15, batteryUtil:0.8,
-  // discounting — real (above-inflation) discount rate, %/yr, applied to capital
-  discountRate:3,
-  // advanced — annual solar-matching estimate (used when the half-hourly model is off)
-  daytimeFrac:0.40, directMatch:0.70,
-  // carbon — operational emission factors
-  petrolKgPerL:2.9,            // well-to-wheel: ~2.3 combustion + ~0.6 upstream
-  gasCombustionKg:0.183,       // DEFRA 2025 combustion, kgCO2e/kWh
-  gasUpstreamPct:20,           // upstream/methane uplift on combustion (GWP100, UK pipe+LNG mix)
-  gridIntensity:43,            // gCO2/kWh, UK generation average (125 g/kWh in 2024-25 but falling towards 15 g/kWh by 2040 = next 15 yrs average ~43 g/kWh) 
-  marginalIntensity:400,       // gCO2/kWh, gas (CCGT) displaced by exported solar
-  // carbon — embodied factors
-  gliderEmbodied:6500,         // kgCO2e to build a car ex-battery (≈ same for petrol & EV) https://theicct.org/publication/electric-cars-life-cycle-analysis-emissions-europe-jul25/
-  batteryCO2PerKwh:75,         // kgCO2e per kWh of cell (IVL central 61-100)
-  vehicleLifeCarbon:20,        // yrs to amortise vehicle embodied carbon over (from ICCT report above)
-  boilerEmbodied:150,          // kgCO2e to manufacture a gas boiler (hp embodied carbon scaled by boiler weight of 30-40kg)
-  hpEmbodied:735,              // kgCO2e to manufacture a heat pump incl. refrigerant (~190 kg)
-                               // https://www.kiwa.com/globalassets/germany/veroffentlichte-epds/2023/1123/epd-kiwa-ee-273-en.pdf/ = 735 kg for 7 kW arotherm
-                               // https://www.raponline.org/blog/why-i-replaced-my-new-gas-boiler-with-a-heat-pump/ = 1560 kg for full install.
-  solarLifecycleCO2:30,        // gCO2e/kWh lifecycle (manufacturing of panels) https://www.linkedin.com/pulse/rapid-fall-solars-embodied-carbon-chris-worboys/
-};
-
-const LITRES_PER_GALLON = 4.54609;
+// Ledger logic (DEFAULTS, ann, flowsHH, compute) lives in the shared
+// tools/solarmatching/ledger.js so the Node test harness runs the exact same
+// code. See the methods below — they're thin wrappers over ledger.*.
+const DEFAULTS = ledger.DEFAULTS;
+const LITRES_PER_GALLON = ledger.LITRES_PER_GALLON;
 
 createApp({
   data(){
@@ -712,50 +679,20 @@ createApp({
     // money spent today weighs more than money spent years out, and discounts
     // the end-of-life resale value back to today. At rate 0 this collapses to
     // plain straight-line spreading: (price − residual) / life.
-    ann(price,residual,life){
-      if(life<=0) return 0;
-      const r=(this.p.discountRate||0)/100;
-      if(r<=0) return (price-residual)/life;
-      const crf=r*Math.pow(1+r,life)/(Math.pow(1+r,life)-1);   // capital recovery factor
-      const pvResidual=residual/Math.pow(1+r,life);            // resale received at end of life
-      return crf*(price-pvResidual);
-    },
+    ann(price,residual,life){ return ledger.ann(this.p, price, residual, life); },
 
     // Map the ledger's build + assumptions onto model.js parameters and run the
     // half-hourly simulation, returning the annual solar / import / export flows.
     // Results are memoised on the model-relevant parameters (see modelCache).
-    flowsHH(c, d){
-      const p = this.p;
-      const mp = {
-        solar_kWp: c.solar ? p.solarKwp : 0,
-        solar_kWh_per_kWp: p.genPerKwp,
-        // lights/appliances/cooking demand; induction cooking folds in here when
-        // the gas supply is disconnected.
-        lac_demand: p.elecBaseload + d.cookingElec,
-        heat_demand: c.hp ? d.heatDelivered : 0,   // model divides by SCOP internally
-        heatpump_scop: p.scop,
-        ev_mode: 'simulated',
-        ev_miles: c.ev ? p.mileage : 0,
-        ev_efficiency: p.evEfficiency,
-        ev_charge_power: 7,
-        ev_charge_start_hour: p.evChargeStart,
-        ev_charge_end_hour: p.evChargeEnd,
-        battery: { capacity: c.battery ? p.batteryKwh : 0, dispatch: this.optimalDispatch ? 'optimal' : 'greedy' },
-        // Flat import/export rates feed the model's own flat-cost figure (unused
-        // here — the ledger applies its own rates); Agile figures come from the
-        // half-hourly dataset prices baked into the model.
-        import_rate: p.elecRate,
-        export_rate: p.segRate
-      };
-      const r = this.runModel(mp);
+    // Context handed to ledger.compute so it can run the half-hourly model and
+    // read the live build flags without reaching into the Vue instance directly.
+    ledgerCtx(){
       return {
-        solarGen:            r.annual.solar_kwh,
-        solarExport:         r.annual.export_kwh,
-        gridImport:          r.annual.import_kwh,
-        agileImportCost:     r.annual.agile_import_cost,
-        agileExportEarnings: r.annual.agile_export_earnings,
-        avgAgileImport:      r.annual.avg_agile_import_rate,
-        avgAgileExport:      r.annual.avg_agile_export_rate
+        p: this.p,
+        useHHModel: this.useHHModel,
+        modelReady: this.modelReady,
+        optimalDispatch: this.optimalDispatch,
+        runModel: this.runModel,
       };
     },
     runModel(mp){
@@ -814,143 +751,10 @@ createApp({
       return (perTonne < 0 ? '−' : '') + this.gbp(Math.abs(perTonne)) + '/t';
     },
 
-    compute(c){
-      const p=this.p;
-      const heatingFrac=p.heatingPct/100, waterFrac=p.waterPct/100, cookingFrac=p.cookingPct/100;
-
-      // ---- electricity demand ----
-      const evElec = c.ev ? p.mileage / p.evEfficiency : 0;
-      const heatDelivered = p.gasTotal * (heatingFrac + waterFrac) * p.boilerEff;
-      const hpElec = c.hp ? heatDelivered / p.scop : 0;
-      const cookingElec = (c.hp && c.disconnectGas) ? (p.gasTotal*cookingFrac*p.inductionEff) : 0;
-      const demand = p.elecBaseload + evElec + hpElec + cookingElec;
-
-      // ---- solar generation, self-consumption & grid import ----
-      // Two interchangeable engines produce the same flow figures (solarGen,
-      // solarSelf, solarExport, gridImport). The half-hourly simulation in
-      // model.js is the default; the original annualised estimate is kept behind
-      // the Advanced toggle so the two can be compared. The Agile tariff is
-      // priced half-hourly, so it always uses the simulation regardless of the
-      // toggle.
-      const useHH = (this.useHHModel || c.agile) && this.modelReady;
-      let solarGen, solarSelf, solarExport, gridImport;
-      let f = null;
-
-      if(useHH){
-        // Half-hourly simulation: dispatch solar, battery and EV charging across
-        // a real year, then read the annual flow totals straight off the model.
-        f = this.flowsHH(c, { heatDelivered, cookingElec });
-        solarGen    = f.solarGen;
-        solarExport = f.solarExport;
-        gridImport  = f.gridImport;
-        solarSelf   = Math.max(0, solarGen - solarExport);
-      } else {
-        // Annualised estimate: daytime-match + battery-shift, no time resolution.
-        solarGen = c.solar ? p.solarKwp * p.genPerKwp : 0;
-        const daytimeDemand = demand * p.daytimeFrac;
-        const directSelf = Math.min(solarGen, daytimeDemand) * p.directMatch;
-        const surplus = Math.max(0, solarGen - directSelf);
-        const eveningDemand = Math.max(0, demand - directSelf);
-        const batteryThroughput = c.battery ? p.batteryKwh * 365 * p.batteryUtil : 0;
-        const batterySolarShift = Math.min(surplus, eveningDemand, batteryThroughput);
-        solarSelf = directSelf + batterySolarShift;
-        solarExport = Math.max(0, solarGen - solarSelf);
-        gridImport = Math.max(0, demand - solarSelf);
-      }
-
-      // ---- electricity cost ----
-      // Agile: half-hourly import cost / export earnings from the simulation.
-      // Otherwise: a flat unit rate on import and a flat export (SEG) rate.
-      let importCost, exportRevenue, avgAgileImport = null, avgAgileExport = null;
-      if(c.agile && f){
-        importCost    = f.agileImportCost;
-        exportRevenue = f.agileExportEarnings;
-        avgAgileImport = f.avgAgileImport;
-        avgAgileExport = f.avgAgileExport;
-      } else {
-        importCost    = gridImport * p.elecRate / 100;
-        exportRevenue = solarExport * p.segRate / 100;
-      }
-      const elecStandingCost = p.elecStanding * 365 / 100;
-
-      // ---- gas ----
-      let gas=0;
-      if(c.hp){
-        if(!c.disconnectGas){ gas = (p.gasTotal*cookingFrac*p.gasRate)/100 + p.gasStanding*365/100; }
-      } else {
-        gas = (p.gasTotal*p.gasRate)/100 + p.gasStanding*365/100;
-      }
-
-      // ---- petrol ----
-      const petrol = c.ev ? 0 : (p.mileage/p.mpg)*LITRES_PER_GALLON*p.petrolPrice;
-
-      const running = importCost - exportRevenue + elecStandingCost + gas + petrol;
-
-      // ---- assets (annualised) ----
-      const carAsset = c.ev ? (this.ann(p.evPrice,p.evResidual,p.evLife)+p.evMaint)
-                            : (this.ann(p.carPrice,p.carResidual,p.carLife)+p.carMaint);
-      const heatAsset = c.hp ? (this.ann(p.hpPrice-p.busGrant,0,p.hpLife)+p.hpUpkeep)
-                             : (this.ann(p.boilerPrice,0,p.boilerLife)+p.boilerService+p.boilerRepairs);
-      const solarAsset = c.solar ? (this.ann(p.solarPrice,0,p.solarLife)+p.solarMaint) : 0;
-      const batteryAsset = c.battery ? this.ann(p.batteryPrice,0,p.batteryLife) : 0;
-      const assets = carAsset+heatAsset+solarAsset+batteryAsset;
-
-      const allIn = running + assets;
-
-      // ---- carbon: operational (kgCO2e/yr) ----
-      const petrolLitres = c.ev ? 0 : (p.mileage/p.mpg)*LITRES_PER_GALLON;
-      let gasKwhBurned;
-      if(c.hp){ gasKwhBurned = c.disconnectGas ? 0 : p.gasTotal*cookingFrac; }
-      else { gasKwhBurned = p.gasTotal; }
-      const gasFactor = p.gasCombustionKg * (1 + p.gasUpstreamPct/100);   // combustion + upstream methane
-      const petrolCO2 = petrolLitres * p.petrolKgPerL;
-      const gasCO2 = gasKwhBurned * gasFactor;
-      const gridCO2 = gridImport * p.gridIntensity / 1000;               // g → kg
-      const exportCO2Credit = solarExport * p.marginalIntensity / 1000;  // displaces gas generation
-      const opCO2 = petrolCO2 + gasCO2 + gridCO2 - exportCO2Credit;
-
-      // ---- carbon: embodied, amortised over each asset's life (kgCO2e/yr) ----
-      const carCO2 = c.ev ? (p.gliderEmbodied + p.evBatteryKwh*p.batteryCO2PerKwh)/p.vehicleLifeCarbon
-                          : (p.gliderEmbodied)/p.vehicleLifeCarbon;
-      const heatCO2 = c.hp ? p.hpEmbodied/p.hpLife : p.boilerEmbodied/p.boilerLife;
-      const solarCO2 = c.solar ? (p.solarLifecycleCO2 * solarGen / 1000) : 0;   // lifecycle intensity × annual gen
-      const batteryCO2 = c.battery ? (p.batteryKwh*p.batteryCO2PerKwh)/p.batteryLife : 0;
-      const embCO2 = carCO2 + heatCO2 + solarCO2 + batteryCO2;
-
-      const totalCO2 = opCO2 + embCO2;
-      const netGridCO2 = Math.max(0, gridCO2 - exportCO2Credit);
-      const carbonSegments=[
-        {key:'petrol', label:'Petrol', color:'var(--petrol)', value: petrolCO2},
-        {key:'gas', label:'Gas', color:'var(--gas)', value: gasCO2},
-        {key:'grid', label:'Grid electricity', color:'var(--grid)', value: netGridCO2},
-        {key:'car', label: c.ev?'EV embodied':'Car embodied', color: c.ev?'var(--ev)':'var(--petrol)', value: carCO2},
-        {key:'heat', label: c.hp?'Heat pump embodied':'Boiler embodied', color: c.hp?'var(--hp)':'var(--gas)', value: heatCO2},
-        {key:'solar', label:'Solar embodied', color:'var(--solar)', value: solarCO2},
-        {key:'battery', label:'Battery embodied', color:'var(--battery)', value: batteryCO2},
-      ].filter(s=>s.value>0.5);
-
-      // ---- ledger segments (sum to allIn) ----
-      const netElec = Math.max(0, importCost + elecStandingCost - exportRevenue);
-      const segments=[
-        {key:'petrol', label:'Petrol', color:'var(--petrol)', value: petrol},
-        {key:'gas', label:'Gas', color:'var(--gas)', value: gas},
-        {key:'elec', label:'Grid electricity', color:'var(--grid)', value: netElec},
-        {key:'car', label: c.ev?'EV asset':'Car asset', color: c.ev?'var(--ev)':'var(--petrol)', value: carAsset},
-        {key:'heat', label: c.hp?'Heat pump asset':'Boiler asset', color: c.hp?'var(--hp)':'var(--gas)', value: heatAsset},
-        {key:'solar', label:'Solar asset', color:'var(--solar)', value: solarAsset},
-        {key:'battery', label:'Battery asset', color:'var(--battery)', value: batteryAsset},
-      ].filter(s=>s.value>0.5);
-
-      return {
-        demand, evElec, hpElec, solarGen, solarSelf, solarExport, gridImport,
-        avgAgileImport, avgAgileExport,
-        selfPct: solarGen>0 ? Math.round(solarSelf/solarGen*100) : 0,
-        importCost, exportRevenue, elecStandingCost, gas, petrol, running,
-        carAsset, heatAsset, solarAsset, batteryAsset, assets, allIn, segments,
-        petrolCO2, gasCO2, gridCO2, exportCO2Credit, opCO2,
-        carCO2, heatCO2, solarCO2, batteryCO2, embCO2, totalCO2, carbonSegments,
-      };
-    },
+    // Annual cost & carbon ledger for a build config. The logic lives in
+    // ledger.compute (shared with the Node harness); ledgerCtx() supplies the
+    // live parameters, flags and the half-hourly model runner.
+    compute(c){ return ledger.compute(c, this.ledgerCtx()); },
     applyKona(){
       const k = this.konaPresets[this.konaChoice];
       if(!k) return;
