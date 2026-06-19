@@ -63,7 +63,7 @@
         petrolKgPerL: 2.9,            // well-to-wheel: ~2.3 combustion + ~0.6 upstream
         gasCombustionKg: 0.183,       // DEFRA 2025 combustion, kgCO2e/kWh
         gasUpstreamPct: 20,           // upstream/methane uplift on combustion (GWP100, UK pipe+LNG mix)
-        gridIntensity: 43,            // gCO2/kWh, UK generation average (next 15 yrs average ~43 g/kWh)
+        gridIntensity: 75,            // gCO2/kWh, UK generation average — conservative forward figure (2024-25 actual ~125, falling toward ~50 by 2030)
         marginalIntensity: 400,       // gCO2/kWh, gas (CCGT) displaced by exported solar
         // carbon — embodied factors
         gliderEmbodied: 6500,         // kgCO2e to build a car ex-battery (≈ same for petrol & EV)
