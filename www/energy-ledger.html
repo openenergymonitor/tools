@@ -526,11 +526,10 @@
 
       <div class="card" v-if="isCarbon">
         <div class="card-head"><h2>This build · carbon</h2><span class="hint">kgCO₂e per year</span></div>
-        <div class="stat-row q4">
+        <div class="stat-row">
           <div class="stat"><div class="k">CO₂e / yr</div><div class="v">{{ co2(current.totalCO2) }}</div><div class="s">operational + embodied</div></div>
           <div class="stat"><div class="k">vs status quo</div><div class="v" :style="{color: carbonSaving>=0?'var(--good)':'var(--bad)'}">{{ carbonSaving>=0?'−':'+' }}{{ co2(Math.abs(carbonSaving)) }}</div><div class="s">per year</div></div>
           <div class="stat"><div class="k">Carbon payback</div><div class="v">{{ carbonPayback===null ? '—' : carbonPayback.toFixed(1) }}<span v-if="carbonPayback!==null" style="font-size:12px;color:var(--faint);"> yrs</span></div><div class="s">debt vs op. saving</div></div>
-          <div class="stat"><div class="k">Abatement cost</div><div class="v" :style="{color: abatementCost===null ? 'var(--faint)' : (abatementCost<0?'var(--good)':'var(--text)')}">{{ abatementCost===null ? '—' : (abatementCost<0?'−':'')+gbp(Math.abs(abatementCost)) }}<span v-if="abatementCost!==null" style="font-size:12px;color:var(--faint);">/t</span></div><div class="s">{{ abatementCost===null ? 'no carbon cut' : (abatementCost<0 ? 'paid to abate' : 'per tCO₂e avoided') }}</div></div>
         </div>
 
         <table class="flows">
@@ -550,6 +549,24 @@
 
           <tr class="tot"><td>Total CO₂e</td><td class="num">{{ co2(current.totalCO2) }}</td></tr>
         </table>
+
+        <div class="card-head" style="margin-top:20px;"><h2>Cost of carbon abated</h2><span class="hint">private vs societal</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;">
+          <div class="stat">
+            <div class="k">To the household</div>
+            <div class="v" :style="{color: abatementCost===null ? 'var(--faint)' : (abatementCost<0?'var(--good)':'var(--text)')}">{{ abatementCost===null ? '—' : (abatementCost<0?'−':'')+gbp(Math.abs(abatementCost)) }}<span v-if="abatementCost!==null" style="font-size:12px;color:var(--faint);">/t</span></div>
+            <div class="s">{{ abatementCost===null ? 'no carbon cut' : (abatementCost<0 ? 'net of grant · paid to abate' : 'net of grant') }}</div>
+          </div>
+          <div class="stat">
+            <div class="k">To society</div>
+            <div class="v" :style="{color: societalAbatementCost===null ? 'var(--faint)' : (societalAbatementCost<0?'var(--good)':'var(--text)')}">{{ societalAbatementCost===null ? '—' : (societalAbatementCost<0?'−':'')+gbp(Math.abs(societalAbatementCost)) }}<span v-if="societalAbatementCost!==null" style="font-size:12px;color:var(--faint);">/t</span></div>
+            <div class="s">{{ grantAnnualised>0 ? 'grant counted as real cost' : 'same — no grant in build' }}</div>
+          </div>
+        </div>
+        <p v-if="grantAnnualised>0" style="font-size:11.5px;color:var(--muted);margin:12px 2px 2px;">
+          The household figure is net of the {{ gbp(p.busGrant) }} BUS grant, so it can read as a saving — privately the homeowner may be paid to decarbonise. The societal figure adds the grant back: it's a transfer from taxpayers, a real resource cost rather than a saving the measure creates, so the true cost of abatement to society is higher. For context, UK government appraisal currently values carbon at roughly £250/tCO₂e.
+        </p>
+
         <p v-if="extraEmbodiedTotal>0" style="font-size:11.5px;color:var(--muted);margin:12px 2px 2px;">
           Switching adds ~{{ co2(extraEmbodiedTotal) }} of one-off manufacturing carbon (the “carbon debt”), repaid by lower running emissions in <b>{{ carbonPayback===null ? 'n/a' : carbonPayback.toFixed(1)+' years' }}</b> — after which it's all saving.
         </p>
@@ -583,7 +600,7 @@
       <div class="foot">
         <p><b>How to read this.</b> Lumpy purchases (a car, a boiler) are spread over their life as an equivalent annual cost — discounted for the time-value of money — so options compare like-for-like. The fossil status quo already carries a car and a boiler you'd replace anyway — switching to an EV or heat pump swaps one asset cost for another rather than adding to it. “Extra upfront” is the cash needed today for the new kit beyond a like-for-like petrol-car / boiler replacement.</p>
         <p style="margin-top:10px;"><b>Simplifications.</b> Solar self-consumption is, by default, run through a half-hourly simulation of a real year (the same engine as the <a href="solar-matching.html">Solar Matching</a> tool) — solar, battery and EV charging are dispatched interval-by-interval, so self-consumption and the import / export split emerge from the timing. A simple annualised daytime-match estimate is available under <em>Advanced · solar matching</em> for comparison. The <b>Agile tariff</b> switch prices every half-hour of import and export against the dataset's wholesale-linked rates (the same dispatch, re-costed); with it off, a flat unit rate and a flat export rate apply. The EV charges within the window set under <em>Electric vehicle</em>. Lumpy purchases are converted to an equivalent annual cost with a capital-recovery (annuity) factor at a real discount rate (default {{ p.discountRate }}%, editable under <em>Assumptions · Discounting</em>), so capital spent today weighs more than future spend and resale values are discounted back — set it to 0 for plain straight-line spreading. Insurance is treated as roughly neutral between petrol and EV. All prices are inc. VAT (flat rates default to the price cap; Agile import comes from the region-D dataset, grossed up by 5%). Prices are a mid-2026 snapshot and unusually high. <span class="pill">v2 · half-hourly</span></p>
-        <p style="margin-top:10px;"><b>Carbon basis.</b> Petrol ~2.9 kgCO₂e/L well-to-wheel; gas 0.183 kgCO₂e/kWh combustion plus an upstream/methane uplift (default +20%, GWP100 — the evidence suggests this is the floor, not the ceiling). Grid taken at ~75 gCO₂/kWh — a deliberately conservative forward average (2024-25 actual is ~125, falling fast toward ~50 by 2030), so the electrified case looks better every year. Exported solar is credited against the gas (CCGT) generation it displaces (~400 gCO₂/kWh, <em>marginal</em>) — deliberately a different, consequential basis from the attributional ~75 g <em>average</em> applied to imports, since an exported unit backs out the marginal plant rather than the grid mix. Both the import average and the export displacement factor are editable under <em>Carbon · operational factors</em>. Both the financial and carbon value of export would be expected to fall over time: as more solar is added to the grid, daytime wholesale (and so export) prices decline and curtailment from over-generation rises, so each exported unit displaces less and earns less. Embodied carbon follows the Hoekstra framing: the car glider is ~equal for petrol and EV, with the battery the main difference (~75 kgCO₂e/kWh of cell). “Carbon payback” = one-off extra manufacturing carbon ÷ annual operational saving. <b>“Abatement cost”</b> = the change in all-in annual cost ÷ the tonnes of CO₂e abated per year (whole build vs status quo, or per step given the rest of the build): a <b>negative</b> figure means the measure cuts carbon <em>and</em> saves money — effectively being paid to decarbonise — while a positive figure is the cost per tonne avoided (for context, UK government appraisal currently values carbon at roughly £250/tCO₂e). Steps that don't cut carbon show “—”. <span class="pill">factors editable</span></p>
+        <p style="margin-top:10px;"><b>Carbon basis.</b> Petrol ~2.9 kgCO₂e/L well-to-wheel; gas 0.183 kgCO₂e/kWh combustion plus an upstream/methane uplift (default +20%, GWP100 — the evidence suggests this is the floor, not the ceiling). Grid taken at ~75 gCO₂/kWh — a deliberately conservative forward average (2024-25 actual is ~125, falling fast toward ~50 by 2030), so the electrified case looks better every year. Exported solar is credited against the gas (CCGT) generation it displaces (~400 gCO₂/kWh, <em>marginal</em>) — deliberately a different, consequential basis from the attributional ~75 g <em>average</em> applied to imports, since an exported unit backs out the marginal plant rather than the grid mix. Both the import average and the export displacement factor are editable under <em>Carbon · operational factors</em>. Both the financial and carbon value of export would be expected to fall over time: as more solar is added to the grid, daytime wholesale (and so export) prices decline and curtailment from over-generation rises, so each exported unit displaces less and earns less. Embodied carbon follows the Hoekstra framing: the car glider is ~equal for petrol and EV, with the battery the main difference (~75 kgCO₂e/kWh of cell). “Carbon payback” = one-off extra manufacturing carbon ÷ annual operational saving. <b>“Abatement cost”</b> = the change in all-in annual cost ÷ the tonnes of CO₂e abated per year (whole build vs status quo, or per step given the rest of the build): a <b>negative</b> figure means the measure cuts carbon <em>and</em> saves money — effectively being paid to decarbonise — while a positive figure is the cost per tonne avoided (for context, UK government appraisal currently values carbon at roughly £250/tCO₂e). It is shown two ways: the <b>household</b> figure is net of any grant, so the homeowner may privately be paid to decarbonise; the <b>societal</b> figure adds the BUS grant back, since a grant is a transfer from taxpayers — a real resource cost, not a saving the measure creates. Steps that don't cut carbon show “—”. <span class="pill">factors editable</span></p>
       </div>
     </div>
   </div>
@@ -734,6 +751,21 @@ createApp({
       // of the headline cost-mode toggle
       const allInSaving = this.statusQuo.allIn - this.current.allIn;
       return -allInSaving / tonnes;   // -saving = extra annual cost over status quo
+    },
+    grantAnnualised(){
+      // public subsidy in the build, annualised exactly as the net-of-grant capital
+      // is, so it precisely reverses the grant netted out of the heat-pump asset.
+      // Only the BUS heat-pump grant exists in this model.
+      return this.cfg.hp ? this.ann(this.p.busGrant, 0, this.p.hpLife) : 0;
+    },
+    societalAbatementCost(){
+      // £ per tonne abated from society's view: add the grant back as a real
+      // resource cost (it's a transfer from taxpayers, not a saving the measure
+      // created), then divide by the same annual tonnes abated.
+      const tonnes = this.carbonSaving / 1000;
+      if(tonnes <= 0.0005) return null;
+      const allInSaving = this.statusQuo.allIn - this.current.allIn - this.grantAnnualised;
+      return -allInSaving / tonnes;
     },
   },
   methods:{
