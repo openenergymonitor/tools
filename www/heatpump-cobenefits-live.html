@@ -278,8 +278,9 @@
   function fmtPayback(y){
     if(!isFinite(y)) return 'never';
     if(y === 0)      return 'now';
-    var n = Math.abs(y), s = n.toFixed(n<10?1:0)+' y';     // y<0 = ahead until n years, behind after
-    return y < 0 ? '>  '+s : s;
+    if(y < 0) return 'n/a';                                 // ahead until n years, behind after
+    var n = Math.abs(y);
+    return n.toFixed(n<10?1:0)+' y';
   }
 
   // WCAG relative luminance, used to pick a readable text colour for each heat-map
