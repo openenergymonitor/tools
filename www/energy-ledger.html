@@ -315,7 +315,7 @@
 
         <div class="tech">
           <div class="icon" style="background:var(--raise);color:var(--text);font-size:15px;">◆</div>
-          <div class="tx"><b>Hyundai Kona preset</b><small>loads real petrol / EV figures into the car cells</small></div>
+          <div class="tx"><b>Hyundai Kona preset</b><small>loads real new &amp; used petrol car / EV figures into the car cells</small></div>
           <select v-model="konaChoice" @change="applyKona" class="kona-select">
             <option value="">— choose —</option>
             <option value="petrol-new">Petrol · new (~£27k · 48mpg)</option>
@@ -495,7 +495,7 @@
         <div class="stat-row">
           <div class="stat"><div class="k">{{ costModeLabel }} / yr</div><div class="v">{{ gbp(costOf(current)) }}</div><div class="s">{{ costModeSub }}</div></div>
           <div class="stat"><div class="k">vs status quo / yr</div><div class="v" :style="{color: saving>=0?'var(--good)':'var(--bad)'}">{{ saving>=0?'−':'+' }}{{ gbp(Math.abs(saving)) }}</div><div class="s">{{ costModeSub }}</div></div>
-          <div class="stat"><div class="k">Extra upfront</div><div class="v">{{ gbp(extraUpfront) }}</div><div class="s">over like-for-like</div></div>
+          <div class="stat"><div class="k">Extra upfront</div><div class="v">{{ gbp(extraUpfront) }}</div><div class="s">{{ likeForLike>0 ? 'above '+kgbp(likeForLike)+' '+likeForLikeLabel : 'all net-new kit' }}</div></div>
         </div>
 
         <div class="stat-row" style="margin-top:10px;">
@@ -608,7 +608,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
 <script src="tools/solarmatching/model.js?v=3"></script>
-<script src="tools/solarmatching/ledger.js?v=5"></script>
+<script src="tools/solarmatching/ledger.js?v=6"></script>
 <script>
 const { createApp } = Vue;
 
@@ -636,7 +636,7 @@ createApp({
       optimalDispatch: false,   // battery: cost-optimised Agile dispatch (model.js DP)
       modelReady: false,
       usingSynthetic: false,
-      konaChoice: 'petrol-new',
+      konaChoice: 'petrol-used',
       konaPresets: {
         'petrol-new':  { ev:false, carPrice:27000, mpg:48, carResidual:4000, carLife:12, carMaint:650 },
         'petrol-used': { ev:false, carPrice:12500, mpg:48, carResidual:1500, carLife:10, carMaint:750 },
@@ -692,6 +692,25 @@ createApp({
       if(this.cfg.solar) x += this.solarCapital;
       if(this.cfg.battery) x += this.batteryCapital;
       return x;
+    },
+    likeForLike(){
+      // the petrol-car / boiler spend that's netted out of "extra upfront" — the
+      // cash you'd have laid out anyway on a like-for-like replacement
+      let x=0;
+      if(this.cfg.ev) x += this.p.carPrice;
+      if(this.cfg.hp) x += this.p.boilerPrice;
+      return x;
+    },
+    likeForLikeLabel(){
+      // names the kit being netted out, matching likeForLike's components — the
+      // petrol car carries its new/used qualifier from the selected Kona preset
+      const parts=[];
+      if(this.cfg.ev){
+        const q = this.konaChoice.includes('used') ? 'used ' : (this.konaChoice.includes('new') ? 'new ' : '');
+        parts.push(q+'petrol car');
+      }
+      if(this.cfg.hp) parts.push('new boiler');
+      return parts.join(' + ');
     },
     // gross install cost, scaled with system size (fixed + marginal per unit)
     solarCapital(){ return ledger.solarCapital(this.p); },
@@ -780,6 +799,7 @@ createApp({
       return b.segments.filter(s => runKeys[s.key]);
     },
     gbp(n){ return '£'+Math.round(n).toLocaleString('en-GB'); },
+    kgbp(n){ return n>=1000 ? '£'+(n/1000).toFixed(1).replace(/\.0$/,'')+'k' : '£'+Math.round(n); },
     kwh(n){ return Math.round(n).toLocaleString('en-GB')+' kWh'; },
     co2(n){ return Math.round(n).toLocaleString('en-GB')+' kg'; },
     // Equivalent annual cost of a lumpy capital sum, spread over its life.

@@ -36,11 +36,11 @@
         // home energy
         gasTotal: 11500, heatingPct: 77, waterPct: 20, cookingPct: 3, boilerEff: 0.90, elecBaseload: 2700,
         // petrol car
-        mileage: 12000, mpg: 48, petrolPrice: 1.55, carPrice: 27000, carLife: 12, carResidual: 4000, carMaint: 650,
+        mileage: 12000, mpg: 48, petrolPrice: 1.55, carPrice: 12500, carLife: 10, carResidual: 1500, carMaint: 750,
         // boiler
         boilerPrice: 3000, boilerLife: 15, boilerService: 100, boilerRepairs: 70,
         // EV
-        evEfficiency: 3.7, evChargeStart: 0, evChargeEnd: 7, evPrice: 33500, evLife: 12, evResidual: 6000, evMaint: 300, evBatteryKwh: 64,
+        evEfficiency: 4.0, evChargeStart: 0, evChargeEnd: 7, evPrice: 13500, evLife: 10, evResidual: 2000, evMaint: 300, evBatteryKwh: 64,
         // heat pump
         scop: 4.0, hpPrice: 12000, busGrant: 7500, hpLife: 18, hpUpkeep: 200, inductionEff: 0.6,
         // solar — install cost modelled as a fixed component (scaffolding, inverter,
