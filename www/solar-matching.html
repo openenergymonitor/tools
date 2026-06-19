@@ -259,6 +259,7 @@ table.data tfoot td{font-weight:600;border-top:2px solid var(--line-2);border-bo
         <div class="panel-body">
           <slider-field label="Import price" unit="p/kWh" :min="5" :max="50" :step="0.5" :dp="1" v-model="p.import_rate"></slider-field>
           <slider-field label="Export price" unit="p/kWh" :min="0" :max="30" :step="0.5" :dp="1" v-model="p.export_rate"></slider-field>
+          <slider-field label="Standing charge" unit="p/day" :min="0" :max="100" :step="0.5" :dp="1" v-model="p.standing_charge" hint="Daily fixed charge — added to both the flat-rate and Agile running cost."></slider-field>
           <div class="note-inline">Agile import &amp; export prices come from the half-hourly dataset and update automatically.</div>
         </div>
       </section>
@@ -371,7 +372,7 @@ table.data tfoot td{font-weight:600;border-top:2px solid var(--line-2);border-bo
           <table class="data">
             <thead><tr><th>Month</th><th>Solar</th><th>Demand</th><th>Import</th><th>Export</th><th>Agile £</th><th>Flat £</th><th>Batt SOC</th></tr></thead>
             <tbody>
-              <tr v-for="row in result.monthly.table" :key="row.m">
+              <tr v-for="row in monthlyRows" :key="row.m">
                 <td>{{ row.month }}</td><td>{{ fmt0(row.solar_kwh) }}</td><td>{{ fmt0(row.demand_kwh) }}</td>
                 <td class="cell-imp">{{ fmt0(row.import_kwh) }}</td><td class="cell-exp">{{ fmt0(row.export_kwh) }}</td>
                 <td>{{ money(row.agile_cost) }}</td><td>{{ money(row.flat_cost) }}</td><td>{{ fmt1(row.soc) }}</td>
@@ -432,8 +433,25 @@ const app = createApp({
     const selectedMonth = ref(7);
 
     const p = reactive(JSON.parse(JSON.stringify(model.defaultParams())));
-    p.battery.capacity = 5;
-    p.solar_kWp = 4;
+    // Match the input assumptions used by energy-ledger.html with heat pump, EV,
+    // battery, solar and Agile + optimal dispatch all enabled (gas disconnected,
+    // so cooking electricity folds into lac_demand). Derived from ledger.js
+    // DEFAULTS via its flowsHH() parameter mapping.
+    p.solar_kWp = 4;                 // solarKwp
+    p.solar_kWh_per_kWp = 950;       // genPerKwp
+    p.lac_demand = 2907;             // elecBaseload 2700 + induction cooking 11500*0.03*0.6
+    p.heat_demand = 10039.5;         // gasTotal 11500 * (0.77+0.20) heating+water * 0.90 boilerEff
+    p.heatpump_scop = 4.0;           // scop
+    p.ev_miles = 12000;              // mileage
+    p.ev_efficiency = 3.7;           // evEfficiency
+    p.ev_charge_power = 7;
+    p.ev_charge_start_hour = 0;      // evChargeStart
+    p.ev_charge_end_hour = 7;        // evChargeEnd
+    p.battery.capacity = 5;          // batteryKwh
+    p.battery.dispatch = 'optimal';  // optimalDispatch on
+    p.import_rate = 26.11;           // elecRate
+    p.export_rate = 15;              // segRate
+    p.standing_charge = 57.19;       // elecStanding (p/day) — applies to both tariffs
 
     // Optimal-dispatch toggle: maps the boolean switch to the model's
     // battery.dispatch string ('optimal' | 'greedy').
@@ -474,11 +492,27 @@ const app = createApp({
     const pct = (n,dp=0) => (n == null || !isFinite(n)) ? '—' : (dp? fmt1(n): fmt0(n)) + '%';
     const clamp = (n,lo,hi) => Math.max(lo, Math.min(hi, n));
 
+    // Fixed daily standing charge as £/yr — added to both tariffs' running cost.
+    const standingCharge = computed(() => (p.standing_charge || 0) * 365 / 100);
+
     const headline = computed(() => {
       if (!a.value) return {};
       const isAgile = activeTariff.value === 'agile';
-      return { cost: isAgile ? a.value.agile_cost : a.value.cost, other: isAgile ? a.value.cost : a.value.agile_cost,
-        otherLabel: isAgile ? 'Flat-rate equivalent' : 'Agile equivalent', saving: isAgile ? a.value.agile_saving : a.value.saving };
+      const sc = standingCharge.value;
+      const energyCost = isAgile ? a.value.agile_cost : a.value.cost;
+      const energyOther = isAgile ? a.value.cost : a.value.agile_cost;
+      const energySaving = isAgile ? a.value.agile_saving : a.value.saving;
+      // The model's % saving is energy-only. The standing charge is unavoidable
+      // and identical with or without solar/battery, so add it to both sides to
+      // keep the headline % coherent with the displayed cost. Back out the
+      // no-solar baseline from the energy saving (saving = 1 − cost/baseline).
+      const denom = 1 - energySaving / 100;
+      const baseline = Math.abs(denom) > 1e-6 ? energyCost / denom : null;
+      const saving = (baseline !== null && (baseline + sc) !== 0)
+        ? 100 * (1 - (energyCost + sc) / (baseline + sc))
+        : energySaving;
+      return { cost: energyCost + sc, other: energyOther + sc,
+        otherLabel: isAgile ? 'Flat-rate equivalent' : 'Agile equivalent', saving };
     });
 
     const balance = computed(() => {
@@ -519,8 +553,21 @@ const app = createApp({
       const row = r.monthly.table.find(t=>t.m===selectedMonth.value); return row ? row.month : ''; });
     const monthOptions = computed(() => result.value ? result.value.monthly.table.map(t=>({m:t.m,label:t.month})) : []);
 
-    const totals = computed(() => { const r = result.value; if (!r) return null;
-      return r.monthly.table.reduce((acc,row)=>{ ['solar_kwh','demand_kwh','import_kwh','export_kwh','agile_cost','flat_cost'].forEach(k=>acc[k]+=row[k]); return acc; },
+    // Monthly table rows with the standing charge folded into each month's costs,
+    // pro-rated by days in the month, so the table and chart stay consistent with
+    // the headline running cost. The model output is energy-only.
+    const monthlyRows = computed(() => {
+      if (!result.value) return [];
+      const scPerDay = (p.standing_charge || 0) / 100;
+      return result.value.monthly.table.map(row => {
+        const days = new Date(2023, row.m, 0).getDate();   // row.m is 1-based
+        const sc = scPerDay * days;
+        return Object.assign({}, row, { agile_cost: row.agile_cost + sc, flat_cost: row.flat_cost + sc });
+      });
+    });
+
+    const totals = computed(() => { if (!result.value) return null;
+      return monthlyRows.value.reduce((acc,row)=>{ ['solar_kwh','demand_kwh','import_kwh','export_kwh','agile_cost','flat_cost'].forEach(k=>acc[k]+=row[k]); return acc; },
         {solar_kwh:0,demand_kwh:0,import_kwh:0,export_kwh:0,agile_cost:0,flat_cost:0}); });
 
     // ================= Chart.js =================
@@ -573,7 +620,7 @@ const app = createApp({
       }, plugins:[daylightBand] };
     }
 
-    function monthCfg(){ const rows=result.value.monthly.table; const labels=rows.map(r=>r.month); let datasets;
+    function monthCfg(){ const rows=monthlyRows.value; const labels=rows.map(r=>r.month); let datasets;
       if(monthlyMetric.value==='cost'){
         datasets=[ { label:'Flat rate', data:rows.map(r=>r.flat_cost), backgroundColor:C.muted },
                    { label:'Agile', data:rows.map(r=>r.agile_cost), backgroundColor:C.solar } ];
@@ -607,7 +654,7 @@ const app = createApp({
     return {
       loaded, usingSynthetic, activeTariff, monthlyMetric, selectedMonth,
       p, optimalDispatch, result, a, headline, balance, selfSuff, selfCons,
-      daySeries, monthName, monthOptions, totals,
+      daySeries, monthName, monthOptions, monthlyRows, totals,
       dayCanvas, monthCanvas, ssCanvas, scCanvas,
       fmt0, fmt1, fmt2, money, pct
     };

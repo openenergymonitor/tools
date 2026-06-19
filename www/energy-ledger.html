@@ -560,6 +560,7 @@
         <table class="flows">
           <tr><td>Total electricity demand</td><td class="num">{{ kwh(current.demand) }}</td></tr>
           <tr class="sub"><td>— household baseload</td><td class="num">{{ kwh(p.elecBaseload) }}</td></tr>
+          <tr class="sub" v-if="current.cookingElec>0"><td>— cooking (induction)</td><td class="num">{{ kwh(current.cookingElec) }}</td></tr>
           <tr class="sub" v-if="cfg.ev"><td>— EV charging</td><td class="num">{{ kwh(current.evElec) }}</td></tr>
           <tr class="sub" v-if="cfg.hp"><td>— heat pump</td><td class="num">{{ kwh(current.hpElec) }}</td></tr>
           <tr v-if="cfg.solar"><td><span class="tag" style="background:var(--solar)"></span>Solar generated</td><td class="num">{{ kwh(current.solarGen) }}</td></tr>
@@ -590,7 +591,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
 <script src="tools/solarmatching/model.js?v=2"></script>
-<script src="tools/solarmatching/ledger.js?v=3"></script>
+<script src="tools/solarmatching/ledger.js?v=4"></script>
 <script>
 const { createApp } = Vue;
 
@@ -629,7 +630,7 @@ createApp({
         {label:'Petrol', color:'var(--petrol)'},
         {label:'Gas', color:'var(--gas)'},
         {label:'Grid electricity', color:'var(--grid)'},
-        {label:'Solar PV', color:'var(--solar)'},
+        {label:'Solar PV', color:'ventirelyar(--solar)'},
         {label:'Battery', color:'var(--battery)'},
         {label:'Heat pump', color:'var(--hp)'},
         {label:'EV', color:'var(--ev)'},

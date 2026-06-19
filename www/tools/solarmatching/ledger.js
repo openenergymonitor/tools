@@ -257,7 +257,7 @@
         ].filter(function (s) { return s.value > 0.5; });
 
         return {
-            demand: demand, evElec: evElec, hpElec: hpElec, solarGen: solarGen, solarSelf: solarSelf,
+            demand: demand, evElec: evElec, hpElec: hpElec, cookingElec: cookingElec, solarGen: solarGen, solarSelf: solarSelf,
             solarExport: solarExport, gridImport: gridImport,
             avgAgileImport: avgAgileImport, avgAgileExport: avgAgileExport,
             selfPct: solarGen > 0 ? Math.round(solarSelf / solarGen * 100) : 0,
