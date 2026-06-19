@@ -355,6 +355,9 @@
           <div class="fields">
             <div class="field"><label>Real discount rate <span class="unit">%/yr</span></label><input type="number" step="0.5" v-model.number="p.discountRate"></div>
             <p style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Lumpy purchases (car, boiler, heat pump, solar, battery) are turned into an equivalent annual cost with a capital-recovery (annuity) factor at this <em>real</em> (above-inflation) rate, so cash spent today weighs more than cash spent years out; resale values, received at end of life, are discounted back the same way. Set to <b>0</b> for plain straight-line spreading. Running costs (energy, fuel, maintenance) are level year-on-year, so a constant annual figure already is their discounted equivalent.</p>
+            <div class="field"><label>Shares-ISA real return <span class="unit">%/yr</span></label><input type="number" step="0.5" v-model.number="p.isaReturn"></div>
+            <div class="field"><label>Investment horizon <span class="unit">yrs</span></label><input type="number" v-model.number="p.investHorizon"></div>
+            <p style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Used by the payback / IRR / ISA-crossover metrics in <em>This build · the numbers</em>: the <b>extra upfront</b> is treated as the investment and the drop in <b>running costs</b> as the annual return over this horizon. The <b>crossover</b> compares putting that same money in a shares ISA growing at the rate above against spending it now and reinvesting each year's bill saving.</p>
           </div>
         </details>
 
@@ -495,6 +498,12 @@
           <div class="stat"><div class="k">Extra upfront</div><div class="v">{{ gbp(extraUpfront) }}</div><div class="s">over like-for-like</div></div>
         </div>
 
+        <div class="stat-row" style="margin-top:10px;">
+          <div class="stat"><div class="k">Simple payback</div><div class="v">{{ paybackLabel }}</div><div class="s">extra upfront ÷ bill saving</div></div>
+          <div class="stat"><div class="k">IRR · real</div><div class="v" :style="{color: investIRR!==null && investIRR > p.isaReturn/100 ? 'var(--good)':''}">{{ irrLabel }}</div><div class="s">tax-free, over {{ p.investHorizon }} yrs</div></div>
+          <div class="stat"><div class="k">Crossover vs ISA</div><div class="v">{{ crossoverLabel }}</div><div class="s">vs {{ p.isaReturn }}% shares ISA</div></div>
+        </div>
+
         <table class="flows">
           <tr><td class="grp" colspan="2">Running costs</td></tr>
           <tr v-if="!cfg.ev"><td><span class="tag" style="background:var(--petrol)"></span>Petrol</td><td class="num">{{ gbp(current.petrol) }}</td></tr>
@@ -581,7 +590,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
 <script src="tools/solarmatching/model.js?v=2"></script>
-<script src="tools/solarmatching/ledger.js?v=2"></script>
+<script src="tools/solarmatching/ledger.js?v=3"></script>
 <script>
 const { createApp } = Vue;
 
@@ -669,6 +678,33 @@ createApp({
     // gross install cost, scaled with system size (fixed + marginal per unit)
     solarCapital(){ return ledger.solarCapital(this.p); },
     batteryCapital(){ return ledger.batteryCapital(this.p); },
+
+    // ---- investment metrics (whole build vs status quo) ----------------------
+    // Treats the extra upfront capital as the investment and the drop in running
+    // costs as the annual return. Maintenance and asset-replacement differences
+    // are deliberately left out (they're carried by the all-in annualised view);
+    // this is the simple homeowner-style framing explored in solar-finance.js.
+    cashSaving(){ return this.statusQuo.running - this.current.running; },   // recurring £/yr bill reduction
+    investIRR(){
+      // real annual return of the extra capital, savings accruing over the horizon
+      if(this.extraUpfront <= 0 || this.cashSaving <= 0) return null;
+      return this.irr(this.extraUpfront, this.cashSaving, this.p.investHorizon);
+    },
+    paybackLabel(){
+      if(this.cashSaving <= 0) return '—';                       // never recovers
+      if(this.extraUpfront <= 0) return 'immediate';             // no extra to recover
+      return (this.extraUpfront / this.cashSaving).toFixed(1) + ' yrs';
+    },
+    irrLabel(){
+      if(this.investIRR === null) return '—';
+      return this.investIRR >= 1 ? '>100%' : (this.investIRR * 100).toFixed(1) + '%';
+    },
+    crossoverLabel(){
+      // years until reinvested bill savings overtake the same money left in an ISA
+      if(this.extraUpfront <= 0 || this.cashSaving <= 0) return '—';
+      const y = this.crossoverYear(this.cashSaving, this.extraUpfront, this.p.isaReturn/100, this.p.investHorizon);
+      return y === null ? ('> ' + this.p.investHorizon + ' yrs') : ('year ' + y);
+    },
     carbonSaving(){ return this.statusQuo.totalCO2 - this.current.totalCO2; },
     // shared linear scale for the carbon bars (mirrors costScaleMax)
     carbonScaleMax(){ return Math.max(this.statusQuo.totalCO2, this.current.totalCO2, 1); },
@@ -719,6 +755,40 @@ createApp({
     // the end-of-life resale value back to today. At rate 0 this collapses to
     // plain straight-line spreading: (price − residual) / life.
     ann(price,residual,life){ return ledger.ann(this.p, price, residual, life); },
+
+    // ---- investment-metric maths (ported from solar-finance.js) --------------
+    // Net present value of a constant yearly saving against an upfront outlay.
+    npv(rate, upfront, yearly, years){
+      let total = -upfront;
+      for(let t=1; t<=years; t++) total += yearly / Math.pow(1+rate, t);
+      return total;
+    },
+    // Internal rate of return — the rate at which NPV is zero — found by bisection
+    // over 0–100%. Returns 1 (i.e. ">100%") when the return exceeds the search cap.
+    irr(upfront, yearly, years){
+      if(this.npv(1, upfront, yearly, years) > 0) return 1;     // beats 100% — cap it
+      let lo=0, hi=1;
+      for(let i=0; i<100; i++){
+        const mid=(lo+hi)/2;
+        if(this.npv(mid, upfront, yearly, years) > 0) lo=mid; else hi=mid;
+      }
+      return (lo+hi)/2;
+    },
+    // A lump sum left to compound at `rate`.
+    isaLumpSum(principal, rate, years){ return principal * Math.pow(1+rate, years); },
+    // Future value of investing each year's saving as it arrives (annuity FV).
+    reinvestedSavings(yearly, rate, years){
+      let pot=0;
+      for(let t=1; t<=years; t++) pot += yearly * Math.pow(1+rate, years-t);
+      return pot;
+    },
+    // First year the reinvested-savings pot overtakes the ISA lump sum; null = never.
+    crossoverYear(yearly, principal, rate, maxYears){
+      for(let t=1; t<=maxYears; t++){
+        if(this.reinvestedSavings(yearly, rate, t) > this.isaLumpSum(principal, rate, t)) return t;
+      }
+      return null;
+    },
 
     // Map the ledger's build + assumptions onto model.js parameters and run the
     // half-hourly simulation, returning the annual solar / import / export flows.

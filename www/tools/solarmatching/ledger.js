@@ -51,6 +51,9 @@
         batteryKwh: 5, batteryFixed: 500, batteryPerKwh: 270, batteryLife: 15, batteryUtil: 0.8,
         // discounting — real (above-inflation) discount rate, %/yr, applied to capital
         discountRate: 3,
+        // investment metrics — for the simple payback / IRR / ISA-crossover view
+        isaReturn: 5,                 // assumed real return on a shares ISA, %/yr
+        investHorizon: 20,            // years over which the extra capital's savings accrue
         // advanced — annual solar-matching estimate (used when the half-hourly model is off)
         daytimeFrac: 0.40, directMatch: 0.70,
         // carbon — operational emission factors
