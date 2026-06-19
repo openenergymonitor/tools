@@ -449,9 +449,9 @@ const app = createApp({
     p.ev_charge_end_hour = 7;        // evChargeEnd
     p.battery.capacity = 5;          // batteryKwh
     p.battery.dispatch = 'optimal';  // optimalDispatch on
-    p.import_rate = 28.50;           // elecRate — Flexible Octopus region D, inc. VAT
+    p.import_rate = 26.11;           // elecRate — price cap, inc. VAT
     p.export_rate = 15;              // segRate
-    p.standing_charge = 68.17;       // elecStanding (p/day, inc. VAT) — applies to both tariffs
+    p.standing_charge = 57.19;       // elecStanding (p/day, inc. VAT) — applies to both tariffs
 
     // Optimal-dispatch toggle: maps the boolean switch to the model's
     // battery.dispatch string ('optimal' | 'greedy').
