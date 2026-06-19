@@ -163,6 +163,12 @@
   .foot b{color:var(--muted);}
   .reset{background:none;border:1px solid var(--line2);color:var(--muted);font-family:"JetBrains Mono";font-size:11px;padding:6px 11px;border-radius:7px;cursor:pointer;}
   .reset:hover{color:var(--text);border-color:var(--text);}
+  .masthead-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .modeseg{display:inline-flex;border:1px solid var(--line2);border-radius:7px;overflow:hidden;}
+  .modeseg button{background:none;border:none;color:var(--muted);font-family:"JetBrains Mono";font-size:11px;padding:6px 11px;cursor:pointer;white-space:nowrap;}
+  .modeseg button + button{border-left:1px solid var(--line2);}
+  .modeseg button:hover:not(.on){color:var(--text);}
+  .modeseg button.on{background:var(--raise);color:var(--text);}
   .pill{font-family:"JetBrains Mono";font-size:10px;padding:2px 7px;border-radius:5px;border:1px solid var(--line2);color:var(--muted);}
   a{color:var(--grid);}
   @media (prefers-reduced-motion: reduce){*{transition:none !important;}}
@@ -177,13 +183,19 @@
       <h1>Household Energy Ledger</h1>
       <p>Start from the fossil status quo, then switch on technologies in any order. Running costs <em>and</em> the assets you'd replace anyway are tracked together, so each step is compared fairly.</p>
     </div>
-    <button class="reset" @click="resetAll">↺ reset assumptions</button>
+    <div class="masthead-actions">
+      <div class="modeseg" role="group" aria-label="Cost basis">
+        <button :class="{on:costMode==='running'}" @click="costMode='running'">Running costs only</button>
+        <button :class="{on:costMode==='allin'}" @click="costMode='allin'">Running costs + assets</button>
+      </div>
+      <button class="reset" @click="resetAll">↺ reset assumptions</button>
+    </div>
   </header>
 
   <!-- HERO LEDGER -->
   <section class="hero">
     <div class="hero-top">
-      <div class="hero-headline">All-in annual cost — fossil status quo vs your current build</div>
+      <div class="hero-headline">{{ costModeLabel }} annual cost — fossil status quo vs your current build</div>
       <div class="saving-badge" :class="saving>=0?'pos':'neg'">
         {{ saving>=0 ? '▼ saves ' : '▲ costs ' }}{{ gbp(Math.abs(saving)) }}/yr
       </div>
@@ -192,23 +204,23 @@
     <div class="ledger-row">
       <div class="ledger-label"><b>Status quo</b>petrol + gas boiler</div>
       <div class="bar">
-        <div class="barfill" :style="{width:(statusQuo.allIn/costScaleMax*100)+'%'}">
-          <div v-for="s in statusQuo.segments" :key="s.key" class="seg"
+        <div class="barfill" :style="{width:(costOf(statusQuo)/costScaleMax*100)+'%'}">
+          <div v-for="s in costSegments(statusQuo)" :key="s.key" class="seg"
                :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+gbp(s.value)"></div>
         </div>
       </div>
-      <div class="ledger-total num">{{ gbp(statusQuo.allIn) }}<span>/year</span></div>
+      <div class="ledger-total num">{{ gbp(costOf(statusQuo)) }}<span>/year</span></div>
     </div>
 
     <div class="ledger-row">
       <div class="ledger-label"><b>This build</b>{{ buildName }}</div>
       <div class="bar">
-        <div class="barfill" :style="{width:(current.allIn/costScaleMax*100)+'%'}">
-          <div v-for="s in current.segments" :key="s.key" class="seg"
+        <div class="barfill" :style="{width:(costOf(current)/costScaleMax*100)+'%'}">
+          <div v-for="s in costSegments(current)" :key="s.key" class="seg"
                :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+gbp(s.value)"></div>
         </div>
       </div>
-      <div class="ledger-total num">{{ gbp(current.allIn) }}<span>/year</span></div>
+      <div class="ledger-total num">{{ gbp(costOf(current)) }}<span>/year</span></div>
     </div>
 
     <div class="legend">
@@ -263,7 +275,7 @@
     <!-- LEFT: configuration -->
     <div>
       <div class="card builder">
-        <div class="card-head"><h2>Build your home</h2><div style="display:flex;gap:12px;flex-wrap:wrap;"><label class="chk" style="font-size:11px;"><input type="checkbox" v-model="marginalRunningOnly">running cost only</label><label class="chk" style="font-size:11px;"><input type="checkbox" v-model="showMarginalDetail">show carbon &amp; abatement</label></div></div>
+        <div class="card-head"><h2>Build your home</h2><label class="chk" style="font-size:11px;"><input type="checkbox" v-model="showMarginalDetail">show carbon &amp; abatement</label></div>
 
         <div class="tech">
           <div class="icon" style="background:var(--ev)">EV</div>
@@ -477,8 +489,8 @@
       <div class="card">
         <div class="card-head"><h2>This build · the numbers</h2></div>
         <div class="stat-row">
-          <div class="stat"><div class="k">All-in / yr</div><div class="v">{{ gbp(current.allIn) }}</div><div class="s">running + assets</div></div>
-          <div class="stat"><div class="k">vs status quo / yr</div><div class="v" :style="{color: saving>=0?'var(--good)':'var(--bad)'}">{{ saving>=0?'−':'+' }}{{ gbp(Math.abs(saving)) }}</div><div class="s">running + assets</div></div>
+          <div class="stat"><div class="k">{{ costModeLabel }} / yr</div><div class="v">{{ gbp(costOf(current)) }}</div><div class="s">{{ costModeSub }}</div></div>
+          <div class="stat"><div class="k">vs status quo / yr</div><div class="v" :style="{color: saving>=0?'var(--good)':'var(--bad)'}">{{ saving>=0?'−':'+' }}{{ gbp(Math.abs(saving)) }}</div><div class="s">{{ costModeSub }}</div></div>
           <div class="stat"><div class="k">Extra upfront</div><div class="v">{{ gbp(extraUpfront) }}</div><div class="s">over like-for-like</div></div>
         </div>
 
@@ -593,7 +605,7 @@ createApp({
       // with the simple annual estimate available for comparison.
       useHHModel: true,
       showMarginalDetail: false,   // build rows: reveal per-step carbon + abatement lines (default hidden to reduce clutter)
-      marginalRunningOnly: false,  // build rows: show marginal £ as running-cost saving only, excluding annualised capital
+      costMode: 'allin',           // how every £ metric is expressed: 'allin' = running + annualised assets; 'running' = running costs only
       optimalDispatch: false,   // battery: cost-optimised Agile dispatch (model.js DP)
       modelReady: false,
       usingSynthetic: false,
@@ -631,10 +643,13 @@ createApp({
   computed:{
     current(){ return this.compute(this.cfg); },
     statusQuo(){ return this.compute({ev:false,hp:false,solar:false,battery:false,agile:false,disconnectGas:false}); },
-    saving(){ return this.statusQuo.allIn - this.current.allIn; },
+    saving(){ return this.costOf(this.statusQuo) - this.costOf(this.current); },
     // shared linear scale for the cost bars: status quo (usually the largest)
     // anchors the full width, so the build bar shrinks as savings are made.
-    costScaleMax(){ return Math.max(this.statusQuo.allIn, this.current.allIn, 1); },
+    costScaleMax(){ return Math.max(this.costOf(this.statusQuo), this.costOf(this.current), 1); },
+    // headline wording that tracks the active cost mode
+    costModeLabel(){ return this.costMode === 'running' ? 'Running' : 'All-in'; },
+    costModeSub(){ return this.costMode === 'running' ? 'running only' : 'running + assets'; },
     buildName(){
       const on=[];
       if(this.cfg.ev)on.push('EV'); if(this.cfg.hp)on.push('heat pump');
@@ -677,10 +692,23 @@ createApp({
       // doesn't abate carbon, so £/tonne is undefined.
       const tonnes = this.carbonSaving / 1000;
       if(tonnes <= 0.0005) return null;
-      return -this.saving / tonnes;   // -saving = extra annual cost over status quo
+      // always on the all-in basis (matches the "How to read" note), independent
+      // of the headline cost-mode toggle
+      const allInSaving = this.statusQuo.allIn - this.current.allIn;
+      return -allInSaving / tonnes;   // -saving = extra annual cost over status quo
     },
   },
   methods:{
+    // The headline £ figure for a build under the active cost mode: the full
+    // all-in cost (running + annualised assets) or running costs only.
+    costOf(b){ return this.costMode === 'running' ? b.running : b.allIn; },
+    // Bar segments to draw under the active mode — drop the asset segments when
+    // showing running costs only so the stacked bar still sums to the figure.
+    costSegments(b){
+      if(this.costMode !== 'running') return b.segments;
+      const runKeys = { petrol:1, gas:1, elec:1 };
+      return b.segments.filter(s => runKeys[s.key]);
+    },
     gbp(n){ return '£'+Math.round(n).toLocaleString('en-GB'); },
     kwh(n){ return Math.round(n).toLocaleString('en-GB')+' kWh'; },
     co2(n){ return Math.round(n).toLocaleString('en-GB')+' kg'; },
@@ -749,9 +777,9 @@ createApp({
 
     marginalLabel(tech){
       // effect on cost of flipping this technology — all-in by default, or
-      // running-cost only when marginalRunningOnly is set
+      // running-cost only when the cost mode is set to running
       const s = this.marginalSavings(tech);
-      return this.fmtSaving(this.marginalRunningOnly ? s.run : s.net);
+      return this.fmtSaving(this.costMode === 'running' ? s.run : s.net);
     },
 
     marginalTooltip(tech){
@@ -766,7 +794,7 @@ createApp({
     marginalCaption(withAbate){
       // small label under the marginal figure, reflecting the active modes
       let s = 'marginal';
-      if(this.marginalRunningOnly) s += ' · running';
+      if(this.costMode === 'running') s += ' · running';
       if(withAbate && this.showMarginalDetail) s += ' · abatement';
       return s;
     },
