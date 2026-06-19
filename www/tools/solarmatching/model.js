@@ -65,13 +65,23 @@ var model = {
             return (v || 0) + (result[2].data[i] || 0) + (result[3].data[i] || 0);
         });
 
+        // The Agile import feed (518378) is stored ex-VAT; domestic electricity
+        // supply carries 5% VAT, so gross the import price up here. This is the
+        // single point that feeds the cost calc, the no-solar baseline, the
+        // volume-weighted average and the DP battery optimiser. Export (399363)
+        // is left as-is: domestic export/SEG payments are not subject to VAT.
+        var VAT = 1.05;
+        var agile_import = result[5].data.map(function (v) {
+            return v == null ? v : v * VAT;
+        });
+
         // Re-map to the series layout the simulation expects:
         // [0] solar, [1] lac demand, [2] heatpump, [3] agile import, [4] agile export, [5] measured ev
         this.series = [
             result[0],
             { data: lac },
             result[4],
-            result[5],
+            { data: agile_import },
             result[6],
             result[7]
         ];

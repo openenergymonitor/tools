@@ -28,8 +28,12 @@
     var LITRES_PER_GALLON = 4.54609;
 
     var DEFAULTS = {
-        // prices
-        elecRate: 26.11, elecStanding: 57.19, gasRate: 7.33, gasStanding: 29.04, segRate: 15,
+        // prices — unit rates p/kWh, standing charges p/day, all inc. VAT (retail
+        // figures as quoted to domestic customers). Flat-rate elec defaults are
+        // Flexible Octopus region D (Merseyside & N Wales, direct debit, mid-2025)
+        // to match the Agile dataset's region. The Agile import feed is the one
+        // exception: it is stored ex-VAT and grossed up in model.js _apply.
+        elecRate: 28.50, elecStanding: 68.17, gasRate: 7.33, gasStanding: 29.04, segRate: 15,
         // home energy
         gasTotal: 11500, heatingPct: 77, waterPct: 20, cookingPct: 3, boilerEff: 0.90, elecBaseload: 2700,
         // petrol car

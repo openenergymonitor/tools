@@ -260,7 +260,7 @@ table.data tfoot td{font-weight:600;border-top:2px solid var(--line-2);border-bo
           <slider-field label="Import price" unit="p/kWh" :min="5" :max="50" :step="0.5" :dp="1" v-model="p.import_rate"></slider-field>
           <slider-field label="Export price" unit="p/kWh" :min="0" :max="30" :step="0.5" :dp="1" v-model="p.export_rate"></slider-field>
           <slider-field label="Standing charge" unit="p/day" :min="0" :max="100" :step="0.5" :dp="1" v-model="p.standing_charge" hint="Daily fixed charge — added to both the flat-rate and Agile running cost."></slider-field>
-          <div class="note-inline">Agile import &amp; export prices come from the half-hourly dataset and update automatically.</div>
+          <div class="note-inline">All prices inc. VAT. Agile import &amp; export prices come from the half-hourly dataset (region D) and update automatically; import is grossed up by 5% VAT.</div>
         </div>
       </section>
     </aside>
@@ -320,7 +320,7 @@ table.data tfoot td{font-weight:600;border-top:2px solid var(--line-2);border-bo
       <div class="tiles">
         <div class="tile"><div class="t-lab">Solar generated</div><div class="t-val">{{ fmt0(a.solar_kwh) }}<i>kWh</i></div><div class="t-sub">{{ fmt2(p.solar_kWp) }} kWp array</div></div>
         <div class="tile"><div class="t-lab">Total demand</div><div class="t-val">{{ fmt0(a.demand_kwh) }}<i>kWh</i></div><div class="t-sub">home · heat · transport</div></div>
-        <div class="tile"><div class="t-lab">Grid import</div><div class="t-val" style="color:var(--import)">{{ fmt0(a.import_kwh) }}<i>kWh</i></div><div class="t-sub">avg {{ fmt1(a.avg_agile_import_rate) }} p/kWh on Agile</div></div>
+        <div class="tile"><div class="t-lab">Grid import</div><div class="t-val" style="color:var(--import)">{{ fmt0(a.import_kwh) }}<i>kWh</i></div><div class="t-sub">avg {{ fmt1(a.avg_agile_import_rate) }} p/kWh on Agile (inc. VAT)</div></div>
         <div class="tile"><div class="t-lab">Grid export</div><div class="t-val" style="color:var(--export)">{{ fmt0(a.export_kwh) }}<i>kWh</i></div><div class="t-sub">avg {{ fmt1(a.avg_agile_export_rate) }} p/kWh on Agile</div></div>
         <div class="tile"><div class="t-lab">Heat pump electricity</div><div class="t-val">{{ fmt0(a.heatpump_elec_kwh) }}<i>kWh</i></div><div class="t-sub">at SCOP {{ fmt1(p.heatpump_scop) }}</div></div>
         <div class="tile"><div class="t-lab">EV electricity</div><div class="t-val">{{ fmt0(a.ev_elec_kwh) }}<i>kWh</i></div><div class="t-sub">{{ p.ev_mode==='real' ? 'measured' : fmt0(p.ev_miles)+' mi/yr' }}</div></div>
@@ -398,7 +398,7 @@ table.data tfoot td{font-weight:600;border-top:2px solid var(--line-2);border-bo
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="tools/solarmatching/model.js?v=2"></script>
+<script src="tools/solarmatching/model.js?v=3"></script>
 <script>
 const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue;
 
@@ -449,9 +449,9 @@ const app = createApp({
     p.ev_charge_end_hour = 7;        // evChargeEnd
     p.battery.capacity = 5;          // batteryKwh
     p.battery.dispatch = 'optimal';  // optimalDispatch on
-    p.import_rate = 26.11;           // elecRate
+    p.import_rate = 28.50;           // elecRate — Flexible Octopus region D, inc. VAT
     p.export_rate = 15;              // segRate
-    p.standing_charge = 57.19;       // elecStanding (p/day) — applies to both tariffs
+    p.standing_charge = 68.17;       // elecStanding (p/day, inc. VAT) — applies to both tariffs
 
     // Optimal-dispatch toggle: maps the boolean switch to the model's
     // battery.dispatch string ('optimal' | 'greedy').

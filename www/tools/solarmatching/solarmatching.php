@@ -322,7 +322,7 @@
         <div class="subhead">Flat-rate tariff</div>
         <div class="field"><label>Import rate</label><div class="grp-in"><input type="text" v-model.number="import_rate" @change="update"><span class="unit">p/kWh</span></div></div>
         <div class="field"><label>Export rate</label><div class="grp-in"><input type="text" v-model.number="export_rate" @change="update"><span class="unit">p/kWh</span></div></div>
-        <div class="subhead">Agile (half-hourly)</div>
+        <div class="subhead">Agile (half-hourly) &middot; inc. VAT</div>
         <div class="field"><label>Avg import rate</label><div class="grp-in"><input type="text" class="ro" :value="annual.avg_agile_import_rate | toFixed(1)" disabled><span class="unit">p/kWh</span></div></div>
         <div class="field"><label>Avg export rate</label><div class="grp-in"><input type="text" class="ro" :value="annual.avg_agile_export_rate | toFixed(1)" disabled><span class="unit">p/kWh</span></div></div>
       </div>
@@ -346,7 +346,7 @@
         <p class="foot" style="margin-top:14px;">
           Agile net <b>£{{ annual.agile_cost | toFixed(0) }}</b> vs flat-rate <b>£{{ annual.cost | toFixed(0) }}</b>
           &mdash; a {{ (annual.cost - annual.agile_cost) | toFixed(0) }} £ difference.
-          Avg agile import {{ annual.avg_agile_import_rate | toFixed(1) }}p, export {{ annual.avg_agile_export_rate | toFixed(1) }}p per kWh.
+          Avg agile import {{ annual.avg_agile_import_rate | toFixed(1) }}p (inc. VAT), export {{ annual.avg_agile_export_rate | toFixed(1) }}p per kWh.
         </p>
       </div>
 

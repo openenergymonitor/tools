@@ -339,14 +339,14 @@
         <div class="card-head"><h2>Assumptions</h2><span class="hint">all editable · mid-2026 figures</span></div>
 
         <details open>
-          <summary>Energy prices &amp; tariff <span class="chev">›</span></summary>
+          <summary>Energy prices &amp; tariff <span class="unit">inc. VAT</span> <span class="chev">›</span></summary>
           <div class="fields">
             <div class="field" v-if="!cfg.agile"><label>Electricity unit rate <span class="unit">p/kWh</span></label><input type="number" step="0.01" v-model.number="p.elecRate"></div>
             <div class="field"><label>Electricity standing charge <span class="unit">p/day</span></label><input type="number" step="0.01" v-model.number="p.elecStanding"></div>
             <div class="field"><label>Gas unit rate <span class="unit">p/kWh</span></label><input type="number" step="0.01" v-model.number="p.gasRate"></div>
             <div class="field"><label>Gas standing charge <span class="unit">p/day</span></label><input type="number" step="0.01" v-model.number="p.gasStanding"></div>
             <div class="field" v-if="!cfg.agile"><label>Export rate (SEG / flat) <span class="unit">p/kWh</span></label><input type="number" step="0.01" v-model.number="p.segRate"></div>
-            <p v-if="cfg.agile" style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Agile tariff is on: import &amp; export prices come from the half-hourly dataset (avg {{ current.avgAgileImport==null ? '—' : current.avgAgileImport.toFixed(1) }}p import / {{ current.avgAgileExport==null ? '—' : current.avgAgileExport.toFixed(1) }}p export across this build), so the flat import &amp; export rates don't apply. Switch Agile off to set them.</p>
+            <p v-if="cfg.agile" style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Agile tariff is on: import &amp; export prices come from the half-hourly dataset (region D, inc. VAT — import grossed up by 5%; avg {{ current.avgAgileImport==null ? '—' : current.avgAgileImport.toFixed(1) }}p import / {{ current.avgAgileExport==null ? '—' : current.avgAgileExport.toFixed(1) }}p export across this build), so the flat import &amp; export rates don't apply. Switch Agile off to set them.</p>
           </div>
         </details>
 
@@ -582,7 +582,7 @@
 
       <div class="foot">
         <p><b>How to read this.</b> Lumpy purchases (a car, a boiler) are spread over their life as an equivalent annual cost — discounted for the time-value of money — so options compare like-for-like. The fossil status quo already carries a car and a boiler you'd replace anyway — switching to an EV or heat pump swaps one asset cost for another rather than adding to it. “Extra upfront” is the cash needed today for the new kit beyond a like-for-like petrol-car / boiler replacement.</p>
-        <p style="margin-top:10px;"><b>Simplifications.</b> Solar self-consumption is, by default, run through a half-hourly simulation of a real year (the same engine as the <a href="solar-matching.html">Solar Matching</a> tool) — solar, battery and EV charging are dispatched interval-by-interval, so self-consumption and the import / export split emerge from the timing. A simple annualised daytime-match estimate is available under <em>Advanced · solar matching</em> for comparison. The <b>Agile tariff</b> switch prices every half-hour of import and export against the dataset's wholesale-linked rates (the same dispatch, re-costed); with it off, a flat unit rate and a flat export rate apply. The EV charges within the window set under <em>Electric vehicle</em>. Lumpy purchases are converted to an equivalent annual cost with a capital-recovery (annuity) factor at a real discount rate (default {{ p.discountRate }}%, editable under <em>Assumptions · Discounting</em>), so capital spent today weighs more than future spend and resale values are discounted back — set it to 0 for plain straight-line spreading. Insurance is treated as roughly neutral between petrol and EV. Prices are a mid-2026 snapshot and unusually high. <span class="pill">v2 · half-hourly</span></p>
+        <p style="margin-top:10px;"><b>Simplifications.</b> Solar self-consumption is, by default, run through a half-hourly simulation of a real year (the same engine as the <a href="solar-matching.html">Solar Matching</a> tool) — solar, battery and EV charging are dispatched interval-by-interval, so self-consumption and the import / export split emerge from the timing. A simple annualised daytime-match estimate is available under <em>Advanced · solar matching</em> for comparison. The <b>Agile tariff</b> switch prices every half-hour of import and export against the dataset's wholesale-linked rates (the same dispatch, re-costed); with it off, a flat unit rate and a flat export rate apply. The EV charges within the window set under <em>Electric vehicle</em>. Lumpy purchases are converted to an equivalent annual cost with a capital-recovery (annuity) factor at a real discount rate (default {{ p.discountRate }}%, editable under <em>Assumptions · Discounting</em>), so capital spent today weighs more than future spend and resale values are discounted back — set it to 0 for plain straight-line spreading. Insurance is treated as roughly neutral between petrol and EV. All prices are inc. VAT (flat rates default to Flexible Octopus region D; Agile import comes from the region-D dataset, grossed up by 5%). Prices are a mid-2026 snapshot and unusually high. <span class="pill">v2 · half-hourly</span></p>
         <p style="margin-top:10px;"><b>Carbon basis.</b> Petrol ~2.9 kgCO₂e/L well-to-wheel; gas 0.183 kgCO₂e/kWh combustion plus an upstream/methane uplift (default +20%, GWP100 — the evidence suggests this is the floor, not the ceiling). Grid ~125 gCO₂/kWh (2024-25 average, falling fast toward ~50 by 2030), so the electrified case looks better every year. Exported solar is credited against gas (CCGT) generation. Embodied carbon follows the Hoekstra framing: the car glider is ~equal for petrol and EV, with the battery the main difference (~75 kgCO₂e/kWh of cell). “Carbon payback” = one-off extra manufacturing carbon ÷ annual operational saving. <b>“Abatement cost”</b> = the change in all-in annual cost ÷ the tonnes of CO₂e abated per year (whole build vs status quo, or per step given the rest of the build): a <b>negative</b> figure means the measure cuts carbon <em>and</em> saves money — you're effectively paid to decarbonise — while a positive figure is what you pay per tonne avoided (for context, UK government appraisal currently values carbon at roughly £250/tCO₂e). Steps that don't cut carbon show “—”. <span class="pill">factors editable</span></p>
       </div>
     </div>
@@ -590,8 +590,8 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
-<script src="tools/solarmatching/model.js?v=2"></script>
-<script src="tools/solarmatching/ledger.js?v=4"></script>
+<script src="tools/solarmatching/model.js?v=3"></script>
+<script src="tools/solarmatching/ledger.js?v=5"></script>
 <script>
 const { createApp } = Vue;
 
