@@ -184,16 +184,17 @@
       <p>Start from the fossil status quo, then switch on technologies in any order. Running costs <em>and</em> the assets you'd replace anyway are tracked together, so each step is compared fairly.</p>
     </div>
     <div class="masthead-actions">
-      <div class="modeseg" role="group" aria-label="Cost basis">
+      <div class="modeseg" role="group" aria-label="Metric basis">
         <button :class="{on:costMode==='running'}" @click="costMode='running'">Running costs only</button>
         <button :class="{on:costMode==='allin'}" @click="costMode='allin'">Running costs + assets</button>
+        <button :class="{on:costMode==='carbon'}" @click="costMode='carbon'">Carbon</button>
       </div>
       <button class="reset" @click="resetAll">↺ reset assumptions</button>
     </div>
   </header>
 
   <!-- HERO LEDGER -->
-  <section class="hero">
+  <section class="hero" v-if="!isCarbon">
     <div class="hero-top">
       <div class="hero-headline">{{ costModeLabel }} annual cost — fossil status quo vs your current build</div>
       <div class="saving-badge" :class="saving>=0?'pos':'neg'">
@@ -229,7 +230,7 @@
   </section>
 
   <!-- CARBON HERO LEDGER -->
-  <section class="hero">
+  <section class="hero" v-if="isCarbon">
     <div class="hero-top">
       <div class="hero-headline">Carbon — fossil status quo vs your current build <span class="pill" style="margin-left:8px;">operational + embodied</span></div>
       <div class="saving-badge" :class="carbonSaving>=0?'pos':'neg'">
@@ -275,40 +276,40 @@
     <!-- LEFT: configuration -->
     <div>
       <div class="card builder">
-        <div class="card-head"><h2>Build your home</h2><label class="chk" style="font-size:11px;"><input type="checkbox" v-model="showMarginalDetail">show carbon &amp; abatement</label></div>
+        <div class="card-head"><h2>Build your home</h2></div>
 
         <div class="tech">
           <div class="icon" style="background:var(--ev)">EV</div>
           <div class="tx"><b>Electric vehicle</b><small>replaces the petrol car</small></div>
-          <div class="mg"><span class="val" :title="marginalTooltip('ev')">{{ marginalLabel('ev') }}</span><template v-if="showMarginalDetail"><small class="co2">{{ marginalCarbonLabel('ev') }} CO₂e</small><small class="abate">{{ marginalAbatementLabel('ev') }}</small></template><span>{{ marginalCaption(true) }}</span></div>
+          <div class="mg"><span class="val" :title="marginalTooltip('ev')">{{ marginalPrimary('ev') }}</span><span>{{ marginalCaption() }}</span></div>
           <label class="sw"><input type="checkbox" v-model="cfg.ev"><span class="track"></span><span class="knob"></span></label>
         </div>
 
         <div class="tech">
           <div class="icon" style="background:var(--hp)">HP</div>
           <div class="tx"><b>Heat pump</b><small>replaces the gas boiler</small></div>
-          <div class="mg"><span class="val" :title="marginalTooltip('hp')">{{ marginalLabel('hp') }}</span><template v-if="showMarginalDetail"><small class="co2">{{ marginalCarbonLabel('hp') }} CO₂e</small><small class="abate">{{ marginalAbatementLabel('hp') }}</small></template><span>{{ marginalCaption(true) }}</span></div>
+          <div class="mg"><span class="val" :title="marginalTooltip('hp')">{{ marginalPrimary('hp') }}</span><span>{{ marginalCaption() }}</span></div>
           <label class="sw"><input type="checkbox" v-model="cfg.hp"><span class="track"></span><span class="knob"></span></label>
         </div>
 
         <div class="tech">
           <div class="icon" style="background:var(--solar)">PV</div>
           <div class="tx"><b>Solar PV</b><small>{{ p.solarKwp }} kWp on the roof</small></div>
-          <div class="mg"><span class="val" :title="marginalTooltip('solar')">{{ marginalLabel('solar') }}</span><template v-if="showMarginalDetail"><small class="co2">{{ marginalCarbonLabel('solar') }} CO₂e</small><small class="abate">{{ marginalAbatementLabel('solar') }}</small></template><span>{{ marginalCaption(true) }}</span></div>
+          <div class="mg"><span class="val" :title="marginalTooltip('solar')">{{ marginalPrimary('solar') }}</span><span>{{ marginalCaption() }}</span></div>
           <label class="sw"><input type="checkbox" v-model="cfg.solar"><span class="track"></span><span class="knob"></span></label>
         </div>
 
         <div class="tech">
           <div class="icon" style="background:var(--battery)">B</div>
           <div class="tx"><b>Home battery</b><small>{{ p.batteryKwh }} kWh storage</small></div>
-          <div class="mg"><span class="val" :title="marginalTooltip('battery')">{{ marginalLabel('battery') }}</span><template v-if="showMarginalDetail"><small class="co2">{{ marginalCarbonLabel('battery') }} CO₂e</small><small class="abate">{{ marginalAbatementLabel('battery') }}</small></template><span>{{ marginalCaption(true) }}</span></div>
+          <div class="mg"><span class="val" :title="marginalTooltip('battery')">{{ marginalPrimary('battery') }}</span><span>{{ marginalCaption() }}</span></div>
           <label class="sw"><input type="checkbox" v-model="cfg.battery"><span class="track"></span><span class="knob"></span></label>
         </div>
 
         <div class="tech" :class="{disabled: !useHHModel}">
           <div class="icon" style="background:var(--grid)">⚡</div>
           <div class="tx"><b>Agile tariff</b><small v-if="useHHModel">half-hourly wholesale-linked import &amp; export prices</small><small v-else>needs the half-hourly model · enable it under Advanced</small></div>
-          <div class="mg" v-if="useHHModel"><span class="val" :title="marginalTooltip('agile')">{{ marginalLabel('agile') }}</span><small v-if="showMarginalDetail" class="co2">{{ marginalCarbonLabel('agile') }} CO₂e</small><span>{{ marginalCaption(false) }}</span></div>
+          <div class="mg" v-if="useHHModel"><span class="val" :title="marginalTooltip('agile')">{{ marginalPrimary('agile') }}</span><span>{{ marginalCaption() }}</span></div>
           <label class="sw"><input type="checkbox" v-model="cfg.agile" :disabled="!useHHModel"><span class="track"></span><span class="knob"></span></label>
         </div>
 
@@ -486,7 +487,7 @@
 
     <!-- RIGHT: results -->
     <div>
-      <div class="card">
+      <div class="card" v-if="!isCarbon">
         <div class="card-head"><h2>This build · the numbers</h2></div>
         <div class="stat-row">
           <div class="stat"><div class="k">{{ costModeLabel }} / yr</div><div class="v">{{ gbp(costOf(current)) }}</div><div class="s">{{ costModeSub }}</div></div>
@@ -514,7 +515,7 @@
         </table>
       </div>
 
-      <div class="card">
+      <div class="card" v-if="isCarbon">
         <div class="card-head"><h2>This build · carbon</h2><span class="hint">kgCO₂e per year</span></div>
         <div class="stat-row q4">
           <div class="stat"><div class="k">CO₂e / yr</div><div class="v">{{ co2(current.totalCO2) }}</div><div class="s">operational + embodied</div></div>
@@ -604,8 +605,7 @@ createApp({
       // solar-matching engine: half-hourly simulation (model.js) by default,
       // with the simple annual estimate available for comparison.
       useHHModel: true,
-      showMarginalDetail: false,   // build rows: reveal per-step carbon + abatement lines (default hidden to reduce clutter)
-      costMode: 'allin',           // how every £ metric is expressed: 'allin' = running + annualised assets; 'running' = running costs only
+      costMode: 'allin',           // how every metric is expressed: 'allin' = running + annualised assets; 'running' = running costs only; 'carbon' = CO₂e
       optimalDispatch: false,   // battery: cost-optimised Agile dispatch (model.js DP)
       modelReady: false,
       usingSynthetic: false,
@@ -650,6 +650,7 @@ createApp({
     // headline wording that tracks the active cost mode
     costModeLabel(){ return this.costMode === 'running' ? 'Running' : 'All-in'; },
     costModeSub(){ return this.costMode === 'running' ? 'running only' : 'running + assets'; },
+    isCarbon(){ return this.costMode === 'carbon'; },
     buildName(){
       const on=[];
       if(this.cfg.ev)on.push('EV'); if(this.cfg.hp)on.push('heat pump');
@@ -782,8 +783,31 @@ createApp({
       return this.fmtSaving(this.costMode === 'running' ? s.run : s.net);
     },
 
+    marginalCarbon(tech){
+      // Signed carbon cut (+ve = less CO₂e) from flipping this technology, split
+      // into operational and embodied components plus the net total — the carbon
+      // counterpart of marginalSavings.
+      const flipped = this.flipCfg(tech);
+      const here = this.current;
+      const there = this.compute(flipped);
+      const dir = this.cfg[tech] ? 1 : -1;
+      return {
+        op:  dir * (there.opCO2    - here.opCO2),
+        emb: dir * (there.embCO2   - here.embCO2),
+        net: dir * (there.totalCO2 - here.totalCO2),
+      };
+    },
+
     marginalTooltip(tech){
-      // full breakdown behind the marginal figure (− = saving, + = added cost)
+      // full breakdown behind the marginal figure (− = saving / cut, + = added)
+      if(this.costMode === 'carbon'){
+        const c = this.marginalCarbon(tech);
+        const f = v => (v >= 0 ? '−' : '+') + this.co2(Math.abs(v));
+        return 'Operational: ' + f(c.op)
+             + '\nEmbodied: ' + f(c.emb)
+             + '\nNet result: ' + f(c.net)
+             + '\n(− = cuts CO₂e/yr, + = adds CO₂e/yr)';
+      }
       const s = this.marginalSavings(tech);
       return 'Running cost saving: ' + this.fmtSaving(s.run)
            + '\nAnnualised capital: ' + this.fmtSaving(s.asset)
@@ -791,11 +815,15 @@ createApp({
            + '\n(− = saves £/yr, + = adds £/yr)';
     },
 
-    marginalCaption(withAbate){
-      // small label under the marginal figure, reflecting the active modes
+    // primary marginal figure for the active mode (carbon delta in carbon mode,
+    // else the £ figure)
+    marginalPrimary(tech){ return this.costMode === 'carbon' ? this.marginalCarbonLabel(tech) : this.marginalLabel(tech); },
+
+    marginalCaption(){
+      // small label under the marginal figure, reflecting the active mode
       let s = 'marginal';
       if(this.costMode === 'running') s += ' · running';
-      if(withAbate && this.showMarginalDetail) s += ' · abatement';
+      else if(this.costMode === 'carbon') s += ' · carbon';
       return s;
     },
 
@@ -809,19 +837,6 @@ createApp({
                                    : (here - there);  // currently off: now minus carbon-if-added → +ve means adding cuts
       const sign = delta>=0 ? '−' : '+';
       return sign + this.co2(Math.abs(delta));
-    },
-
-    marginalAbatementLabel(tech){
-      // £ per tonne CO2e abated by flipping this step, given the rest of the build.
-      // Negative = the step cuts carbon AND saves money; '—' = it doesn't cut carbon.
-      const flipped = this.flipCfg(tech);
-      const there = this.compute(flipped);                  // cached if already computed for the £/kg labels
-      const costSaving   = this.cfg[tech] ? (there.allIn - this.current.allIn)       : (this.current.allIn - there.allIn);     // +ve = step saves £/yr
-      const carbonAbated = this.cfg[tech] ? (there.totalCO2 - this.current.totalCO2) : (this.current.totalCO2 - there.totalCO2); // +ve = step cuts kg/yr
-      const tonnes = carbonAbated / 1000;
-      if(tonnes <= 0.0005) return '—';                      // step doesn't cut carbon → undefined
-      const perTonne = -costSaving / tonnes;                // +£/t = pay to abate; −£/t = paid to abate
-      return (perTonne < 0 ? '−' : '') + this.gbp(Math.abs(perTonne)) + '/t';
     },
 
     // Annual cost & carbon ledger for a build config. The logic lives in
