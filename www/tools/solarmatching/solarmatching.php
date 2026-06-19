@@ -10,7 +10,7 @@
 <script src="<?php echo $path_lib; ?>feed.js?v=1"></script>
 <script src="<?php echo $path_lib; ?>vis.helper.js?v=1"></script>
 
-<script src="tools/solarmatching/model.js?v=2"></script>
+<script src="tools/solarmatching/model.js?v=4"></script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -276,6 +276,9 @@
         <div class="field"><label>Battery capacity</label><div class="grp-in"><input type="text" v-model.number="battery.capacity" @change="update"><span class="unit">kWh</span></div></div>
 
         <template v-if="battery.capacity>0">
+          <div class="field"><label>Max power</label><div class="grp-in"><input type="text" class="short" v-model.number="battery_max_power_kw" @change="update"><span class="unit">kW</span></div></div>
+          <div class="field"><label>Round-trip efficiency</label><div class="grp-in"><input type="text" class="short" v-model.number="battery_round_trip_pct" @change="update"><span class="unit">%</span></div></div>
+
           <div class="subhead">Battery scheduling</div>
           <label class="chk"><input type="checkbox" true-value="optimal" false-value="greedy" v-model="battery.dispatch" @change="update">Optimal dispatch &mdash; cost-optimised against Agile prices (overrides manual scheduling below)</label>
 
@@ -482,10 +485,13 @@ var app = new Vue({
             soc_start: 0,
             charge_kwh: 0,
             discharge_kwh: 0,
-            charge_max: 3.5,
-            discharge_max: 3.5,
-            charge_efficiency: 0.9,
-            discharge_efficiency: 0.9,
+            // Inverter charge/discharge power limit (W) — a real battery rating,
+            // independent of the PV array size.
+            charge_max: 3500,
+            discharge_max: 3500,
+            // Round-trip efficiency (0-1); model.run() splits it evenly into
+            // charge/discharge efficiency.
+            round_trip_efficiency: 0.8,
             // Dispatch: 'greedy' (manual scheduling below) or 'optimal'
             // (cost-optimised against Agile prices; see model.js optimiseBatteryDP)
             dispatch: 'greedy',
@@ -539,6 +545,19 @@ var app = new Vue({
         interval: 900,
 
         view: "monthly" // or "power"
+    },
+    computed: {
+        // Max charge/discharge power, edited in kW (model stores W). One inverter
+        // rating drives both limits.
+        battery_max_power_kw: {
+            get: function () { return this.battery.charge_max / 1000; },
+            set: function (v) { this.battery.charge_max = v * 1000; this.battery.discharge_max = v * 1000; }
+        },
+        // Round-trip efficiency, edited as a percentage (model stores 0-1).
+        battery_round_trip_pct: {
+            get: function () { return this.battery.round_trip_efficiency * 100; },
+            set: function (v) { this.battery.round_trip_efficiency = v / 100; }
+        }
     },
     methods: {
         update: function () {

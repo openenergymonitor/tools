@@ -150,10 +150,13 @@ var model = {
             battery: {
                 capacity: 0,
                 soc_start: 0,
-                charge_max: 3.5,
-                discharge_max: 3.5,
-                charge_efficiency: 0.9,
-                discharge_efficiency: 0.9,
+                // Inverter charge/discharge power limits (W). A real battery rating,
+                // independent of the PV array size.
+                charge_max: 3500,
+                discharge_max: 3500,
+                // Round-trip efficiency (0-1) is the user-facing control; run()
+                // splits it evenly into charge/discharge efficiency (sqrt each).
+                round_trip_efficiency: 0.8,
                 // Dispatch strategy: 'greedy' (per-interval heuristic + the
                 // scheduled windows below) or 'optimal' (globally near-optimal
                 // perfect-foresight DP over the half-hourly agile prices; the
@@ -199,6 +202,16 @@ var model = {
         var p = Object.assign(this.defaultParams(), params || {});
         p.battery = Object.assign(this.defaultParams().battery, (params && params.battery) || {});
 
+        // Round-trip efficiency is the single user-facing control; split it evenly
+        // across charge and discharge so charge_eff * discharge_eff == round_trip.
+        // (A caller may still pass charge_efficiency / discharge_efficiency directly
+        // by omitting round_trip_efficiency.)
+        if (p.battery.round_trip_efficiency != null) {
+            var rt_eff = Math.sqrt(p.battery.round_trip_efficiency);
+            p.battery.charge_efficiency = rt_eff;
+            p.battery.discharge_efficiency = rt_eff;
+        }
+
         var series = this.series;
         var data_start_time = this.data_start_time;
         var interval = this.interval;
@@ -227,10 +240,11 @@ var model = {
         // EV: charge overnight at fixed power until the day's energy need is met
         let ev_daily_kwh = ev_elec_kwh / 365;
 
-        // Battery charge/discharge power caps (W) scale with array size, as in
-        // the original model.
-        p.battery.charge_max = p.solar_kWp * 1000;
-        p.battery.discharge_max = p.solar_kWp * 1000;
+        // Battery charge/discharge power caps (W) come from p.battery.charge_max /
+        // discharge_max — a real inverter rating, independent of the PV array size.
+        // (Tying them to solar_kWp previously crippled battery-only arbitrage: with
+        // no PV the cap collapsed to 0 and the DP could only inch the SOC one
+        // quantisation level per interval.)
         let overnight_target_soc = p.battery.capacity * p.battery.overnight_charge_target_pct / 100;
 
         // Pre-pass: solar generation (W) and total demand (W) per interval.

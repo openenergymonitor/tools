@@ -52,6 +52,8 @@
         // for cells, so the £/kWh falls with capacity. Anchored to a 13.5 kWh
         // Powerwall add-on (~£4.1k) with a 5 kWh budget add-on (~£1.2k) as the floor.
         batteryKwh: 5, batteryFixed: 500, batteryPerKwh: 270, batteryLife: 15, batteryUtil: 0.8,
+        // battery performance — inverter power limit (kW) and round-trip efficiency (0-1)
+        batteryMaxPowerKw: 3.5, batteryRoundTrip: 0.8,
         // discounting — real (above-inflation) discount rate, %/yr, applied to capital
         discountRate: 3,
         // investment metrics — for the simple payback / IRR / ISA-crossover view
@@ -117,7 +119,13 @@
             ev_charge_power: 7,
             ev_charge_start_hour: p.evChargeStart,
             ev_charge_end_hour: p.evChargeEnd,
-            battery: { capacity: c.battery ? p.batteryKwh : 0, dispatch: ctx.optimalDispatch ? 'optimal' : 'greedy' },
+            battery: {
+                capacity: c.battery ? p.batteryKwh : 0,
+                dispatch: ctx.optimalDispatch ? 'optimal' : 'greedy',
+                charge_max: p.batteryMaxPowerKw * 1000,
+                discharge_max: p.batteryMaxPowerKw * 1000,
+                round_trip_efficiency: p.batteryRoundTrip
+            },
             // Flat import/export rates feed the model's own flat-cost figure (unused
             // here — the ledger applies its own rates); Agile figures come from the
             // half-hourly dataset prices baked into the model.

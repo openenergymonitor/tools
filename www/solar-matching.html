@@ -225,8 +225,8 @@ table.data tfoot td{font-weight:600;border-top:2px solid var(--line-2);border-bo
           <template v-if="p.battery.capacity>0">
             <slider-field label="Starting charge" unit="kWh" :min="0" :max="p.battery.capacity" :step="0.5" :dp="1" v-model="p.battery.soc_start"></slider-field>
             <div class="row2">
-              <slider-field label="Charge eff." unit="" :min="0.7" :max="1" :step="0.01" :dp="2" v-model="p.battery.charge_efficiency"></slider-field>
-              <slider-field label="Discharge eff." unit="" :min="0.7" :max="1" :step="0.01" :dp="2" v-model="p.battery.discharge_efficiency"></slider-field>
+              <slider-field label="Max power" unit="kW" :min="0.5" :max="11" :step="0.1" :dp="1" v-model="maxPowerKw" hint="Inverter charge / discharge power limit."></slider-field>
+              <slider-field label="Round-trip eff." unit="%" :min="70" :max="100" :step="1" :dp="0" v-model="roundTripPct" hint="Energy out ÷ energy in over a full cycle; split evenly across charge and discharge."></slider-field>
             </div>
             <div class="sub">
               <toggle-field label="Optimal dispatch (Agile cost-optimised)" v-model="optimalDispatch"></toggle-field>
@@ -398,7 +398,7 @@ table.data tfoot td{font-weight:600;border-top:2px solid var(--line-2);border-bo
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="tools/solarmatching/model.js?v=3"></script>
+<script src="tools/solarmatching/model.js?v=4"></script>
 <script>
 const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue;
 
@@ -458,6 +458,18 @@ const app = createApp({
     const optimalDispatch = computed({
       get: () => p.battery.dispatch === 'optimal',
       set: v => { p.battery.dispatch = v ? 'optimal' : 'greedy'; }
+    });
+
+    // Max charge/discharge power: stored internally in W, edited in kW. A single
+    // inverter rating drives both the charge and discharge limit.
+    const maxPowerKw = computed({
+      get: () => p.battery.charge_max / 1000,
+      set: v => { p.battery.charge_max = v * 1000; p.battery.discharge_max = v * 1000; }
+    });
+    // Round-trip efficiency edited as a percentage (model stores the 0-1 fraction).
+    const roundTripPct = computed({
+      get: () => p.battery.round_trip_efficiency * 100,
+      set: v => { p.battery.round_trip_efficiency = v / 100; }
     });
 
     const result = ref(null);
@@ -653,7 +665,7 @@ const app = createApp({
 
     return {
       loaded, usingSynthetic, activeTariff, monthlyMetric, selectedMonth,
-      p, optimalDispatch, result, a, headline, balance, selfSuff, selfCons,
+      p, optimalDispatch, maxPowerKw, roundTripPct, result, a, headline, balance, selfSuff, selfCons,
       daySeries, monthName, monthOptions, monthlyRows, totals,
       dayCanvas, monthCanvas, ssCanvas, scCanvas,
       fmt0, fmt1, fmt2, money, pct
