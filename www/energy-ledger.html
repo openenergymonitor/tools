@@ -99,6 +99,48 @@
   .tech .mg span{display:block;font-size:10px;color:var(--faint);font-weight:400;}
   .tech .mg span.val{display:inline;font-size:12.5px;}
 
+  /* marginal value + step-detail tooltip */
+  .mg .mgtop{display:flex;align-items:center;justify-content:flex-end;gap:6px;}
+  .mg .infotip{position:relative;display:inline-flex;align-items:center;cursor:help;}
+  .mg .infotip .ic{
+    width:15px;height:15px;border-radius:50%;display:grid;place-items:center;
+    font-family:"JetBrains Mono",monospace;font-style:italic;font-weight:700;font-size:10px;line-height:1;
+    color:var(--muted);border:1px solid var(--line2);background:var(--panel2);
+    transition:color .15s,border-color .15s,background .15s;
+  }
+  .mg .infotip:hover .ic,.mg .infotip:focus-within .ic{color:var(--ink);background:var(--grid);border-color:var(--grid);}
+  .mg .tipcard{
+    position:absolute;top:calc(100% + 9px);right:-6px;z-index:50;
+    width:268px;text-align:left;font-weight:400;line-height:1.5;white-space:normal;
+    background:linear-gradient(180deg,var(--raise) 0%,var(--panel2) 100%);
+    border:1px solid var(--line2);border-radius:11px;
+    box-shadow:0 14px 40px rgba(0,0,0,.5);
+    padding:13px 14px;
+    opacity:0;visibility:hidden;transform:translateY(-4px);
+    transition:opacity .16s ease,transform .16s ease,visibility .16s;
+    pointer-events:none;
+  }
+  .mg .infotip:hover .tipcard,.mg .infotip:focus-within .tipcard{opacity:1;visibility:visible;transform:translateY(0);}
+  .mg .tipcard::before{
+    content:"";position:absolute;top:-6px;right:9px;width:11px;height:11px;
+    background:var(--raise);border-left:1px solid var(--line2);border-top:1px solid var(--line2);
+    transform:rotate(45deg);
+  }
+  .tipcard .tiphd{display:flex;align-items:center;gap:7px;font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:13px;color:var(--text);}
+  .tipcard .tdot{width:9px;height:9px;border-radius:3px;flex:none;}
+  .tipcard .tipsub{font-size:11px;color:var(--muted);line-height:1.5;margin:3px 0 9px;font-weight:400;}
+  .tipcard .tiprow{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:12px;color:var(--text);padding:3px 0;}
+  /* label spans sit inside .mg, so out-specify .tech .mg span (which paints them faint) */
+  .mg .tipcard .tiprow > span:first-child{color:var(--text);}
+  .tipcard .tiprow .tv,.tipcard .tiprow .tg,.tipcard .tiprow .tb{font-family:"JetBrains Mono",monospace;font-weight:700;font-variant-numeric:tabular-nums;}
+  .mg .tipcard .tv{color:var(--text);}
+  .mg .tipcard .tg{color:var(--good);}
+  .mg .tipcard .tb{color:var(--bad);}
+  .tipcard .tipnet{border-top:1px solid var(--line);margin-top:4px;padding-top:7px;}
+  .tipcard .tipnet > span:first-child{color:var(--text);font-weight:600;}
+  .tipcard .tiphd2{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--gas);margin:13px 0 7px;padding-top:11px;border-top:1px dashed var(--line);}
+  .tipcard .tipnote{font-size:10px;color:var(--muted);margin-top:9px;font-family:"JetBrains Mono",monospace;}
+
   /* toggle */
   .sw{position:relative;width:46px;height:26px;flex:none;cursor:pointer;}
   .sw input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;}
@@ -281,35 +323,50 @@
         <div class="tech">
           <div class="icon" style="background:var(--ev)">EV</div>
           <div class="tx"><b>Electric vehicle</b><small>replaces the petrol car</small></div>
-          <div class="mg"><span class="val" :title="marginalTooltip('ev')">{{ marginalPrimary('ev') }}</span><span>{{ marginalCaption() }}</span></div>
+          <div class="mg">
+            <div class="mgtop"><span class="val">{{ marginalPrimary('ev') }}</span><span class="infotip" tabindex="0" role="img" aria-label="Step breakdown"><span class="ic">i</span><span class="tipcard" v-html="marginalTipHtml('ev')"></span></span></div>
+            <span>{{ marginalCaption() }}</span>
+          </div>
           <label class="sw"><input type="checkbox" v-model="cfg.ev"><span class="track"></span><span class="knob"></span></label>
         </div>
 
         <div class="tech">
           <div class="icon" style="background:var(--hp)">HP</div>
           <div class="tx"><b>Heat pump</b><small>replaces the gas boiler</small></div>
-          <div class="mg"><span class="val" :title="marginalTooltip('hp')">{{ marginalPrimary('hp') }}</span><span>{{ marginalCaption() }}</span></div>
+          <div class="mg">
+            <div class="mgtop"><span class="val">{{ marginalPrimary('hp') }}</span><span class="infotip" tabindex="0" role="img" aria-label="Step breakdown"><span class="ic">i</span><span class="tipcard" v-html="marginalTipHtml('hp')"></span></span></div>
+            <span>{{ marginalCaption() }}</span>
+          </div>
           <label class="sw"><input type="checkbox" v-model="cfg.hp"><span class="track"></span><span class="knob"></span></label>
         </div>
 
         <div class="tech">
           <div class="icon" style="background:var(--solar)">PV</div>
           <div class="tx"><b>Solar PV</b><small>{{ p.solarKwp }} kWp on the roof</small></div>
-          <div class="mg"><span class="val" :title="marginalTooltip('solar')">{{ marginalPrimary('solar') }}</span><span>{{ marginalCaption() }}</span></div>
+          <div class="mg">
+            <div class="mgtop"><span class="val">{{ marginalPrimary('solar') }}</span><span class="infotip" tabindex="0" role="img" aria-label="Step breakdown"><span class="ic">i</span><span class="tipcard" v-html="marginalTipHtml('solar')"></span></span></div>
+            <span>{{ marginalCaption() }}</span>
+          </div>
           <label class="sw"><input type="checkbox" v-model="cfg.solar"><span class="track"></span><span class="knob"></span></label>
         </div>
 
         <div class="tech">
           <div class="icon" style="background:var(--battery)">B</div>
           <div class="tx"><b>Home battery</b><small>{{ p.batteryKwh }} kWh storage</small></div>
-          <div class="mg"><span class="val" :title="marginalTooltip('battery')">{{ marginalPrimary('battery') }}</span><span>{{ marginalCaption() }}</span></div>
+          <div class="mg">
+            <div class="mgtop"><span class="val">{{ marginalPrimary('battery') }}</span><span class="infotip" tabindex="0" role="img" aria-label="Step breakdown"><span class="ic">i</span><span class="tipcard" v-html="marginalTipHtml('battery')"></span></span></div>
+            <span>{{ marginalCaption() }}</span>
+          </div>
           <label class="sw"><input type="checkbox" v-model="cfg.battery"><span class="track"></span><span class="knob"></span></label>
         </div>
 
         <div class="tech" :class="{disabled: !useHHModel}">
           <div class="icon" style="background:var(--grid)">⚡</div>
           <div class="tx"><b>Agile tariff</b><small v-if="useHHModel">half-hourly wholesale-linked import &amp; export prices</small><small v-else>needs the half-hourly model · enable it under Advanced</small></div>
-          <div class="mg" v-if="useHHModel"><span class="val" :title="marginalTooltip('agile')">{{ marginalPrimary('agile') }}</span><span>{{ marginalCaption() }}</span></div>
+          <div class="mg" v-if="useHHModel">
+            <div class="mgtop"><span class="val">{{ marginalPrimary('agile') }}</span><span class="infotip" tabindex="0" role="img" aria-label="Step breakdown"><span class="ic">i</span><span class="tipcard" v-html="marginalTipHtml('agile')"></span></span></div>
+            <span>{{ marginalCaption() }}</span>
+          </div>
           <label class="sw"><input type="checkbox" v-model="cfg.agile" :disabled="!useHHModel"><span class="track"></span><span class="knob"></span></label>
         </div>
 
@@ -923,21 +980,84 @@ createApp({
       };
     },
 
-    marginalTooltip(tech){
-      // full breakdown behind the marginal figure (− = saving / cut, + = added)
+    // display name + carrier colour for a technology, used in the step tooltip
+    techLabel(tech){ return {ev:'Electric vehicle', hp:'Heat pump', solar:'Solar PV', battery:'Home battery', agile:'Agile tariff'}[tech] || tech; },
+    techColor(tech){ return {ev:'--ev', hp:'--hp', solar:'--solar', battery:'--battery', agile:'--grid'}[tech] || '--text'; },
+
+    // Marginal upfront capital to add this single technology, given the rest of
+    // the build. extraUpfront is additive per tech (each contributes its own
+    // capital, net of the like-for-like petrol-car / boiler spend it replaces),
+    // so the step's capital is just that tech's own contribution.
+    stepUpfront(tech){
+      const p = this.p;
+      switch(tech){
+        case 'ev':      return p.evPrice - p.carPrice;
+        case 'hp':      return (p.hpPrice - p.busGrant) - p.boilerPrice;
+        case 'solar':   return this.solarCapital;
+        case 'battery': return this.batteryCapital;
+        default:        return 0;   // agile etc. — no capital outlay
+      }
+    },
+
+    // Investment view of one step, mirroring the whole-build payback / IRR /
+    // crossover but with the step's marginal capital as the outlay and the
+    // step's running-cost saving (given the rest of the build) as the return.
+    stepInvest(tech){
+      const upfront = this.stepUpfront(tech);
+      const saving  = this.marginalSavings(tech).run;   // £/yr running-cost reduction from this step
+      const H = this.p.investHorizon, r = this.p.isaReturn/100;
+      const irr       = (upfront <= 0 || saving <= 0) ? null : this.irr(upfront, saving, H);
+      const crossover = (upfront <= 0 || saving <= 0) ? null : this.crossoverYear(saving, upfront, r, H);
+      return { upfront, saving, irr, crossover };
+    },
+    stepPaybackLabel(inv){
+      if(inv.saving <= 0) return '—';            // never recovers
+      if(inv.upfront <= 0) return 'immediate';   // no extra capital to recover
+      return (inv.upfront / inv.saving).toFixed(1) + ' yrs';
+    },
+    stepIrrLabel(inv){
+      if(inv.irr === null) return '—';
+      return inv.irr >= 1 ? '>100%' : (inv.irr * 100).toFixed(1) + '%';
+    },
+    stepCrossoverLabel(inv){
+      if(inv.upfront <= 0 || inv.saving <= 0) return '—';
+      return inv.crossover === null ? ('> ' + this.p.investHorizon + ' yrs') : ('year ' + inv.crossover);
+    },
+
+    marginalTipHtml(tech){
+      // styled breakdown behind the marginal figure (− = saving / cut, + = added),
+      // plus a per-step investment view (payback / IRR / ISA crossover)
+      const on = this.cfg[tech];
+      const hd = (on ? 'Contribution of ' : 'Adding ') + this.techLabel(tech);
+      const sub = on
+        ? 'Effect of this step, given the rest of the build — i.e. what you’d give up by removing it.'
+        : 'Effect of adding this step, given whatever is already switched on.';
+      const head = `<div class="tiphd"><span class="tdot" style="background:var(${this.techColor(tech)})"></span>${hd}</div>`
+                 + `<div class="tipsub">${sub}</div>`;
+
       if(this.costMode === 'carbon'){
         const c = this.marginalCarbon(tech);
-        const f = v => (v >= 0 ? '−' : '+') + this.co2(Math.abs(v));
-        return 'Operational: ' + f(c.op)
-             + '\nEmbodied: ' + f(c.emb)
-             + '\nNet result: ' + f(c.net)
-             + '\n(− = cuts CO₂e/yr, + = adds CO₂e/yr)';
+        const f = v => `<span class="${v>=0?'tg':'tb'}">${(v>=0?'−':'+')+this.co2(Math.abs(v))}</span>`;
+        return head
+          + `<div class="tiprow"><span>Operational</span>${f(c.op)}</div>`
+          + `<div class="tiprow"><span>Embodied (annualised)</span>${f(c.emb)}</div>`
+          + `<div class="tiprow tipnet"><span>Net carbon /yr</span>${f(c.net)}</div>`
+          + `<div class="tipnote">− = cuts CO₂e/yr · + = adds</div>`;
       }
+
       const s = this.marginalSavings(tech);
-      return 'Running cost saving: ' + this.fmtSaving(s.run)
-           + '\nAnnualised capital: ' + this.fmtSaving(s.asset)
-           + '\nNet result: ' + this.fmtSaving(s.net)
-           + '\n(− = saves £/yr, + = adds £/yr)';
+      const inv = this.stepInvest(tech);
+      const m = v => `<span class="${v>=0?'tg':'tb'}">${this.fmtSaving(v)}</span>`;
+      return head
+        + `<div class="tiprow"><span>Running cost</span>${m(s.run)}</div>`
+        + `<div class="tiprow"><span>Annualised capital</span>${m(s.asset)}</div>`
+        + `<div class="tiprow tipnet"><span>Net all-in /yr</span>${m(s.net)}</div>`
+        + `<div class="tipnote">− = saves £/yr · + = adds</div>`
+        + `<div class="tiphd2">This step as an investment</div>`
+        + `<div class="tiprow"><span>Extra upfront</span><span class="tv">${this.gbp(inv.upfront)}</span></div>`
+        + `<div class="tiprow"><span>Simple payback</span><span class="tv">${this.stepPaybackLabel(inv)}</span></div>`
+        + `<div class="tiprow"><span>IRR · real</span><span class="tv">${this.stepIrrLabel(inv)}</span></div>`
+        + `<div class="tiprow"><span>Crossover vs ${this.p.isaReturn}% ISA</span><span class="tv">${this.stepCrossoverLabel(inv)}</span></div>`;
     },
 
     // primary marginal figure for the active mode (carbon delta in carbon mode,
