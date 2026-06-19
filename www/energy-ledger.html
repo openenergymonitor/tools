@@ -478,7 +478,7 @@
         <div class="card-head"><h2>This build · the numbers</h2></div>
         <div class="stat-row">
           <div class="stat"><div class="k">All-in / yr</div><div class="v">{{ gbp(current.allIn) }}</div><div class="s">running + assets</div></div>
-          <div class="stat"><div class="k">vs status quo</div><div class="v" :style="{color: saving>=0?'var(--good)':'var(--bad)'}">{{ saving>=0?'−':'+' }}{{ gbp(Math.abs(saving)) }}</div><div class="s">per year</div></div>
+          <div class="stat"><div class="k">vs status quo / yr</div><div class="v" :style="{color: saving>=0?'var(--good)':'var(--bad)'}">{{ saving>=0?'−':'+' }}{{ gbp(Math.abs(saving)) }}</div><div class="s">running + assets</div></div>
           <div class="stat"><div class="k">Extra upfront</div><div class="v">{{ gbp(extraUpfront) }}</div><div class="s">over like-for-like</div></div>
         </div>
 
