@@ -62,8 +62,10 @@
   .ledger-row{display:grid;grid-template-columns:160px 1fr 96px;align-items:center;gap:14px;margin:11px 0;}
   .ledger-label{font-size:12px;color:var(--muted);}
   .ledger-label b{display:block;color:var(--text);font-family:"Space Grotesk";font-size:13px;font-weight:600;}
-  .bar{height:34px;border-radius:7px;background:#0d1217;overflow:hidden;border:1px solid var(--line);}
-  .barfill{height:100%;display:flex;overflow:hidden;border-radius:6px;transition:width .55s cubic-bezier(.22,.61,.36,1);}
+  .bar{position:relative;height:34px;border-radius:7px;background:#0d1217;overflow:hidden;border:1px solid var(--line);}
+  .barfill{position:absolute;top:0;height:100%;display:flex;overflow:hidden;border-radius:6px;transition:left .55s cubic-bezier(.22,.61,.36,1), width .55s cubic-bezier(.22,.61,.36,1);}
+  .barfill.credit{background:repeating-linear-gradient(45deg,rgba(84,192,138,.85) 0 8px,rgba(84,192,138,.6) 8px 16px);}
+  .zero-line{position:absolute;top:-1px;bottom:-1px;width:1px;background:var(--line2);z-index:2;pointer-events:none;}
   .seg{height:100%;transition:flex-grow .55s cubic-bezier(.22,.61,.36,1), background .3s;position:relative;}
   .seg:first-child{border-top-left-radius:6px;border-bottom-left-radius:6px}
   .ledger-total{font-family:"JetBrains Mono";font-weight:700;font-size:17px;text-align:right;}
@@ -247,9 +249,12 @@
     <div class="ledger-row">
       <div class="ledger-label"><b>Status quo</b>petrol + gas boiler</div>
       <div class="bar">
-        <div class="barfill" :style="{width:(costOf(statusQuo)/costScaleMax*100)+'%'}">
-          <div v-for="s in costSegments(statusQuo)" :key="s.key" class="seg"
-               :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+gbp(s.value)"></div>
+        <div v-if="costNegMax>0" class="zero-line" :style="{left:zeroFrac(costPosMax,costNegMax)*100+'%'}"></div>
+        <div class="barfill" :class="{credit:costOf(statusQuo)<0}" :style="barFill(costOf(statusQuo),costPosMax,costNegMax)" :title="costOf(statusQuo)<0?'Net credit: '+gbp(costOf(statusQuo)):null">
+          <template v-if="costOf(statusQuo)>=0">
+            <div v-for="s in costSegments(statusQuo)" :key="s.key" class="seg"
+                 :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+gbp(s.value)"></div>
+          </template>
         </div>
       </div>
       <div class="ledger-total num">{{ gbp(costOf(statusQuo)) }}<span>/year</span></div>
@@ -258,9 +263,12 @@
     <div class="ledger-row">
       <div class="ledger-label"><b>This build</b>{{ buildName }}</div>
       <div class="bar">
-        <div class="barfill" :style="{width:(costOf(current)/costScaleMax*100)+'%'}">
-          <div v-for="s in costSegments(current)" :key="s.key" class="seg"
-               :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+gbp(s.value)"></div>
+        <div v-if="costNegMax>0" class="zero-line" :style="{left:zeroFrac(costPosMax,costNegMax)*100+'%'}"></div>
+        <div class="barfill" :class="{credit:costOf(current)<0}" :style="barFill(costOf(current),costPosMax,costNegMax)" :title="costOf(current)<0?'Net credit: '+gbp(costOf(current)):null">
+          <template v-if="costOf(current)>=0">
+            <div v-for="s in costSegments(current)" :key="s.key" class="seg"
+                 :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+gbp(s.value)"></div>
+          </template>
         </div>
       </div>
       <div class="ledger-total num">{{ gbp(costOf(current)) }}<span>/year</span></div>
@@ -283,9 +291,12 @@
     <div class="ledger-row">
       <div class="ledger-label"><b>Status quo</b>petrol + gas boiler</div>
       <div class="bar">
-        <div class="barfill" :style="{width:(statusQuo.totalCO2/carbonScaleMax*100)+'%'}">
-          <div v-for="s in statusQuo.carbonSegments" :key="s.key" class="seg"
-               :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+co2(s.value)"></div>
+        <div v-if="carbonNegMax>0" class="zero-line" :style="{left:zeroFrac(carbonPosMax,carbonNegMax)*100+'%'}"></div>
+        <div class="barfill" :class="{credit:statusQuo.totalCO2<0}" :style="barFill(statusQuo.totalCO2,carbonPosMax,carbonNegMax)" :title="statusQuo.totalCO2<0?'Net carbon credit: '+co2(statusQuo.totalCO2):null">
+          <template v-if="statusQuo.totalCO2>=0">
+            <div v-for="s in statusQuo.carbonSegments" :key="s.key" class="seg"
+                 :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+co2(s.value)"></div>
+          </template>
         </div>
       </div>
       <div class="ledger-total num">{{ co2(statusQuo.totalCO2) }}<span>CO₂e/yr</span></div>
@@ -294,9 +305,12 @@
     <div class="ledger-row">
       <div class="ledger-label"><b>This build</b>{{ buildName }}</div>
       <div class="bar">
-        <div class="barfill" :style="{width:(current.totalCO2/carbonScaleMax*100)+'%'}">
-          <div v-for="s in current.carbonSegments" :key="s.key" class="seg"
-               :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+co2(s.value)"></div>
+        <div v-if="carbonNegMax>0" class="zero-line" :style="{left:zeroFrac(carbonPosMax,carbonNegMax)*100+'%'}"></div>
+        <div class="barfill" :class="{credit:current.totalCO2<0}" :style="barFill(current.totalCO2,carbonPosMax,carbonNegMax)" :title="current.totalCO2<0?'Net carbon credit: '+co2(current.totalCO2):null">
+          <template v-if="current.totalCO2>=0">
+            <div v-for="s in current.carbonSegments" :key="s.key" class="seg"
+                 :style="{flexGrow:Math.max(s.value,0), background:s.color}" :title="s.label+': '+co2(s.value)"></div>
+          </template>
         </div>
       </div>
       <div class="ledger-total num">{{ co2(current.totalCO2) }}<span>CO₂e/yr</span></div>
@@ -731,8 +745,11 @@ createApp({
     statusQuo(){ return this.compute({ev:false,hp:false,solar:false,battery:false,agile:false,disconnectGas:false}); },
     saving(){ return this.costOf(this.statusQuo) - this.costOf(this.current); },
     // shared linear scale for the cost bars: status quo (usually the largest)
-    // anchors the full width, so the build bar shrinks as savings are made.
-    costScaleMax(){ return Math.max(this.costOf(this.statusQuo), this.costOf(this.current), 1); },
+    // anchors the positive side, so the build bar shrinks as savings are made.
+    // costNegMax captures any build that nets out below zero (a net earner —
+    // export revenue beats running + assets), drawn as a credit left of zero.
+    costPosMax(){ return Math.max(this.costOf(this.statusQuo), this.costOf(this.current), 1); },
+    costNegMax(){ return Math.max(0, -this.costOf(this.statusQuo), -this.costOf(this.current)); },
     // headline wording that tracks the active cost mode
     costModeLabel(){ return this.costMode === 'running' ? 'Running' : 'All-in'; },
     costModeSub(){ return this.costMode === 'running' ? 'running only' : 'running + assets'; },
@@ -802,8 +819,11 @@ createApp({
       return y === null ? ('> ' + this.p.investHorizon + ' yrs') : ('year ' + y);
     },
     carbonSaving(){ return this.statusQuo.totalCO2 - this.current.totalCO2; },
-    // shared linear scale for the carbon bars (mirrors costScaleMax)
-    carbonScaleMax(){ return Math.max(this.statusQuo.totalCO2, this.current.totalCO2, 1); },
+    // shared linear scale for the carbon bars (mirrors costPosMax/costNegMax);
+    // a build can be a net carbon sink (export credit beats operational +
+    // embodied), so carbonNegMax draws that as a credit left of zero.
+    carbonPosMax(){ return Math.max(this.statusQuo.totalCO2, this.current.totalCO2, 1); },
+    carbonNegMax(){ return Math.max(0, -this.statusQuo.totalCO2, -this.current.totalCO2); },
     extraEmbodiedTotal(){
       // one-time extra manufacturing carbon (the "carbon debt") vs like-for-like replacement
       const p=this.p; let x=0;
@@ -850,6 +870,20 @@ createApp({
     // The headline £ figure for a build under the active cost mode: the full
     // all-in cost (running + annualised assets) or running costs only.
     costOf(b){ return this.costMode === 'running' ? b.running : b.allIn; },
+    // Fraction of the bar track where the zero baseline sits. 0 (far left) when
+    // nothing nets negative; shifts right to make room for credit bars.
+    zeroFrac(posMax, negMax){ const span = posMax + negMax; return span > 0 ? negMax / span : 0; },
+    // Position+width for a bar drawn on a signed [−negMax, +posMax] scale around
+    // a zero origin: positive values grow right of zero, a negative total grows
+    // left of zero as a credit (which is why the old width-only formula collapsed
+    // to an empty bar once a build netted below zero).
+    barFill(value, posMax, negMax){
+      const span = (posMax + negMax) || 1;
+      const zero = (negMax / span) * 100;
+      if(value >= 0) return { left: zero + '%', width: (value / span * 100) + '%' };
+      const w = -value / span * 100;
+      return { left: (zero - w) + '%', width: w + '%' };
+    },
     // Bar segments to draw under the active mode — drop the asset segments when
     // showing running costs only so the stacked bar still sums to the figure.
     costSegments(b){
