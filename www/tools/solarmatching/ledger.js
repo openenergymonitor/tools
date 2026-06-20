@@ -47,11 +47,11 @@
         // design, MCS, labour) plus a marginal £/kWp for panels & mounting, so the
         // £/kWp falls with system size. Fit to Octopus quotes: 5 kWp £7.5k, 8 kWp
         // £10.9k, 16.4 kWp £18k.
-        solarKwp: 4, genPerKwp: 950, solarFixed: 3200, solarPerKwp: 900, solarLife: 25, solarMaint: 30,
+        solarKwp: 4, genPerKwp: 950, solarFixed: 2800, solarPerKwp: 670, solarLife: 25, solarMaint: 30,
         // battery — fixed component (hybrid inverter, install) plus a marginal £/kWh
         // for cells, so the £/kWh falls with capacity. Anchored to a 13.5 kWh
         // Powerwall add-on (~£4.1k) with a 5 kWh budget add-on (~£1.2k) as the floor.
-        batteryKwh: 5, batteryFixed: 500, batteryPerKwh: 270, batteryLife: 15, batteryUtil: 0.8,
+        batteryKwh: 5, batteryFixed: 500, batteryPerKwh: 250, batteryLife: 15, batteryUtil: 0.8,
         // battery performance — inverter power limit (kW) and round-trip efficiency (0-1)
         batteryMaxPowerKw: 3.5, batteryRoundTrip: 0.8,
         // discounting — real (above-inflation) discount rate, %/yr, applied to capital
