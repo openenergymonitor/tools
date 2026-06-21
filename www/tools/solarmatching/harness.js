@@ -14,8 +14,10 @@
 //   node harness.js scenario ev,hp,solar,battery,agile [--optimal] [--p k=v ...]
 //   node harness.js marginals [base flags] [--optimal]
 //   node harness.js cobenefits [--optimal]          pairwise synergy matrix
+//   node harness.js shapley [--optimal]             fair per-measure attribution of the full build
+//   node harness.js interactions [--optimal]        individual vs combination-specific decomposition
 //   node harness.js sweep <param> <from> <to> <step> [flags] [--optimal]
-//   node harness.js ladder [--optimal]              cumulative build-up ladder
+//   node harness.js ladder [--optimal]              cumulative build-up ladder (+ investment view)
 //
 // Build flags are a comma list of: ev, hp, solar, battery, agile  (gas is
 // auto-disconnected with hp, mirroring the view). Override any DEFAULTS field
@@ -208,6 +210,196 @@ function ladderReport(p, opts) {
                 `${lpad(co2(r.totalCO2), 12)}${lpad(sco2(-(r.totalCO2 - prev.totalCO2)), 12)}`);
     prev = r;
   }
+
+  // investment view of the same ladder: each step's own extra capital vs the
+  // running-cost saving it adds GIVEN the steps below it (mirrors the page's
+  // per-step payback / IRR / crossover).
+  console.log('');
+  console.log(`  ${pad('Step (investment view)', 22)}${lpad('Extra upfront', 15)}${lpad('Δ running/yr', 14)}${lpad('Payback', 11)}${lpad('IRR', 9)}${lpad('ISA xover', 11)}`);
+  console.log('  ' + hr('─', 80));
+  on = [];
+  prev = run(cfg([]), p, opts);
+  for (const t of order) {
+    const before = cfg(on);
+    on = on.concat(t);
+    const after = cfg(on);
+    const r = run(after, p, opts);
+    const stepUp = ledger.extraUpfront(p, after) - ledger.extraUpfront(p, before);
+    const stepSave = prev.running - r.running;
+    const inv = ledger.investment(p, stepUp, stepSave);
+    const payback = inv.payback == null ? '—' : (inv.payback === 0 ? 'immediate' : inv.payback.toFixed(1) + 'y');
+    const irrTxt = inv.irr == null ? '—' : (inv.irr >= 1 ? '>100%' : (inv.irr * 100).toFixed(0) + '%');
+    const xover = (stepUp <= 0 || stepSave <= 0) ? '—' : (inv.crossover == null ? '>' + p.investHorizon + 'y' : 'yr ' + inv.crossover);
+    console.log(`  ${pad('+ ' + TECH_LABEL[t], 22)}${lpad(gbp(stepUp), 15)}${lpad(sgbp(stepSave), 14)}${lpad(payback, 11)}${lpad(irrTxt, 9)}${lpad(xover, 11)}`);
+    prev = r;
+  }
+}
+
+// ---- coalition analysis (Shapley + Möbius interactions) ---------------------
+// The value function: saving of a subset of techs vs the fossil status quo, for
+// both all-in £/yr and total CO2e/yr. Enumerated over all 2^5 = 32 subsets so
+// the same runs feed both the Shapley attribution and the interaction split.
+function coalitionValues(p, opts) {
+  const sq = run(cfg([]), p, opts);
+  const v = new Map();                       // bitmask -> { cost, carbon }
+  for (let mask = 0; mask < (1 << TECHS.length); mask++) {
+    const techs = TECHS.filter((_, i) => mask & (1 << i));
+    const r = run(cfg(techs), p, opts);
+    v.set(mask, { cost: sq.allIn - r.allIn, carbon: sq.totalCO2 - r.totalCO2 });
+  }
+  return v;
+}
+
+const popcount = m => { let n = 0; while (m) { n += m & 1; m >>= 1; } return n; };
+const maskTechs = m => TECHS.filter((_, i) => m & (1 << i));
+const maskLabel = m => maskTechs(m).map(t => TECH_LABEL[t]).join(' + ') || '∅';
+
+// Möbius transform of a set function v: m(S) = Σ_{T⊆S} (−1)^{|S\T|} v(T).
+// m({i}) is the standalone saving; m({i,j}) the pairwise synergy; higher terms
+// the irreducible 3-/4-/5-way synergies. They sum back to v(full build).
+function mobius(vMap, field) {
+  const m = new Map();
+  for (let S = 0; S < (1 << TECHS.length); S++) {
+    let sum = 0;
+    for (let T = S; ; T = (T - 1) & S) {
+      sum += (popcount(S ^ T) % 2 ? -1 : 1) * vMap.get(T)[field];
+      if (T === 0) break;
+    }
+    m.set(S, sum);
+  }
+  return m;
+}
+
+// Shapley value: each interaction m(S) shared equally among the |S| members, so
+// φ_i = Σ_{S∋i} m(S)/|S|. The φ_i sum to the full-build saving (efficiency).
+function shapley(mob) {
+  const phi = TECHS.map(() => 0);
+  for (const [S, val] of mob) {
+    if (S === 0) continue;
+    const k = popcount(S);
+    for (let i = 0; i < TECHS.length; i++) if (S & (1 << i)) phi[i] += val / k;
+  }
+  return phi;
+}
+
+// Fair attribution of the whole-build saving across the five measures, and how
+// much of each measure's credit is "standalone" vs "only there in combination".
+function shapleyReport(p, opts) {
+  const full = (1 << TECHS.length) - 1;
+  const v = coalitionValues(p, opts);
+  h2('Shapley attribution — fair share of the FULL build saving per measure' +
+     (opts.optimalDispatch ? '  [optimal dispatch]' : ''));
+  console.log('  Averaged over all 120 build orders. Standalone = the measure on its own;');
+  console.log('  Synergy = Shapley − standalone (value it only has alongside the others).\n');
+
+  for (const [field, fmt, total] of [
+    ['cost', sgbp, v.get(full).cost],
+    ['carbon', sco2, v.get(full).carbon],
+  ]) {
+    const mob = mobius(v, field);
+    const phi = shapley(mob);
+    const label = field === 'cost' ? '£/yr saving vs status quo' : 'kg/yr carbon saving vs status quo';
+    console.log('  ' + label);
+    console.log('  ' + pad('Measure', 14) + lpad('Standalone', 13) + lpad('Shapley', 13) + lpad('Synergy', 13) + lpad('% of total', 12));
+    console.log('  ' + hr('─', 63));
+    let sumAlone = 0, sumPhi = 0;
+    TECHS.forEach((t, i) => {
+      const alone = v.get(1 << i)[field];
+      sumAlone += alone; sumPhi += phi[i];
+      console.log('  ' + pad(TECH_LABEL[t], 14) + lpad(fmt(alone), 13) + lpad(fmt(phi[i]), 13) +
+                  lpad(fmt(phi[i] - alone), 13) + lpad((100 * phi[i] / total).toFixed(0) + '%', 12));
+    });
+    console.log('  ' + hr('─', 63));
+    console.log('  ' + pad('TOTAL', 14) + lpad(fmt(sumAlone), 13) + lpad(fmt(sumPhi), 13) +
+                lpad(fmt(sumPhi - sumAlone), 13) + lpad('100%', 12));
+    console.log('  (TOTAL Shapley = full-build saving ' + fmt(total) + '; ' +
+                'TOTAL synergy = full build − sum of standalones)\n');
+  }
+}
+
+// Decompose the full-build saving into pure individual effects + 2-/3-/4-/5-way
+// synergies (the Möbius terms grouped by coalition size). This is the direct
+// answer to "how much is the measures themselves vs specific combinations".
+function interactionsReport(p, opts) {
+  const v = coalitionValues(p, opts);
+  h2('Interaction decomposition — individual vs combination-specific saving' +
+     (opts.optimalDispatch ? '  [optimal dispatch]' : ''));
+  console.log('  Splits the full-build saving into order-1 (each measure alone) plus the');
+  console.log('  irreducible order-2..5 synergies. Each row sums into the total below.\n');
+
+  for (const [field, fmt] of [['cost', sgbp], ['carbon', sco2]]) {
+    const mob = mobius(v, field);
+    const byOrder = [0, 0, 0, 0, 0, 0];
+    for (const [S, val] of mob) if (S) byOrder[popcount(S)] += val;
+    const total = byOrder.reduce((a, b) => a + b, 0);
+    const label = field === 'cost' ? '£/yr' : 'kg/yr carbon';
+    console.log('  ' + label);
+    const names = ['', 'order-1  individual', 'order-2  pairs', 'order-3  triples', 'order-4  quads', 'order-5  all five'];
+    for (let k = 1; k <= 5; k++)
+      console.log('  ' + pad(names[k], 22) + lpad(fmt(byOrder[k]), 13) +
+                  lpad((100 * byOrder[k] / total).toFixed(0) + '%', 10));
+    console.log('  ' + hr('─', 45));
+    console.log('  ' + pad('FULL BUILD', 22) + lpad(fmt(total), 13) + lpad('100%', 10));
+    const synergy = total - byOrder[1];
+    console.log('  ' + pad('  of which synergy', 22) + lpad(fmt(synergy), 13) +
+                lpad((100 * synergy / total).toFixed(0) + '%', 10));
+
+    // the notable named combinations the research question asks about
+    const pick = combo => mob.get(combo.reduce((m, t) => m | (1 << TECHS.indexOf(t)), 0));
+    const named = [
+      ['Solar + Battery', ['solar', 'battery']],
+      ['Solar + Battery + Heat pump  (the "holy trinity")', ['solar', 'battery', 'hp']],
+      ['Solar + Battery + EV', ['solar', 'battery', 'ev']],
+      ['Battery + Agile', ['battery', 'agile']],
+      ['Solar + Battery + Agile', ['solar', 'battery', 'agile']],
+    ];
+    console.log('    named combination-specific terms (pure synergy of that exact set):');
+    for (const [nm, combo] of named)
+      console.log('      ' + pad(nm, 50) + lpad(fmt(pick(combo)), 12));
+    console.log('');
+  }
+}
+
+// Solar × Battery co-benefit grid, focused on the Solar+Battery+Heat-pump
+// question in a fixed tariff world. The base is "Agile only" (tariff on, no
+// solar/battery/hp, EV off), and every build sits on that base, so the synergies
+// are measured GIVEN you already have Agile. For each (solarKwp, batteryKwh) cell
+// it reports, vs that Agile base:
+//   S+B+H save   total £/yr saving of having all three
+//   combo syn    that saving minus the sum of S, B, H added separately
+//                (the headline co-benefit of the combination)
+//   3-way        the irreducible solar×battery×heat-pump interaction (Möbius)
+//   SB / SH / BH the three pairwise synergies that make up the rest of combo syn
+function gridReport(p, opts, positional) {
+  const parseList = (s, d) => (s ? s.split(',').map(Number) : d);
+  const sList = parseList(positional[0], [2, 4, 6, 8]);
+  const bList = parseList(positional[1], [5, 7.5, 10]);
+  h2('Solar × Battery co-benefit grid — on an Agile base (EV off)' +
+     (opts.optimalDispatch ? '  [optimal dispatch]' : ''));
+  console.log('  Saving & synergy vs "Agile only". combo syn = S+B+H together − (S + B + H apart).');
+  console.log('  3-way = pure solar×battery×heat-pump interaction. SB/SH/BH = pairwise synergies.\n');
+  console.log('  ' + pad('solar', 7) + pad('batt', 7) +
+              lpad('S+B+H save', 12) + lpad('combo syn', 11) + lpad('3-way', 9) +
+              lpad('SB', 8) + lpad('SH', 8) + lpad('BH', 8));
+  console.log('  ' + hr('─', 68));
+  for (const s of sList) {
+    for (const b of bList) {
+      const pp = makeP(Object.assign({}, p, { solarKwp: s, batteryKwh: b }));
+      const base = run(cfg(['agile']), pp, opts).allIn;            // Agile-only base
+      const save = set => base - run(cfg(set.concat('agile')), pp, opts).allIn;
+      const S = save(['solar']), B = save(['battery']), H = save(['hp']);
+      const SB = save(['solar', 'battery']), SH = save(['solar', 'hp']), BH = save(['battery', 'hp']);
+      const SBH = save(['solar', 'battery', 'hp']);
+      const combo = SBH - S - B - H;                               // total synergy among the three
+      const synSB = SB - S - B, synSH = SH - S - H, synBH = BH - B - H;
+      const threeWay = SBH - SB - SH - BH + S + B + H;             // Möbius 3-way term
+      console.log('  ' + pad(s + 'kWp', 7) + pad(b + 'kWh', 7) +
+                  lpad(sgbp(SBH), 12) + lpad(sgbp(combo), 11) + lpad(sgbp(threeWay), 9) +
+                  lpad(sgbp(synSB), 8) + lpad(sgbp(synSH), 8) + lpad(sgbp(synBH), 8));
+    }
+  }
+  console.log('\n  Reading it: combo syn = SB + SH + BH + 3-way. A near-zero combo syn means the' +
+              '\n  three measures barely help each other — their value is essentially standalone.');
 }
 
 function sweepReport(param, from, to, step, c, p, opts) {
@@ -245,6 +437,16 @@ function main() {
     case 'cobenefits':
       cobenefitsReport(p, opts);
       break;
+    case 'shapley':
+      shapleyReport(p, opts);
+      break;
+    case 'interactions':
+    case 'interaction':
+      interactionsReport(p, opts);
+      break;
+    case 'grid':
+      gridReport(p, opts, args.positional);
+      break;
     case 'ladder':
       ladderReport(p, opts);
       break;
@@ -264,7 +466,10 @@ function main() {
       marginalsReport(cfg(['ev', 'hp', 'solar', 'battery', 'agile']), p, opts);
       ladderReport(p, opts);
       cobenefitsReport(p, opts);
-      console.log('\nTip: node harness.js cobenefits --optimal   (cost-optimised battery dispatch)');
+      shapleyReport(p, opts);
+      interactionsReport(p, opts);
+      console.log('\nTip: node harness.js interactions --optimal  (individual vs combination-specific saving)');
+      console.log('     node harness.js shapley --optimal       (fair per-measure attribution)');
       console.log('     node harness.js sweep batteryKwh 0 15 2.5 solar,battery,agile');
     }
   }

@@ -761,13 +761,9 @@ createApp({
       return on.length? on.join(' + ') : 'nothing switched on yet';
     },
     extraUpfront(){
-      // cash today for new kit beyond a like-for-like petrol-car / boiler replacement
-      let x=0;
-      if(this.cfg.ev) x += this.p.evPrice - this.p.carPrice;
-      if(this.cfg.hp) x += (this.p.hpPrice - this.p.busGrant) - this.p.boilerPrice;
-      if(this.cfg.solar) x += this.solarCapital;
-      if(this.cfg.battery) x += this.batteryCapital;
-      return x;
+      // cash today for new kit beyond a like-for-like petrol-car / boiler
+      // replacement (shared with the harness via ledger.extraUpfront)
+      return ledger.extraUpfront(this.p, this.cfg);
     },
     likeForLike(){
       // the petrol-car / boiler spend that's netted out of "extra upfront" — the
@@ -902,39 +898,14 @@ createApp({
     // plain straight-line spreading: (price − residual) / life.
     ann(price,residual,life){ return ledger.ann(this.p, price, residual, life); },
 
-    // ---- investment-metric maths (ported from solar-finance.js) --------------
-    // Net present value of a constant yearly saving against an upfront outlay.
-    npv(rate, upfront, yearly, years){
-      let total = -upfront;
-      for(let t=1; t<=years; t++) total += yearly / Math.pow(1+rate, t);
-      return total;
-    },
-    // Internal rate of return — the rate at which NPV is zero — found by bisection
-    // over 0–100%. Returns 1 (i.e. ">100%") when the return exceeds the search cap.
-    irr(upfront, yearly, years){
-      if(this.npv(1, upfront, yearly, years) > 0) return 1;     // beats 100% — cap it
-      let lo=0, hi=1;
-      for(let i=0; i<100; i++){
-        const mid=(lo+hi)/2;
-        if(this.npv(mid, upfront, yearly, years) > 0) lo=mid; else hi=mid;
-      }
-      return (lo+hi)/2;
-    },
-    // A lump sum left to compound at `rate`.
-    isaLumpSum(principal, rate, years){ return principal * Math.pow(1+rate, years); },
-    // Future value of investing each year's saving as it arrives (annuity FV).
-    reinvestedSavings(yearly, rate, years){
-      let pot=0;
-      for(let t=1; t<=years; t++) pot += yearly * Math.pow(1+rate, years-t);
-      return pot;
-    },
-    // First year the reinvested-savings pot overtakes the ISA lump sum; null = never.
-    crossoverYear(yearly, principal, rate, maxYears){
-      for(let t=1; t<=maxYears; t++){
-        if(this.reinvestedSavings(yearly, rate, t) > this.isaLumpSum(principal, rate, t)) return t;
-      }
-      return null;
-    },
+    // ---- investment-metric maths (shared via ledger.js — no drift) -----------
+    // Pure NPV / IRR / ISA-crossover maths now lives in ledger.js so the page and
+    // the Node harness compute these identically. These are thin delegators.
+    npv(rate, upfront, yearly, years){ return ledger.npv(rate, upfront, yearly, years); },
+    irr(upfront, yearly, years){ return ledger.irr(upfront, yearly, years); },
+    isaLumpSum(principal, rate, years){ return ledger.isaLumpSum(principal, rate, years); },
+    reinvestedSavings(yearly, rate, years){ return ledger.reinvestedSavings(yearly, rate, years); },
+    crossoverYear(yearly, principal, rate, maxYears){ return ledger.crossoverYear(yearly, principal, rate, maxYears); },
 
     // Map the ledger's build + assumptions onto model.js parameters and run the
     // half-hourly simulation, returning the annual solar / import / export flows.

@@ -101,6 +101,62 @@
         return (p.batteryFixed || 0) + (p.batteryPerKwh || 0) * p.batteryKwh;
     }
 
+    // ---- investment metrics (pure; ported from the view / solar-finance.js) ----
+    // These power the simple homeowner-style payback / IRR / ISA-crossover view:
+    // the EXTRA upfront capital (beyond a like-for-like petrol-car / boiler swap)
+    // is the investment, and the drop in RUNNING costs is the annual return.
+
+    // Net present value of a constant yearly saving against an upfront outlay.
+    function npv(rate, upfront, yearly, years) {
+        var total = -upfront;
+        for (var t = 1; t <= years; t++) total += yearly / Math.pow(1 + rate, t);
+        return total;
+    }
+    // Internal rate of return — the rate at which NPV is zero — by bisection over
+    // 0–100%. Returns 1 (">100%") when the return exceeds the search cap.
+    function irr(upfront, yearly, years) {
+        if (npv(1, upfront, yearly, years) > 0) return 1;
+        var lo = 0, hi = 1;
+        for (var i = 0; i < 100; i++) {
+            var mid = (lo + hi) / 2;
+            if (npv(mid, upfront, yearly, years) > 0) lo = mid; else hi = mid;
+        }
+        return (lo + hi) / 2;
+    }
+    // A lump sum left to compound at `rate`.
+    function isaLumpSum(principal, rate, years) { return principal * Math.pow(1 + rate, years); }
+    // Future value of investing each year's saving as it arrives (annuity FV).
+    function reinvestedSavings(yearly, rate, years) {
+        var pot = 0;
+        for (var t = 1; t <= years; t++) pot += yearly * Math.pow(1 + rate, years - t);
+        return pot;
+    }
+    // First year the reinvested-savings pot overtakes the ISA lump sum; null = never.
+    function crossoverYear(yearly, principal, rate, maxYears) {
+        for (var t = 1; t <= maxYears; t++) {
+            if (reinvestedSavings(yearly, rate, t) > isaLumpSum(principal, rate, t)) return t;
+        }
+        return null;
+    }
+    // Cash today for new kit beyond a like-for-like petrol-car / boiler replacement.
+    function extraUpfront(p, c) {
+        var x = 0;
+        if (c.ev) x += p.evPrice - p.carPrice;
+        if (c.hp) x += (p.hpPrice - p.busGrant) - p.boilerPrice;
+        if (c.solar) x += solarCapital(p);
+        if (c.battery) x += batteryCapital(p);
+        return x;
+    }
+    // Investment summary: payback (yrs), real IRR and ISA-crossover year for a
+    // given outlay and constant yearly running-cost saving.
+    function investment(p, upfront, yearly) {
+        var H = p.investHorizon, r = (p.isaReturn || 0) / 100;
+        var payback = yearly <= 0 ? null : (upfront <= 0 ? 0 : upfront / yearly);
+        var theIrr = (upfront <= 0 || yearly <= 0) ? null : irr(upfront, yearly, H);
+        var cross = (upfront <= 0 || yearly <= 0) ? null : crossoverYear(yearly, upfront, r, H);
+        return { upfront: upfront, yearly: yearly, payback: payback, irr: theIrr, crossover: cross };
+    }
+
     // Map the ledger's build + assumptions onto model.js parameters and run the
     // half-hourly simulation, returning the annual solar / import / export flows.
     // ctx.runModel does the actual model.run (and memoises).
@@ -298,6 +354,13 @@
         ann: ann,
         solarCapital: solarCapital,
         batteryCapital: batteryCapital,
+        npv: npv,
+        irr: irr,
+        isaLumpSum: isaLumpSum,
+        reinvestedSavings: reinvestedSavings,
+        crossoverYear: crossoverYear,
+        extraUpfront: extraUpfront,
+        investment: investment,
         flowsHH: flowsHH,
         compute: compute,
         flipCfg: flipCfg,
