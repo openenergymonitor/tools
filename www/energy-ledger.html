@@ -157,6 +157,53 @@
   .chk{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--muted);cursor:pointer;}
   .chk input{width:16px;height:16px;accent-color:var(--good);cursor:pointer;}
 
+  /* ---- tariff: segmented controls + schedule editor ---- */
+  .tseg{display:inline-flex;flex:none;background:var(--ink);border:1px solid var(--line2);border-radius:8px;padding:2px;gap:2px;}
+  .tseg button{font-family:"Space Grotesk";font-weight:600;font-size:12px;color:var(--muted);background:none;border:none;border-radius:6px;padding:6px 11px;cursor:pointer;white-space:nowrap;transition:background .2s,color .2s;}
+  .tseg button:hover:not(:disabled){color:var(--text);}
+  .tseg button.on{background:rgba(84,192,138,.32);color:var(--good);}
+  .tseg button:disabled{opacity:.4;cursor:not-allowed;}
+  .tseg button:focus-visible{outline:2px solid var(--grid);outline-offset:1px;}
+
+  /* nested sub-card (battery dispatch, tariff details) */
+  .subcard{background:rgba(0,0,0,.16);border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin:2px 0 6px;}
+  .subcard-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0;}
+  .subcard-row label{font-size:12.5px;color:var(--muted);}
+  .subcard-row .unit{font-size:11px;color:var(--faint);font-family:"JetBrains Mono";margin-left:6px;}
+  .subcard .chk{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--text);cursor:pointer;}
+  .subcard .chk input{width:16px;height:16px;accent-color:var(--good);cursor:pointer;flex:none;}
+  .subcard .chk b{font-family:"Space Grotesk";font-weight:600;}
+  .subcard-note{font-size:11px;color:var(--faint);margin:7px 0 0;line-height:1.5;}
+  .num-in{width:108px;background:var(--ink);border:1px solid var(--line2);color:var(--text);font-family:"JetBrains Mono";font-size:13px;font-weight:500;text-align:right;padding:7px 9px;border-radius:7px;}
+  .num-in:focus{outline:2px solid var(--grid);outline-offset:1px;border-color:var(--grid);}
+
+  .tsched-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:2px 0 8px;}
+  .tsched-head b{font-family:"Space Grotesk";font-size:12.5px;}
+  .tsched-presets{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .preset-lbl{font-size:10.5px;color:var(--faint);font-family:"JetBrains Mono";text-transform:uppercase;letter-spacing:.04em;}
+  .presetbtn{font-family:"Space Grotesk";font-weight:600;font-size:11px;color:var(--muted);background:var(--ink);border:1px solid var(--line2);border-radius:6px;padding:4px 9px;cursor:pointer;transition:background .2s,color .2s,border-color .2s;}
+  .presetbtn:hover{color:var(--text);border-color:var(--grid);}
+  .presetbtn:focus-visible{outline:2px solid var(--grid);outline-offset:1px;}
+  /* grid keeps Time / Import / Export / bin columns aligned across rows */
+  .tsched-row{display:grid;grid-template-columns:1fr 1fr 1fr 30px;gap:9px;align-items:center;padding:3px 0;}
+  .tsched-row input{
+    width:100%;min-width:0;background:var(--ink);border:1px solid var(--line2);color:var(--text);
+    font-family:"JetBrains Mono";font-size:13px;text-align:right;padding:6px 8px;border-radius:7px;
+  }
+  .tsched-row input[type=time]{text-align:left;}
+  .tsched-row input:focus{outline:2px solid var(--grid);outline-offset:1px;border-color:var(--grid);}
+  .tsched-row input:disabled{opacity:.4;cursor:not-allowed;}
+  .tsched-labels{font-size:10.5px;color:var(--faint);font-family:"JetBrains Mono";text-transform:uppercase;letter-spacing:.04em;padding:0 0 1px;}
+  .tsched-labels span{align-self:end;}
+  .tsched-labels .r{text-align:right;}
+  .tsched-labels .strike{text-decoration:line-through;opacity:.55;}
+  .tsched-row .iconbtn,.addband{background:none;border:none;color:var(--faint);cursor:pointer;border-radius:6px;line-height:1;}
+  .tsched-row .iconbtn{font-size:15px;padding:2px 4px;justify-self:center;}
+  .tsched-row .iconbtn:hover:not(:disabled){color:var(--text);background:var(--ink);}
+  .tsched-row .iconbtn:disabled{opacity:.3;cursor:not-allowed;}
+  .addband{font-family:"Space Grotesk";font-weight:600;font-size:11.5px;color:var(--muted);padding:6px 2px 0;}
+  .addband:hover{color:var(--text);}
+
   /* ---- accordions / inputs ---- */
   details{border-top:1px solid var(--line);}
   details:first-of-type{border-top:none;}
@@ -391,14 +438,82 @@
           <label class="sw"><input type="checkbox" v-model="cfg.battery"><span class="track"></span><span class="knob"></span></label>
         </div>
 
+        <div class="subcard" v-if="cfg.battery && useHHModel">
+          <label class="chk"><input type="checkbox" v-model="optimalDispatch"><b>Optimal battery dispatch</b> <span class="pill" v-if="optimalDispatch" style="border-color:rgba(245,197,66,.45);color:var(--solar);background:rgba(245,197,66,.1);">slower</span></label>
+          <p class="subcard-note">Schedules the battery to minimise cost against the half-hourly prices — charge when cheap, discharge / export when expensive, with perfect foresight — instead of the simple solar-surplus rule.<template v-if="!timeVaryingPricing"> With flat import &amp; export prices there's nothing to arbitrage, so this makes little difference.</template></p>
+        </div>
+
         <div class="tech" :class="{disabled: !useHHModel}">
           <div class="icon" style="background:var(--grid)">⚡</div>
-          <div class="tx"><b>Agile tariff</b><small v-if="useHHModel">half-hourly wholesale-linked import &amp; export prices</small><small v-else>needs the half-hourly model · enable it under Advanced</small></div>
-          <div class="mg" v-if="useHHModel">
+          <div class="tx"><b>Tariff</b><small v-if="useHHModel">flat rate, half-hourly Agile, or your own time-of-day schedule</small><small v-else>time-varying tariffs need the half-hourly model · enable it under Advanced</small></div>
+          <div class="mg" v-if="useHHModel && cfg.agile">
             <div class="mgtop"><span class="val">{{ marginalPrimary('agile') }}</span><span class="infotip" tabindex="0" role="img" aria-label="Step breakdown"><span class="ic">i</span><span class="tipcard" v-html="marginalTipHtml('agile')"></span></span></div>
             <span>{{ marginalCaption() }}</span>
           </div>
-          <label class="sw"><input type="checkbox" v-model="cfg.agile" :disabled="!useHHModel"><span class="track"></span><span class="knob"></span></label>
+          <div class="tseg" role="group" aria-label="Tariff type">
+            <button :class="{on: tariffSel==='flat'}" @click="tariffSel='flat'">Flat</button>
+            <button :class="{on: tariffSel==='agile'}" @click="tariffSel='agile'" :disabled="!useHHModel">Agile</button>
+            <button :class="{on: tariffSel==='custom'}" @click="tariffSel='custom'" :disabled="!useHHModel">Custom</button>
+          </div>
+        </div>
+
+        <div class="subcard tariff-card">
+          <!-- flat import rate -->
+          <div class="subcard-row" v-if="tariffSel==='flat'">
+            <label>Import rate <span class="unit">p/kWh inc. VAT</span></label>
+            <input class="num-in" type="number" step="0.01" v-model.number="p.elecRate">
+          </div>
+
+          <!-- custom schedule builder -->
+          <div v-if="tariffSel==='custom' && useHHModel">
+            <div class="tsched-head">
+              <b>Schedule</b>
+              <span class="tsched-presets">
+                <span class="preset-lbl">presets</span>
+                <button v-for="(pr,key) in tariffPresets" :key="key" class="presetbtn" @click="applyTariffPreset(key)" :title="'Load '+pr.label">{{ pr.label }}</button>
+              </span>
+            </div>
+            <div class="tsched">
+              <div class="tsched-row tsched-labels">
+                <span>From</span>
+                <span class="r">Import</span>
+                <span class="r" :class="{strike: cfg.exportMode!=='schedule'}">Export</span>
+                <span></span>
+              </div>
+              <div class="tsched-row" v-for="(row,i) in p.tariffSchedule" :key="i">
+                <input type="time" v-model="row.start">
+                <input type="number" step="0.01" v-model.number="row.price">
+                <input type="number" step="0.01" v-model.number="row.export" :disabled="cfg.exportMode!=='schedule'" :title="cfg.exportMode!=='schedule' ? 'Export set by Agile Outgoing' : ''">
+                <button class="iconbtn" @click="removeTariffRow(i)" :disabled="p.tariffSchedule.length<=1" title="Remove">🗑</button>
+              </div>
+            </div>
+            <button class="addband" @click="addTariffRow" title="Add time band">+ add band</button>
+            <p class="subcard-note">Prices (p/kWh) apply from each band's start until the next, wrapping past midnight.</p>
+          </div>
+
+          <!-- export source selector -->
+          <div class="subcard-row" v-if="useHHModel">
+            <label>Export</label>
+            <div class="tseg" role="group" aria-label="Export tariff">
+              <button v-if="tariffSel==='custom'" :class="{on: exportSel==='schedule'}" @click="exportSel='schedule'">Schedule</button>
+              <button v-else :class="{on: exportSel==='flat'}" @click="exportSel='flat'">Flat</button>
+              <button :class="{on: exportSel==='agile'}" @click="exportSel='agile'">Agile&nbsp;Out</button>
+            </div>
+          </div>
+
+          <!-- flat export rate -->
+          <div class="subcard-row" v-if="cfg.exportMode==='flat'">
+            <label>Export rate <span class="unit">{{ tariffSel==='flat' ? 'SEG · ' : '' }}p/kWh</span></label>
+            <input class="num-in" type="number" step="0.01" v-model.number="p.segRate">
+          </div>
+
+          <!-- standing charge (applies to every tariff) -->
+          <div class="subcard-row">
+            <label>Standing charge <span class="unit">p/day inc. VAT</span></label>
+            <input class="num-in" type="number" step="0.01" v-model.number="p.elecStanding">
+          </div>
+
+          <p class="subcard-note" v-if="useHHModel && timeVaryingPricing">Avg across this build: <b>{{ current.avgAgileImport==null ? Number(p.elecRate).toFixed(1) : current.avgAgileImport.toFixed(1) }}p</b> import / <b>{{ current.avgAgileExport==null ? Number(p.segRate).toFixed(1) : current.avgAgileExport.toFixed(1) }}p</b> export.</p>
         </div>
 
         <div class="tech">
@@ -413,11 +528,6 @@
           </select>
         </div>
 
-        <div class="subtoggle" v-if="cfg.battery && useHHModel && cfg.agile">
-          <label class="chk"><input type="checkbox" v-model="optimalDispatch">Optimal battery dispatch <span class="unit">Agile cost-optimised</span> <span v-if="optimalDispatch" class="pill" style="margin-left:2px;border-color:rgba(245,197,66,.45);color:var(--solar);background:rgba(245,197,66,.1);">slower simulation</span></label>
-        </div>
-        <p v-if="cfg.battery && useHHModel && cfg.agile && optimalDispatch" style="font-size:11px;color:var(--faint);margin:6px 2px 0;"><b>Optimal battery dispatch:</b> schedules the battery to minimise cost against the half-hourly Agile prices (charge when cheap, discharge / export when expensive) with perfect foresight, instead of the simple solar-surplus rule. </p>
-
         <div class="subtoggle" v-if="cfg.hp">
           <label class="chk"><input type="checkbox" v-model="cfg.disconnectGas">Disconnect gas entirely</label>
         </div>
@@ -427,14 +537,11 @@
         <div class="card-head"><h2>Assumptions</h2><span class="hint">all editable · mid-2026 figures</span></div>
 
         <details open>
-          <summary>Energy prices &amp; tariff <span class="unit">inc. VAT</span> <span class="chev">›</span></summary>
+          <summary>Energy prices <span class="unit">inc. VAT</span> <span class="chev">›</span></summary>
           <div class="fields">
-            <div class="field" v-if="!cfg.agile"><label>Electricity unit rate <span class="unit">p/kWh</span></label><input type="number" step="0.01" v-model.number="p.elecRate"></div>
-            <div class="field"><label>Electricity standing charge <span class="unit">p/day</span></label><input type="number" step="0.01" v-model.number="p.elecStanding"></div>
+            <p style="font-size:11px;color:var(--faint);margin:0 2px 6px;">Electricity import, export &amp; standing charge are set under <em>Build your home · Tariff</em> (flat, Agile or a custom schedule).</p>
             <div class="field"><label>Gas unit rate <span class="unit">p/kWh</span></label><input type="number" step="0.01" v-model.number="p.gasRate"></div>
             <div class="field"><label>Gas standing charge <span class="unit">p/day</span></label><input type="number" step="0.01" v-model.number="p.gasStanding"></div>
-            <div class="field" v-if="!cfg.agile"><label>Export rate (SEG / flat) <span class="unit">p/kWh</span></label><input type="number" step="0.01" v-model.number="p.segRate"></div>
-            <p v-if="cfg.agile" style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Agile tariff is on: import &amp; export prices come from the half-hourly dataset (region D, inc. VAT — import grossed up by 5%; avg {{ current.avgAgileImport==null ? '—' : current.avgAgileImport.toFixed(1) }}p import / {{ current.avgAgileExport==null ? '—' : current.avgAgileExport.toFixed(1) }}p export across this build), so the flat import &amp; export rates don't apply. Switch Agile off to set them.</p>
           </div>
         </details>
 
@@ -488,8 +595,8 @@
           <summary>Electric vehicle <span class="chev">›</span></summary>
           <div class="fields">
             <div class="field"><label>Efficiency <span class="unit">mi/kWh</span></label><input type="number" step="0.1" v-model.number="p.evEfficiency"></div>
-            <div class="field"><label>Charge window — from <span class="unit">h</span></label><input type="number" step="1" min="0" max="23" v-model.number="p.evChargeStart"></div>
-            <div class="field"><label>Charge window — until <span class="unit">h</span></label><input type="number" step="1" min="1" max="24" v-model.number="p.evChargeEnd"></div>
+            <div class="field"><label>Charge window — from <span class="unit">h · 0.5 = 00:30</span></label><input type="number" step="0.5" min="0" max="23.5" v-model.number="p.evChargeStart"></div>
+            <div class="field"><label>Charge window — until <span class="unit">h</span></label><input type="number" step="0.5" min="0.5" max="24" v-model.number="p.evChargeEnd"></div>
             <div class="field"><label>Purchase price <span class="unit">£</span></label><input type="number" v-model.number="p.evPrice"></div>
             <div class="field"><label>Ownership period <span class="unit">yrs</span></label><input type="number" v-model.number="p.evLife"></div>
             <div class="field"><label>Resale value at end <span class="unit">£</span></label><input type="number" v-model.number="p.evResidual"></div>
@@ -598,8 +705,8 @@
           <tr><td class="grp" colspan="2">Running costs</td></tr>
           <tr v-if="!cfg.ev"><td><span class="tag" style="background:var(--petrol)"></span>Petrol</td><td class="num">{{ gbp(current.petrol) }}</td></tr>
           <tr><td><span class="tag" style="background:var(--gas)"></span>Gas{{ cfg.hp && !cfg.disconnectGas ? ' (cooking only)' : '' }}</td><td class="num">{{ gbp(current.gas) }}</td></tr>
-          <tr><td><span class="tag" style="background:var(--grid)"></span>Electricity import{{ cfg.agile ? ' (Agile)' : '' }}</td><td class="num">{{ gbp(current.importCost) }}</td></tr>
-          <tr v-if="current.exportRevenue>0"><td class="sub"><span class="tag" style="background:var(--solar)"></span>{{ cfg.agile ? 'Agile export credit' : 'Solar export credit' }}</td><td class="num credit">−{{ gbp(current.exportRevenue) }}</td></tr>
+          <tr><td><span class="tag" style="background:var(--grid)"></span>Electricity import{{ cfg.agile ? ' ('+tariffLabel+')' : '' }}</td><td class="num">{{ gbp(current.importCost) }}</td></tr>
+          <tr v-if="current.exportRevenue>0"><td class="sub"><span class="tag" style="background:var(--solar)"></span>{{ cfg.exportMode==='agile' ? 'Agile export credit' : 'Solar export credit' }}</td><td class="num credit">−{{ gbp(current.exportRevenue) }}</td></tr>
           <tr><td class="sub">Electricity standing charge</td><td class="num">{{ gbp(current.elecStandingCost) }}</td></tr>
           <tr class="tot"><td>Running subtotal</td><td class="num">{{ gbp(current.running) }}</td></tr>
 
@@ -674,7 +781,7 @@
           <tr v-if="cfg.solar"><td class="sub">— self-consumed ({{ current.selfPct }}%)</td><td class="num credit">{{ kwh(current.solarSelf) }}</td></tr>
           <tr v-if="cfg.solar"><td class="sub">— exported</td><td class="num">{{ kwh(current.solarExport) }}</td></tr>
           <tr class="tot"><td>Grid import</td><td class="num">{{ kwh(current.gridImport) }}</td></tr>
-          <tr v-if="cfg.agile && current.avgAgileImport!=null"><td class="sub">— avg Agile import price</td><td class="num">{{ current.avgAgileImport.toFixed(1) }} p/kWh</td></tr>
+          <tr v-if="cfg.agile && current.avgAgileImport!=null"><td class="sub">— avg {{ tariffLabel }} import price</td><td class="num">{{ current.avgAgileImport.toFixed(1) }} p/kWh</td></tr>
         </table>
         <div v-if="cfg.solar" class="bartrack" :title="'Self-consumed vs exported'">
           <div class="seg" :style="{flexGrow:current.solarSelf, background:'var(--battery)'}"></div>
@@ -682,8 +789,7 @@
         </div>
         <p v-if="cfg.solar" style="font-size:11.5px;color:var(--muted);margin:10px 2px 4px;">
           {{ current.selfPct }}% of your solar is used at home. Adding load (EV, heat pump) or a battery pushes this up — every self-consumed kWh is worth the
-          <template v-if="cfg.agile && current.avgAgileImport!=null">~{{ current.avgAgileImport.toFixed(1) }}p avg Agile import rate you avoid, versus only ~{{ current.avgAgileExport.toFixed(1) }}p avg if exported.</template>
-          <template v-else>{{ p.elecRate }}p import rate you avoid, versus only {{ p.segRate }}p if exported.</template>
+          ~{{ current.avgAgileImport!=null ? current.avgAgileImport.toFixed(1) : Number(p.elecRate).toFixed(1) }}p {{ current.avgAgileImport!=null ? 'avg ' : '' }}import rate you avoid, versus only ~{{ current.avgAgileExport!=null ? current.avgAgileExport.toFixed(1) : Number(p.segRate).toFixed(1) }}p {{ current.avgAgileExport!=null ? 'avg ' : '' }}if exported.
         </p>
 
         <template v-if="current.elecRates">
@@ -744,8 +850,8 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
-<script src="tools/solarmatching/model.js?v=5"></script>
-<script src="tools/solarmatching/ledger.js?v=8"></script>
+<script src="tools/solarmatching/model.js?v=6"></script>
+<script src="tools/solarmatching/ledger.js?v=9"></script>
 <script>
 const { createApp } = Vue;
 
@@ -765,7 +871,11 @@ createApp({
   data(){
     return {
       p: JSON.parse(JSON.stringify(DEFAULTS)),
-      cfg: { ev:false, hp:false, solar:false, battery:false, agile:false, disconnectGas:false },
+      // agile = a time-varying half-hourly import tariff is active; tariffMode selects
+      // its source ('agile' = wholesale dataset, 'custom' = user schedule). exportMode
+      // is the independent export source: 'flat' SEG, 'agile' Outgoing, or 'schedule'
+      // (the custom band table's export column).
+      cfg: { ev:false, hp:false, solar:false, battery:false, agile:false, tariffMode:'agile', exportMode:'flat', disconnectGas:false },
       // solar-matching engine: half-hourly simulation (model.js) by default,
       // with the simple annual estimate available for comparison.
       useHHModel: true,
@@ -792,13 +902,13 @@ createApp({
     };
   },
   watch:{
-    // Agile pricing is inherently half-hourly, so it's only offered while the
-    // half-hourly model is on. Switching to the annual estimate turns it off.
-    useHHModel(on){ if(!on) this.cfg.agile = false; },
-    // Optimal dispatch only makes sense against Agile prices, and its checkbox
-    // is only shown while Agile is on — keep the state in sync so the slow
-    // cost-optimised solve never runs once Agile is switched off.
-    'cfg.agile'(on){ if(!on) this.optimalDispatch = false; },
+    // Time-varying tariffs are inherently half-hourly, so they're only offered while
+    // the half-hourly model is on. Switching to the annual estimate forces flat both sides.
+    useHHModel(on){ if(!on){ this.cfg.agile = false; this.cfg.exportMode = 'flat'; } },
+    // Optimal dispatch pays off only when a price varies over the day, so default it
+    // on whenever any non-flat import or export is selected (and off when fully flat).
+    // The user can still override afterwards — this only fires on the transition.
+    timeVaryingPricing(on){ this.optimalDispatch = on; },
     // Disconnecting gas only makes sense once heating is electrified, so default
     // to a full disconnect when the heat pump goes on (the user can still keep
     // gas for cooking by unticking it), and clear it when the heat pump goes off.
@@ -806,6 +916,39 @@ createApp({
   },
   computed:{
     current(){ return this.compute(this.cfg); },
+    // Three-way IMPORT selector backing the segmented control. 'flat' clears the
+    // time-varying import; 'agile'/'custom' turn it on and pick the source. Switching
+    // import keeps a still-valid export choice, else snaps export to a sensible default.
+    tariffSel:{
+      get(){ return this.cfg.agile ? this.cfg.tariffMode : 'flat'; },
+      set(v){
+        if(v==='flat'){ this.cfg.agile = false; if(this.cfg.exportMode==='schedule') this.cfg.exportMode='flat'; }
+        else { this.cfg.agile = true; this.cfg.tariffMode = v;
+          if(v==='custom'){ if(this.cfg.exportMode==='flat') this.cfg.exportMode='schedule'; }
+          else { if(this.cfg.exportMode==='schedule') this.cfg.exportMode='agile';
+            // Agile import carries its own standing charge
+            const ag = ledger.TARIFF_PRESETS.agile; if(ag && ag.standing!=null) this.p.elecStanding = ag.standing;
+          }
+        }
+      },
+    },
+    // Export selector backing its segmented control: 'flat' SEG, 'agile' Outgoing,
+    // or (custom import only) 'schedule' = the band table's export column.
+    exportSel:{
+      get(){ return this.cfg.exportMode; },
+      set(v){ this.cfg.exportMode = v; },
+    },
+    // Any time-varying pricing on either side — used to default optimal dispatch on.
+    timeVaryingPricing(){ return this.cfg.agile || this.cfg.exportMode !== 'flat'; },
+    // Display name for the active time-varying import tariff ('Agile' / 'Custom').
+    tariffLabel(){ return this.cfg.tariffMode === 'custom' ? 'Custom' : 'Agile'; },
+    // Schedule presets (Go / Cosy / Flux) offered as one-click buttons in the editor
+    // — only entries that carry a schedule (the Agile entry holds a standing charge only).
+    tariffPresets(){
+      const all = ledger.TARIFF_PRESETS, out = {};
+      for(const k in all) if(all[k].schedule) out[k] = all[k];
+      return out;
+    },
     // Per-use electricity rows for the "effective rate by use" table. Order puts
     // the heat pump last (the focus of the spark-gap story below it).
     elecCostRows(){
@@ -822,7 +965,7 @@ createApp({
       const hp = this.current.elecRates && this.current.elecRates.hp;
       return hp && Math.abs(hp.levRate - hp.cashRate) > 0.2;
     },
-    statusQuo(){ return this.compute({ev:false,hp:false,solar:false,battery:false,agile:false,disconnectGas:false}); },
+    statusQuo(){ return this.compute({ev:false,hp:false,solar:false,battery:false,agile:false,tariffMode:'agile',exportMode:'flat',disconnectGas:false}); },
     saving(){ return this.costOf(this.statusQuo) - this.costOf(this.current); },
     // shared linear scale for the cost bars: status quo (usually the largest)
     // anchors the positive side, so the build bar shrinks as savings are made.
@@ -1066,7 +1209,7 @@ createApp({
     },
 
     // display name + carrier colour for a technology, used in the step tooltip
-    techLabel(tech){ return {ev:'Electric vehicle', hp:'Heat pump', solar:'Solar PV', battery:'Home battery', agile:'Agile tariff'}[tech] || tech; },
+    techLabel(tech){ if(tech==='agile') return (this.cfg.tariffMode==='custom'?'Custom':'Agile')+' tariff'; return {ev:'Electric vehicle', hp:'Heat pump', solar:'Solar PV', battery:'Home battery'}[tech] || tech; },
     techColor(tech){ return {ev:'--ev', hp:'--hp', solar:'--solar', battery:'--battery', agile:'--grid'}[tech] || '--text'; },
 
     // Marginal upfront capital to add this single technology, given the rest of
@@ -1173,6 +1316,21 @@ createApp({
     // ledger.compute (shared with the Node harness); ledgerCtx() supplies the
     // live parameters, flags and the half-hourly model runner.
     compute(c){ return ledger.compute(c, this.ledgerCtx()); },
+
+    // ---- custom tariff schedule editing ----
+    // Add a band after the last, defaulting to noon at the day rate so the user
+    // only has to nudge the time/price.
+    addTariffRow(){ this.p.tariffSchedule.push({ start:'12:00', price: this.p.elecRate, export: this.p.segRate }); },
+    removeTariffRow(i){ if(this.p.tariffSchedule.length>1) this.p.tariffSchedule.splice(i,1); },
+    // Load a ready-made schedule (Go / Cosy / Flux) into the editor — copied, so the
+    // bands stay editable and the shared preset isn't mutated — and apply its daily
+    // standing charge.
+    applyTariffPreset(key){
+      const pr = ledger.TARIFF_PRESETS[key];
+      if(!pr) return;
+      if(pr.schedule) this.p.tariffSchedule = JSON.parse(JSON.stringify(pr.schedule));
+      if(pr.standing != null) this.p.elecStanding = pr.standing;
+    },
     applyKona(){
       const k = this.konaPresets[this.konaChoice];
       if(!k) return;
@@ -1181,7 +1339,8 @@ createApp({
     },
     resetAll(){
       this.p = JSON.parse(JSON.stringify(DEFAULTS));
-      this.cfg = { ev:false, hp:false, solar:false, battery:false, agile:false, disconnectGas:false };
+      this.cfg = { ev:false, hp:false, solar:false, battery:false, agile:false, tariffMode:'agile', exportMode:'flat', disconnectGas:false };
+      this.optimalDispatch = false;
       this.useHHModel = true;
       this.konaChoice = '';
       modelCache.clear();

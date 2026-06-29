@@ -60,8 +60,15 @@ function makeCtx(p, opts) {
 
 // Normalise a build config: disconnectGas tracks hp unless set explicitly.
 function cfg(flags) {
-  const c = { ev: false, hp: false, solar: false, battery: false, agile: false, disconnectGas: false };
+  const c = { ev: false, hp: false, solar: false, battery: false, agile: false, tariffMode: 'agile', exportMode: 'flat', disconnectGas: false };
   (flags || []).forEach(f => { if (f in c) c[f] = true; });
+  // 'custom' flag: a time-varying tariff priced against the user-defined schedule
+  // (ledger.DEFAULTS.tariffSchedule) rather than the Agile dataset.
+  if ((flags || []).includes('custom')) { c.agile = true; c.tariffMode = 'custom'; }
+  // Export source defaults to match the import (agile→agile, custom→schedule, else
+  // flat); the 'outgoing' flag forces the half-hourly Agile Outgoing export feed.
+  c.exportMode = c.agile ? (c.tariffMode === 'custom' ? 'schedule' : 'agile') : 'flat';
+  if ((flags || []).includes('outgoing')) { c.exportMode = 'agile'; }
   if (c.hp && !('disconnectGasExplicit' in c)) c.disconnectGas = true;
   return c;
 }
@@ -121,8 +128,11 @@ function scenarioReport(c, p, opts) {
   console.log(`  ${pad('  self-consumed', 26)} ${lpad(kwh(r.solarSelf) + ` (${r.selfPct}%)`, 14)}`);
   console.log(`  ${pad('  exported', 26)} ${lpad(kwh(r.solarExport), 14)}`);
   console.log(`  ${pad('Grid import', 26)} ${lpad(kwh(r.gridImport), 14)}`);
-  if (r.avgAgileImport != null)
-    console.log(`  ${pad('Avg Agile import/export', 26)} ${lpad(r.avgAgileImport.toFixed(1) + ' / ' + r.avgAgileExport.toFixed(1) + ' p/kWh', 14)}`);
+  if (r.avgAgileImport != null || r.avgAgileExport != null) {
+    const imp = r.avgAgileImport != null ? r.avgAgileImport.toFixed(1) : 'flat';
+    const exp = r.avgAgileExport != null ? r.avgAgileExport.toFixed(1) : 'flat';
+    console.log(`  ${pad('Avg ' + (c.tariffMode === 'custom' ? 'custom' : 'Agile') + ' import/export', 26)} ${lpad(imp + ' / ' + exp + ' p/kWh', 14)}`);
+  }
   console.log(hr('·'));
   console.log(`  ${pad('Running cost', 26)} ${lpad(gbp(r.running), 14)}`);
   console.log(`  ${pad('Annualised assets', 26)} ${lpad(gbp(r.assets), 14)}`);

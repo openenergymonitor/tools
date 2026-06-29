@@ -32,7 +32,16 @@
         // price-cap figures as quoted to domestic customers). The Agile import
         // feed is the one exception: it is stored ex-VAT and grossed up in
         // model.js _apply.
-        elecRate: 26.11, elecStanding: 57.19, gasRate: 7.33, gasStanding: 29.04, segRate: 15,
+        elecRate: 26.11, elecStanding: 57.19, gasRate: 7.33, gasStanding: 29.04, segRate: 12,
+        // user-defined tariff schedule (used when cfg.tariffMode==='custom'). Each
+        // band carries an import `price` and an `export` rate (p/kWh, inc. VAT) that
+        // apply from its start time until the next, wrapping past midnight. Default
+        // mirrors Octopus Go: a cheap overnight window (00:30–05:30) with a flat day
+        // rate the rest of the time (the pre-00:30 minutes wrap back to the day band).
+        tariffSchedule: [
+            { start: '00:30', price: 9.5, export: 12 },
+            { start: '05:30', price: 35.73, export: 12 },
+        ],
         // home energy
         gasTotal: 11500, heatingPct: 77, waterPct: 20, cookingPct: 3, boilerEff: 0.90, elecBaseload: 2700,
         // petrol car
@@ -40,7 +49,7 @@
         // boiler
         boilerPrice: 3000, boilerLife: 15, boilerService: 100, boilerRepairs: 70,
         // EV
-        evEfficiency: 4.0, evChargeStart: 0, evChargeEnd: 7, evPrice: 13500, evLife: 10, evResidual: 2000, evMaint: 300, evBatteryKwh: 64,
+        evEfficiency: 4.0, evChargeStart: 0.5, evChargeEnd: 7, evPrice: 13500, evLife: 10, evResidual: 2000, evMaint: 300, evBatteryKwh: 64,
         // heat pump
         scop: 4.0, hpPrice: 12000, busGrant: 7500, hpLife: 18, hpUpkeep: 200, inductionEff: 0.6,
         // solar — install cost modelled as a fixed component (scaffolding, inverter,
@@ -74,6 +83,58 @@
         boilerEmbodied: 150,          // kgCO2e to manufacture a gas boiler
         hpEmbodied: 735,              // kgCO2e to manufacture a heat pump incl. refrigerant
         solarLifecycleCO2: 30,        // gCO2e/kWh lifecycle (manufacturing of panels)
+    };
+
+    // Ready-made schedules for the custom-tariff builder. Each is a list of
+    // { start: 'HH:MM', price, export } bands (p/kWh inc. VAT) where a band holds
+    // until the next, wrapping past midnight. Picking a preset copies its schedule
+    // into p.tariffSchedule (then still editable) and sets the daily standing charge
+    // (p/day inc. VAT). Go/Cosy have no published time-of-use export rate, so they use
+    // a flat 12p SEG export across every band. The `agile` entry carries only a
+    // standing charge — the Agile import feed has no editable schedule — so it has no
+    // preset button; it's applied when the Agile import option is chosen.
+    var TARIFF_PRESETS = {
+        agile: { label: 'Octopus Agile', standing: 65.84 },
+        // Octopus Go: a cheap overnight window (00:30–05:30) with a flat day rate.
+        go: {
+            label: 'Octopus Go',
+            standing: 69.7,
+            schedule: [
+                { start: '00:30', price: 9.5, export: 12 },
+                { start: '05:30', price: 35.73, export: 12 },
+            ],
+        },
+        // Octopus Cosy: three cheap windows (04:00–07:00, 13:00–16:00, 22:00–00:00),
+        // a teatime peak (16:00–19:00) and a flat day rate in between. The 22:00 cheap
+        // band runs to midnight; the explicit 00:00 day band then resumes the day rate
+        // through to the 04:00 cheap window.
+        cosy: {
+            label: 'Octopus Cosy',
+            standing: 69.7,
+            schedule: [
+                { start: '00:00', price: 33.22, export: 12 },
+                { start: '04:00', price: 16.29, export: 12 },
+                { start: '07:00', price: 33.22, export: 12 },
+                { start: '13:00', price: 16.29, export: 12 },
+                { start: '16:00', price: 49.83, export: 12 },
+                { start: '19:00', price: 33.22, export: 12 },
+                { start: '22:00', price: 16.29, export: 12 },
+            ],
+        },
+        // Octopus Flux: import & export both vary by time. A cheap overnight flux
+        // window (02:00–05:00) to charge a battery, a teatime peak (16:00–19:00) with
+        // a high export rate to sell into, and a flat day rate either side.
+        flux: {
+            label: 'Octopus Flux',
+            standing: 68,
+            schedule: [
+                { start: '00:00', price: 26.79, export: 10.54 },
+                { start: '02:00', price: 16.08, export: 5.12 },
+                { start: '05:00', price: 26.79, export: 10.54 },
+                { start: '16:00', price: 37.52, export: 30.68 },
+                { start: '19:00', price: 26.79, export: 10.54 },
+            ],
+        },
     };
 
     // Equivalent annual cost of a lumpy capital sum, spread over its life.
@@ -188,6 +249,18 @@
             import_rate: p.elecRate,
             export_rate: p.segRate
         };
+        // Tell the model where to source import & export prices. Import follows the
+        // build: 'schedule' (custom), 'agile' (agile import) or 'flat'. Export is an
+        // independent choice (c.exportMode): 'flat' SEG, 'agile' Outgoing, or
+        // 'schedule' (the custom band table's export column). The agile/agile pair is
+        // the model default, so we only attach mp.tariff when something differs —
+        // keeping the common Agile-tariff cache keys unchanged.
+        var importSrc = c.agile ? (c.tariffMode === 'custom' ? 'schedule' : 'agile') : 'flat';
+        var exportSrc = c.exportMode || 'flat';
+        if (importSrc !== 'agile' || exportSrc !== 'agile') {
+            mp.tariff = { import: importSrc, export: exportSrc };
+            if (importSrc === 'schedule' || exportSrc === 'schedule') mp.tariff.schedule = p.tariffSchedule;
+        }
         var r = ctx.runModel(mp);
         return {
             solarGen: r.annual.solar_kwh,
@@ -220,7 +293,7 @@
         // simulation in model.js is the default; the original annualised estimate is
         // kept for comparison. The Agile tariff is priced half-hourly, so it always
         // uses the simulation regardless of the toggle.
-        var useHH = (ctx.useHHModel || c.agile) && ctx.modelReady;
+        var useHH = (ctx.useHHModel || c.agile || (c.exportMode && c.exportMode !== 'flat')) && ctx.modelReady;
         var solarGen, solarSelf, solarExport, gridImport;
         var f = null;
 
@@ -245,12 +318,19 @@
         }
 
         // ---- electricity cost ----
+        // Import and export are priced independently and the half-hourly model has
+        // already costed each interval at the right source (see flowsHH / model.js),
+        // so when the model ran we read its totals straight off. The avg-rate figures
+        // are only meaningful for a time-varying side (import: agile/custom; export:
+        // anything but flat). The annual-estimate fallback (no model) is flat both
+        // sides. exportMode defaults to flat for older configs without the field.
+        var exportMode = c.exportMode || 'flat';
         var importCost, exportRevenue, avgAgileImport = null, avgAgileExport = null;
-        if (c.agile && f) {
+        if (f) {
             importCost = f.agileImportCost;
             exportRevenue = f.agileExportEarnings;
-            avgAgileImport = f.avgAgileImport;
-            avgAgileExport = f.avgAgileExport;
+            if (c.agile) avgAgileImport = f.avgAgileImport;
+            if (exportMode !== 'flat') avgAgileExport = f.avgAgileExport;
         } else {
             importCost = gridImport * p.elecRate / 100;
             exportRevenue = solarExport * p.segRate / 100;
@@ -275,7 +355,7 @@
             // £/kWh prices for home energy
             var solarLcoe = (c.solar && solarGen > 0)
                 ? (ann(p, solarCapital(p), 0, p.solarLife) + p.solarMaint) / solarGen : 0;
-            var forgoneExport = (c.agile ? (avgAgileExport || 0) : p.segRate) / 100;
+            var forgoneExport = (exportMode !== 'flat' ? (avgAgileExport || 0) : p.segRate) / 100;
             var bf = f.batteryFlow;
             var batChargeGridCost = c.agile ? bf.charge_grid_cost : bf.charge_grid_cost_flat;
             var batLcosCapital = c.battery ? ann(p, batteryCapital(p), 0, p.batteryLife) : 0;
@@ -428,6 +508,7 @@
     return {
         LITRES_PER_GALLON: LITRES_PER_GALLON,
         DEFAULTS: DEFAULTS,
+        TARIFF_PRESETS: TARIFF_PRESETS,
         ann: ann,
         solarCapital: solarCapital,
         batteryCapital: batteryCapital,

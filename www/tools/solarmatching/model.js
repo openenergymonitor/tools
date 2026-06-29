@@ -143,8 +143,8 @@ var model = {
             ev_miles: 16000,          // miles per year
             ev_efficiency: 3.8,       // miles per kWh
             ev_charge_power: 7,       // kW charge rate
-            ev_charge_start_hour: 0,  // start charging overnight (midnight)
-            ev_charge_end_hour: 7,    // latest hour charging can continue to
+            ev_charge_start_hour: 0,  // start charging overnight (midnight); fractional ok (0.5 = 00:30)
+            ev_charge_end_hour: 7,    // latest hour charging can continue to (fractional ok)
 
             // battery
             battery: {
@@ -178,6 +178,14 @@ var model = {
             // tariff
             import_rate: 26, // p/kWh flat-rate import
             export_rate: 10, // p/kWh flat-rate export
+
+            // Optional user-defined import tariff schedule. When set, the import
+            // price for each interval comes from this time-of-day schedule rather
+            // than the half-hourly Agile feed (series[3]); export stays at the flat
+            // export_rate above. Shape: { schedule: [{ start: 'HH:MM', price }] }
+            // where each entry's price (p/kWh, inc. VAT) applies from its start
+            // time until the next entry, wrapping past midnight. null = use Agile.
+            tariff: null,
 
             // Off-peak window. Used only to report how much grid import falls in
             // the window (annual.import_offpeak_kwh); it does not change battery
@@ -264,6 +272,9 @@ var model = {
         for (var pi = 0; pi < n_intervals; pi++) {
             let date = new Date(time_at(pi));
             let hour = date.getHours();
+            // Fractional hour (e.g. 0.5 = 00:30) so the EV charge window can start
+            // / end on a half-hour, matching tariff bands like Octopus Go (00:30).
+            let hour_frac = hour + date.getMinutes() / 60;
             let solarpv = series[0].data[pi] * solar_normalisation_factor * p.solar_kWp;
             let lac = series[1].data[pi] * lac_normalisation_factor;
             let heatpump = series[2].data[pi] * heatpump_normalisation_factor;
@@ -273,7 +284,7 @@ var model = {
             } else {
                 if (date.getDate() != prepass_day) { prepass_day = date.getDate(); prepass_ev_today = 0; }
                 if (ev_daily_kwh > 0 &&
-                    hour >= p.ev_charge_start_hour && hour < p.ev_charge_end_hour &&
+                    hour_frac >= p.ev_charge_start_hour && hour_frac < p.ev_charge_end_hour &&
                     prepass_ev_today < ev_daily_kwh) {
                     ev = p.ev_charge_power * 1000;
                     let ev_kwh = ev * power_to_kwh;
@@ -291,12 +302,61 @@ var model = {
             demand_w[pi] = lac + heatpump + ev;
         }
 
+        // Per-interval import / export prices (p/kWh). Each side is sourced
+        // independently via p.tariff.import / p.tariff.export:
+        //   'agile'    – the half-hourly feed (series[3] import, series[4] export)
+        //   'flat'     – the constant import_rate / export_rate
+        //   'schedule' – a user-defined time-of-day band table (p.tariff.schedule)
+        // Both default to the Agile feed (so an absent p.tariff = old behaviour).
+        // Built once here so the DP and the main loop price against the same arrays.
+        let tariff = p.tariff || {};
+        let import_src = tariff.import || 'agile';
+        let export_src = tariff.export || 'agile';
+        let import_rate_arr = series[3].data;
+        let export_rate_arr = series[4].data;
+        if (import_src !== 'agile' || export_src !== 'agile') {
+            // Time-of-day band lookup, built only when a side is 'schedule'. Bands
+            // are {minutes-of-day, price, export}, sorted; minutes parsed from a
+            // numeric `minutes` field or a 'HH:MM' `start` string. Export falls back
+            // to the flat export_rate when a band omits it.
+            let band_at = null;
+            if (tariff.schedule && tariff.schedule.length) {
+                let sched = tariff.schedule.map(function (e) {
+                    var m = (typeof e.minutes === 'number') ? e.minutes
+                        : (function (s) { var x = String(s).split(':'); return (+x[0]) * 60 + (+(x[1] || 0)); })(e.start);
+                    return { minutes: m, price: e.price, export: (e.export != null ? e.export : p.export_rate) };
+                }).sort(function (a, b) { return a.minutes - b.minutes; });
+                // Latest band at or before the time of day; before the first start we
+                // wrap to the last band (the overnight band).
+                band_at = function (min_of_day) {
+                    var band = sched[sched.length - 1];
+                    for (var s = 0; s < sched.length; s++) {
+                        if (min_of_day >= sched[s].minutes) band = sched[s]; else break;
+                    }
+                    return band;
+                };
+            }
+            if (import_src !== 'agile') import_rate_arr = new Array(n_intervals);
+            if (export_src !== 'agile') export_rate_arr = new Array(n_intervals);
+            for (var ri = 0; ri < n_intervals; ri++) {
+                var band = null;
+                if ((import_src === 'schedule' || export_src === 'schedule') && band_at) {
+                    let d = new Date(time_at(ri));
+                    band = band_at(d.getHours() * 60 + d.getMinutes());
+                }
+                if (import_src === 'schedule') import_rate_arr[ri] = band.price;
+                else if (import_src === 'flat') import_rate_arr[ri] = p.import_rate;
+                if (export_src === 'schedule') export_rate_arr[ri] = band.export;
+                else if (export_src === 'flat') export_rate_arr[ri] = p.export_rate;
+            }
+        }
+
         // Optimal dispatch: compute the whole-year schedule once, up front.
-        // Perfect foresight over the half-hourly agile import/export prices.
+        // Perfect foresight over the half-hourly import/export prices.
         let optimal = (p.battery.dispatch === 'optimal' && p.battery.capacity > 0);
         let dp_charge_w, dp_discharge_w, dp_soc;
         if (optimal) {
-            let sched = optimiseBatteryDP(solar_w, demand_w, series[3].data, series[4].data, {
+            let sched = optimiseBatteryDP(solar_w, demand_w, import_rate_arr, export_rate_arr, {
                 capacity: p.battery.capacity,
                 soc_levels: p.battery.soc_levels,
                 power_to_kwh: power_to_kwh,
@@ -429,9 +489,10 @@ var model = {
                 let solarpv = solar_w[i];
                 let demand = demand_w[i];
 
-                // Agile import / export rates (p/kWh)
-                let import_rate = series[3].data[i];
-                let export_rate = series[4].data[i];
+                // Import / export rates (p/kWh) — Agile feed or, if a user-defined
+                // tariff schedule is set, its time-of-day price (built above).
+                let import_rate = import_rate_arr[i];
+                let export_rate = export_rate_arr[i];
 
                 // Balance of generation minus demand (W), before the battery.
                 let balance = solarpv - demand;
