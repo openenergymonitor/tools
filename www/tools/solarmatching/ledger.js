@@ -196,7 +196,9 @@
             agileImportCost: r.annual.agile_import_cost,
             agileExportEarnings: r.annual.agile_export_earnings,
             avgAgileImport: r.annual.avg_agile_import_rate,
-            avgAgileExport: r.annual.avg_agile_export_rate
+            avgAgileExport: r.annual.avg_agile_export_rate,
+            loadAttr: r.annual.load_attr,
+            batteryFlow: r.annual.battery_flow
         };
     }
 
@@ -254,6 +256,80 @@
             exportRevenue = solarExport * p.segRate / 100;
         }
         var elecStandingCost = p.elecStanding * 365 / 100;
+
+        // ---- effective electricity unit rate by load (diagnostic) ----
+        // For each load we know (from the half-hourly attribution) how many kWh
+        // it drew from the grid, from solar-direct and from the battery, and the
+        // grid kWh are already priced at the timing-weighted rate paid. The home-
+        // generated/stored kWh are priced two ways:
+        //   cash      — solar at the export it forgoes, battery at the cash spent
+        //               charging it (grid import + forgone export on solar charge)
+        //   levelised — solar at its production cost (annualised capital ÷ output),
+        //               battery at its charge cost + storage capital per kWh cycled
+        // Capital already appears in the ledger as the solar/battery asset lines,
+        // so this is a STANDALONE lens (never summed into the all-in total) — it
+        // shows how much solar+battery cut the rate the heat pump etc. pays, and
+        // hence the spark gap vs gas. Only available with the half-hourly model.
+        var elecRates = null, sparkGap = null;
+        if (f && f.loadAttr) {
+            // £/kWh prices for home energy
+            var solarLcoe = (c.solar && solarGen > 0)
+                ? (ann(p, solarCapital(p), 0, p.solarLife) + p.solarMaint) / solarGen : 0;
+            var forgoneExport = (c.agile ? (avgAgileExport || 0) : p.segRate) / 100;
+            var bf = f.batteryFlow;
+            var batChargeGridCost = c.agile ? bf.charge_grid_cost : bf.charge_grid_cost_flat;
+            var batLcosCapital = c.battery ? ann(p, batteryCapital(p), 0, p.batteryLife) : 0;
+            // battery cost per kWh delivered (charge cost spread over discharge —
+            // round-trip losses fall out because more is charged than delivered)
+            var batUnitCash = bf.discharge_kwh > 0
+                ? (batChargeGridCost + bf.charge_solar_kwh * forgoneExport) / bf.discharge_kwh : 0;
+            var batUnitLev = bf.discharge_kwh > 0
+                ? (batChargeGridCost + bf.charge_solar_kwh * solarLcoe + batLcosCapital) / bf.discharge_kwh : 0;
+
+            var loadRate = function (a) {
+                if (!a) return null;
+                var kwh = a.grid_kwh + a.solar_kwh + a.battery_kwh;
+                if (kwh <= 0.5) return null;
+                var grid = c.agile ? a.grid_cost : a.grid_cost_flat;
+                var cashCost = grid + a.solar_kwh * forgoneExport + a.battery_kwh * batUnitCash;
+                var levCost = grid + a.solar_kwh * solarLcoe + a.battery_kwh * batUnitLev;
+                return {
+                    kwh: kwh, gridKwh: a.grid_kwh, solarKwh: a.solar_kwh, batteryKwh: a.battery_kwh,
+                    cashCost: cashCost, levCost: levCost,
+                    cashRate: cashCost / kwh * 100, levRate: levCost / kwh * 100
+                };
+            };
+            // lac carries baseload + cooking; they share one profile, so split the
+            // result pro-rata by kWh (exact — identical timing).
+            var scaleRate = function (r, frac) {
+                if (!r || frac <= 0) return null;
+                return {
+                    kwh: r.kwh * frac, gridKwh: r.gridKwh * frac, solarKwh: r.solarKwh * frac,
+                    batteryKwh: r.batteryKwh * frac, cashCost: r.cashCost * frac, levCost: r.levCost * frac,
+                    cashRate: r.cashRate, levRate: r.levRate
+                };
+            };
+            var lacRate = loadRate(f.loadAttr.lac);
+            var lacTotal = p.elecBaseload + cookingElec;
+            var cookFrac = lacTotal > 0 ? cookingElec / lacTotal : 0;
+            elecRates = {
+                baseload: scaleRate(lacRate, 1 - cookFrac),
+                cooking: cookingElec > 0 ? scaleRate(lacRate, cookFrac) : null,
+                ev: c.ev ? loadRate(f.loadAttr.ev) : null,
+                hp: c.hp ? loadRate(f.loadAttr.hp) : null,
+                solarLcoe: solarLcoe * 100, forgoneExport: forgoneExport * 100,
+                batUnitCash: batUnitCash * 100, batUnitLev: batUnitLev * 100
+            };
+            // spark gap: cost of a useful kWh of heat, heat pump vs gas boiler
+            if (elecRates.hp) {
+                sparkGap = {
+                    gasHeat: p.gasRate / p.boilerEff,            // p/kWh useful heat (gas)
+                    hpHeatCash: elecRates.hp.cashRate / p.scop,  // p/kWh useful heat (HP, cash)
+                    hpHeatLev: elecRates.hp.levRate / p.scop,    // p/kWh useful heat (HP, levelised)
+                    elecGasRatio: p.elecRate / p.gasRate         // headline flat-rate spark ratio
+                };
+            }
+        }
 
         // ---- gas ----
         var gas = 0;
@@ -329,6 +405,7 @@
             avgAgileImport: avgAgileImport, avgAgileExport: avgAgileExport,
             selfPct: solarGen > 0 ? Math.round(solarSelf / solarGen * 100) : 0,
             importCost: importCost, exportRevenue: exportRevenue, elecStandingCost: elecStandingCost,
+            elecRates: elecRates, sparkGap: sparkGap,
             gas: gas, petrol: petrol, running: running,
             carAsset: carAsset, heatAsset: heatAsset, solarAsset: solarAsset, batteryAsset: batteryAsset,
             assets: assets, allIn: allIn, segments: segments,

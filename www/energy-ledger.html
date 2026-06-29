@@ -28,6 +28,7 @@
     --ev:#8a86f5;
     --good:#54c08a;
     --bad:#d8694d;
+    --oem:#44a1f2;
     --radius:10px;
   }
   *{box-sizing:border-box}
@@ -47,9 +48,9 @@
 
   /* ---- masthead ---- */
   .masthead{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:24px;}
-  .brand .eyebrow{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--gas);margin:0 0 6px;}
+  .brand .eyebrow{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--oem);margin:0 0 6px;}
   .brand h1{font-size:30px;font-weight:700;margin:0;letter-spacing:-.01em;}
-  .brand p{margin:6px 0 0;color:var(--muted);max-width:46ch;font-size:13px;}
+  .brand p{margin:6px 0 0;color:var(--muted);max-width:48ch;font-size:13px;}
 
   /* ---- hero ledger ---- */
   .hero{background:linear-gradient(180deg,var(--panel) 0%,#141b22 100%);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin-bottom:26px;}
@@ -202,6 +203,22 @@
 
   .bartrack{height:8px;border-radius:5px;background:#0d1217;overflow:hidden;display:flex;margin-top:14px;border:1px solid var(--line);}
   .bartrack .seg{transition:flex-grow .55s ease;}
+
+  .subhead{font-size:10.5px;color:var(--faint);letter-spacing:.08em;text-transform:uppercase;margin:20px 2px 4px;font-weight:600;}
+  table.ucost{width:100%;border-collapse:collapse;}
+  table.ucost td,table.ucost th{padding:6px 0;font-size:12.5px;border-top:1px solid var(--line);}
+  table.ucost th{color:var(--faint);font-size:10px;letter-spacing:.05em;text-transform:uppercase;font-weight:600;border:none;}
+  table.ucost th.n,table.ucost td.n{text-align:right;}
+  table.ucost td.n{font-family:"JetBrains Mono";font-variant-numeric:tabular-nums;font-weight:500;}
+  table.ucost td.lev{color:var(--text);}
+  table.ucost .tag{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:9px;vertical-align:baseline;}
+  .sparkgap{margin-top:16px;padding:13px 14px;border-radius:10px;background:#0d1217;border:1px solid var(--line);}
+  .sparkgap h3{font-size:12px;margin:0 0 8px;color:var(--text);font-weight:700;}
+  .sparkgap p{margin:6px 0;font-size:12px;color:var(--muted);line-height:1.6;}
+  .sparkgap b{color:var(--text);font-family:"JetBrains Mono";font-variant-numeric:tabular-nums;}
+  .sparkgap .verdict{font-size:12.5px;color:var(--text);}
+  .sparkbar{height:8px;border-radius:5px;background:#0d1217;overflow:hidden;display:flex;margin:9px 0 4px;border:1px solid var(--line);}
+  .sparkbar .seg{transition:flex-grow .55s ease;}
 
   .foot{margin-top:26px;color:var(--faint);font-size:11.5px;line-height:1.65;border-top:1px solid var(--line);padding-top:16px;}
   .foot b{color:var(--muted);}
@@ -668,6 +685,53 @@
           <template v-if="cfg.agile && current.avgAgileImport!=null">~{{ current.avgAgileImport.toFixed(1) }}p avg Agile import rate you avoid, versus only ~{{ current.avgAgileExport.toFixed(1) }}p avg if exported.</template>
           <template v-else>{{ p.elecRate }}p import rate you avoid, versus only {{ p.segRate }}p if exported.</template>
         </p>
+
+        <template v-if="current.elecRates">
+          <div class="subhead">Effective electricity rate by use</div>
+          <table class="ucost">
+            <tr>
+              <th>Use</th><th class="n">kWh/yr</th>
+              <th class="n">cash</th><th class="n">all-in</th>
+            </tr>
+            <tr v-for="row in elecCostRows" :key="row.key">
+              <td><span class="tag" :style="{background:row.color}"></span>{{ row.label }}</td>
+              <td class="n">{{ kwh(row.r.kwh) }}</td>
+              <td class="n">{{ row.r.cashRate.toFixed(1) }}p</td>
+              <td class="n lev">{{ row.r.levRate.toFixed(1) }}p</td>
+            </tr>
+          </table>
+          <p style="font-size:11.5px;color:var(--muted);margin:9px 2px 2px;">
+            What each use actually pays per kWh once solar and battery are mixed in. <b>Cash</b> prices home-generated power at what it gives up — self-used solar at the {{ current.elecRates.forgoneExport.toFixed(1) }}p export you forgo, battery at the {{ current.elecRates.batUnitCash.toFixed(1) }}p it cost to charge. <b>All-in</b> prices it at its own capital cost — solar at its {{ current.elecRates.solarLcoe.toFixed(1) }}p levelised cost, battery at {{ current.elecRates.batUnitLev.toFixed(1) }}p incl. storage hardware. (A diagnostic lens — this capital is already in the asset lines, so it isn't re-added to the all-in total.)
+          </p>
+        </template>
+
+        <div v-if="current.sparkGap" class="sparkgap">
+          <h3>Heat pump vs gas — closing the spark gap</h3>
+          <p>
+            The heat pump's electricity effectively costs
+            <b>{{ current.elecRates.hp.cashRate.toFixed(1) }}p</b><template v-if="hpRateSpread">–<b>{{ current.elecRates.hp.levRate.toFixed(1) }}p</b></template>/kWh
+            (grid {{ Math.round(current.elecRates.hp.gridKwh/current.elecRates.hp.kwh*100) }}%<template v-if="current.elecRates.hp.solarKwh>1">, solar {{ Math.round(current.elecRates.hp.solarKwh/current.elecRates.hp.kwh*100) }}%</template><template v-if="current.elecRates.hp.batteryKwh>1">, battery {{ Math.round(current.elecRates.hp.batteryKwh/current.elecRates.hp.kwh*100) }}%</template>)<template v-if="!cfg.solar && !cfg.battery"> — flat grid rate, before any solar or battery</template>.
+          </p>
+          <p>
+            At SCOP {{ p.scop }} that's <b>{{ current.sparkGap.hpHeatCash.toFixed(1) }}p</b><template v-if="hpRateSpread">–<b>{{ current.sparkGap.hpHeatLev.toFixed(1) }}p</b></template> per kWh of <em>heat</em>, versus gas at <b>{{ current.sparkGap.gasHeat.toFixed(1) }}p</b>/kWh ({{ p.gasRate }}p ÷ {{ Math.round(p.boilerEff*100) }}% boiler).
+          </p>
+          <div class="sparkbar" :title="'Cost of useful heat: heat pump vs gas'">
+            <div class="seg" :style="{flexGrow:current.sparkGap.hpHeatCash, background:'var(--hp)'}"></div>
+            <div class="seg" :style="{flexGrow:Math.max(current.sparkGap.gasHeat-current.sparkGap.hpHeatCash,0.001), background:'var(--gas)'}"></div>
+          </div>
+          <p class="verdict">
+            <template v-if="current.sparkGap.hpHeatLev < current.sparkGap.gasHeat">
+              A unit of heat is <b>{{ Math.round((1-current.sparkGap.hpHeatLev/current.sparkGap.gasHeat)*100) }}–{{ Math.round((1-current.sparkGap.hpHeatCash/current.sparkGap.gasHeat)*100) }}% cheaper</b> from the heat pump than from gas.
+              <template v-if="cfg.solar || cfg.battery"> Solar and battery widen that gap by cutting the heat pump's unit rate.</template>
+            </template>
+            <template v-else-if="current.sparkGap.hpHeatCash < current.sparkGap.gasHeat">
+              Heat is cheaper from the heat pump on a cash basis, but once you price the solar/battery capital it's about line-ball with gas — adding solar or battery, or a cheaper tariff, tips it further in the heat pump's favour.
+            </template>
+            <template v-else>
+              At these rates a unit of heat costs more from the heat pump than from gas — a higher SCOP, a cheaper tariff (Agile), or solar/battery self-supply would close the gap.
+            </template>
+          </p>
+        </div>
       </div>
 
       <div class="foot">
@@ -680,8 +744,8 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
-<script src="tools/solarmatching/model.js?v=4"></script>
-<script src="tools/solarmatching/ledger.js?v=7"></script>
+<script src="tools/solarmatching/model.js?v=5"></script>
+<script src="tools/solarmatching/ledger.js?v=8"></script>
 <script>
 const { createApp } = Vue;
 
@@ -720,7 +784,7 @@ createApp({
         {label:'Petrol', color:'var(--petrol)'},
         {label:'Gas', color:'var(--gas)'},
         {label:'Grid electricity', color:'var(--grid)'},
-        {label:'Solar PV', color:'ventirelyar(--solar)'},
+        {label:'Solar PV', color:'var(--solar)'},
         {label:'Battery', color:'var(--battery)'},
         {label:'Heat pump', color:'var(--hp)'},
         {label:'EV', color:'var(--ev)'},
@@ -742,6 +806,22 @@ createApp({
   },
   computed:{
     current(){ return this.compute(this.cfg); },
+    // Per-use electricity rows for the "effective rate by use" table. Order puts
+    // the heat pump last (the focus of the spark-gap story below it).
+    elecCostRows(){
+      const e = this.current.elecRates; if(!e) return [];
+      const rows = [];
+      if(e.baseload) rows.push({key:'baseload', label:'Baseload (home)', color:'var(--grid)', r:e.baseload});
+      if(e.cooking)  rows.push({key:'cooking',  label:'Cooking (induction)', color:'var(--grid)', r:e.cooking});
+      if(e.ev)       rows.push({key:'ev',       label:'EV charging', color:'var(--ev)', r:e.ev});
+      if(e.hp)       rows.push({key:'hp',       label:'Heat pump', color:'var(--hp)', r:e.hp});
+      return rows;
+    },
+    // Whether the cash and all-in heat-pump rates differ enough to show a range.
+    hpRateSpread(){
+      const hp = this.current.elecRates && this.current.elecRates.hp;
+      return hp && Math.abs(hp.levRate - hp.cashRate) > 0.2;
+    },
     statusQuo(){ return this.compute({ev:false,hp:false,solar:false,battery:false,agile:false,disconnectGas:false}); },
     saving(){ return this.costOf(this.statusQuo) - this.costOf(this.current); },
     // shared linear scale for the cost bars: status quo (usually the largest)

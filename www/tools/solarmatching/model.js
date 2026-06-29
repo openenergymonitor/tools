@@ -253,6 +253,12 @@ var model = {
         let n_intervals = series[0].data.length;
         let solar_w = new Array(n_intervals);
         let demand_w = new Array(n_intervals);
+        // Per-load demand (W) kept alongside the blended total so grid / solar /
+        // battery supply can later be attributed to each load by its share of
+        // each interval's demand. lac carries lights+appliances+cooking.
+        let lac_w = new Array(n_intervals);
+        let hp_w = new Array(n_intervals);
+        let ev_w = new Array(n_intervals);
         let prepass_ev_today = 0;
         let prepass_day = new Date(data_start_time).getDate();
         for (var pi = 0; pi < n_intervals; pi++) {
@@ -279,6 +285,9 @@ var model = {
                 }
             }
             solar_w[pi] = solarpv;
+            lac_w[pi] = lac;
+            hp_w[pi] = heatpump;
+            ev_w[pi] = ev;
             demand_w[pi] = lac + heatpump + ev;
         }
 
@@ -348,6 +357,27 @@ var model = {
             let annual = new_totals();
             let mtot = new_totals();
 
+            // Per-load electricity attribution. Each interval's grid import,
+            // on-site solar and battery discharge are shared across the loads
+            // present in that interval in proportion to their share of demand,
+            // so the electricity each load (lac = baseload+cooking, heat pump,
+            // EV) actually received can later be priced. grid_cost is the agile
+            // (half-hourly) import cost; grid_cost_flat the flat-rate equivalent.
+            let load_attr = {
+                lac: { grid_kwh: 0, grid_cost: 0, grid_cost_flat: 0, solar_kwh: 0, battery_kwh: 0 },
+                hp:  { grid_kwh: 0, grid_cost: 0, grid_cost_flat: 0, solar_kwh: 0, battery_kwh: 0 },
+                ev:  { grid_kwh: 0, grid_cost: 0, grid_cost_flat: 0, solar_kwh: 0, battery_kwh: 0 }
+            };
+            // Battery energy sourcing, so a per-kWh cost can be put on the energy
+            // the battery delivers: charge split into grid (priced at the import
+            // rate) vs solar surplus (an opportunity cost = forgone export),
+            // against the total energy discharged (to load or export).
+            let bat_flow = {
+                discharge_kwh: 0,
+                charge_grid_kwh: 0, charge_grid_cost: 0, charge_grid_cost_flat: 0,
+                charge_solar_kwh: 0
+            };
+
             // Annual-only agile accumulators.
             // Cost of meeting all demand from agile import, no solar/battery (baseline for saving %)
             let annual_agile_no_solar_cost = 0;
@@ -414,26 +444,35 @@ var model = {
 
                 // Battery: each branch adjusts `balance` by the power actually
                 // charged (drawn from balance) or discharged (added to balance).
+                // bat_charge_w / bat_discharge_w record those powers (W) so the
+                // energy can be attributed and priced below.
+                let bat_charge_w = 0, bat_discharge_w = 0;
                 if (bat.capacity > 0) {
                     if (optimal) {
                         // Pre-computed globally near-optimal dispatch (see
                         // optimiseBatteryDP). charge/discharge are grid-side W;
                         // SOC is taken straight from the optimised trajectory.
-                        balance -= dp_charge_w[i];
-                        balance += dp_discharge_w[i];
+                        bat_charge_w = dp_charge_w[i];
+                        bat_discharge_w = dp_discharge_w[i];
+                        balance -= bat_charge_w;
+                        balance += bat_discharge_w;
                         battery_soc = dp_soc[i];
                     } else if (in_force_discharge) {
                         // Forced peak discharge: empty remaining charge to load + grid
-                        balance += discharge_battery(bat.discharge_max);
+                        bat_discharge_w = discharge_battery(bat.discharge_max);
+                        balance += bat_discharge_w;
                     } else if (in_overnight_charge && battery_soc < overnight_target_soc) {
                         // Overnight recharge from grid up to the target SOC
-                        balance -= charge_battery(bat.charge_max, overnight_target_soc);
+                        bat_charge_w = charge_battery(bat.charge_max, overnight_target_soc);
+                        balance -= bat_charge_w;
                     } else if (balance > 0) {
                         // Charge from solar surplus
-                        balance -= charge_battery(balance, bat.capacity);
+                        bat_charge_w = charge_battery(balance, bat.capacity);
+                        balance -= bat_charge_w;
                     } else {
                         // Discharge to meet demand
-                        balance += discharge_battery(-balance);
+                        bat_discharge_w = discharge_battery(-balance);
+                        balance += bat_discharge_w;
                     }
                 }
 
@@ -449,6 +488,41 @@ var model = {
 
                 add_interval(annual, solar_kwh, demand_kwh, import_kwh, export_kwh, import_cost, export_earnings);
                 add_interval(mtot, solar_kwh, demand_kwh, import_kwh, export_kwh, import_cost, export_earnings);
+
+                // ---- battery energy sourcing ----
+                // Charge is met from solar surplus first (solar beyond this
+                // interval's demand), then from the grid.
+                let surplus_for_charge = solarpv - demand;
+                if (surplus_for_charge < 0) surplus_for_charge = 0;
+                let charge_solar_w = Math.min(bat_charge_w, surplus_for_charge);
+                let charge_grid_kwh = (bat_charge_w - charge_solar_w) * power_to_kwh;
+                bat_flow.discharge_kwh += bat_discharge_w * power_to_kwh;
+                bat_flow.charge_solar_kwh += charge_solar_w * power_to_kwh;
+                bat_flow.charge_grid_kwh += charge_grid_kwh;
+                bat_flow.charge_grid_cost += charge_grid_kwh * import_rate * 0.01;
+                bat_flow.charge_grid_cost_flat += charge_grid_kwh * p.import_rate * 0.01;
+
+                // ---- per-load attribution ----
+                // Demand not met from the grid is served on-site, split into
+                // solar-direct (up to the on-site need) then battery. Each supply
+                // source is then shared across the loads by their demand share.
+                if (demand > 0) {
+                    let onsite_kwh = demand_kwh - import_kwh;
+                    if (onsite_kwh < 0) onsite_kwh = 0;
+                    let solar_to_load_kwh = Math.min(solar_kwh, onsite_kwh);
+                    let battery_to_load_kwh = onsite_kwh - solar_to_load_kwh;
+                    let loads = [[load_attr.lac, lac_w[i]], [load_attr.hp, hp_w[i]], [load_attr.ev, ev_w[i]]];
+                    for (var li = 0; li < loads.length; li++) {
+                        let a = loads[li][0];
+                        let share = loads[li][1] / demand;
+                        let g = import_kwh * share;
+                        a.grid_kwh += g;
+                        a.grid_cost += g * import_rate * 0.01;
+                        a.grid_cost_flat += g * p.import_rate * 0.01;
+                        a.solar_kwh += solar_to_load_kwh * share;
+                        a.battery_kwh += battery_to_load_kwh * share;
+                    }
+                }
 
                 // Grid import falling in the off-peak window (for two-rate tariffs)
                 if (hour >= p.off_peak_start_hour && hour < p.off_peak_end_hour) {
@@ -529,7 +603,11 @@ var model = {
                     agile_cost: annual_agile_cost,
                     agile_saving: agile_saving,
                     avg_agile_import_rate: avg_agile_import_rate,
-                    avg_agile_export_rate: avg_agile_export_rate
+                    avg_agile_export_rate: avg_agile_export_rate,
+
+                    // per-load electricity attribution & battery energy sourcing
+                    load_attr: load_attr,
+                    battery_flow: bat_flow
                 },
 
                 // Monthly breakdown: one table row per month (the view derives
