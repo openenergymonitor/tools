@@ -229,7 +229,9 @@
             <div class="card">
                 <div class="card-body">
                     <h4>DHW Schedule</h4>
-                    <p>DHW not implemented yet, this just blocks out hot water period to see impact on room temperatures. Increase duration to enable.</p>
+                    <p>Hot water reheat windows. During a window the heat pump reheats the cylinder to the set point
+                    (with hysteresis) if needed, taking priority over space heating via a diverter valve.
+                    Set duration to 0 to disable a window.</p>
                     <table class="table">
                         <tr>
                             <th>Time</th>
@@ -256,6 +258,132 @@
                             </td>
                         </tr>
                     </table>
+                </div>
+            </div>
+            <br>
+            <div class="card">
+                <div class="card-body">
+                    <h4>Hot water cylinder</h4>
+                    <p>Stratified cylinder heated by a heat pump coil in the bottom half. Hot water is drawn at
+                    cylinder temperature (no mixing down to a use temperature):
+                    showers 07:00 ({{ (dhw.daily_volume*0.4).toFixed(0) }} L),
+                    bath 19:00 ({{ (dhw.daily_volume*0.3).toFixed(0) }} L),
+                    3&times; washing up ({{ (dhw.daily_volume*0.1).toFixed(0) }} L each).</p>
+
+                    <div class="row">
+                        <div class="col">
+                            <label class="form-label">Cylinder volume</label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" v-model.number="dhw.cylinder_volume" @change="simulate" />
+                                <span class="input-group-text">L</span>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Hot water use per day</label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" v-model.number="dhw.daily_volume" @change="simulate" />
+                                <span class="input-group-text">L</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col">
+                            <label class="form-label">Coil surface area</label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" v-model.number="dhw.coil_area" @change="simulate" />
+                                <span class="input-group-text">m&sup2;</span>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Coil U value</label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" v-model.number="dhw.coil_U" @change="simulate" />
+                                <span class="input-group-text">W/m&sup2;K</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col">
+                            <label class="form-label">Cold feed temperature</label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" v-model.number="dhw.cold_feed_temp" @change="simulate" />
+                                <span class="input-group-text">&deg;C</span>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Reheat hysteresis</label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" v-model.number="dhw.reheat_hysteresis" @change="simulate" />
+                                <span class="input-group-text">K</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col">
+                            <label class="form-label">Stratification nodes</label>
+                            <div class="input-group mb-3">
+                                <select class="form-control" v-model.number="dhw.node_count" @change="simulate">
+                                    <option :value="2">2</option>
+                                    <option :value="4">4</option>
+                                    <option :value="8">8</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Thermostat height <small class="text-muted">(0 bottom &ndash; 1 top)</small></label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" v-model.number="dhw.stat_height" @change="simulate" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col">
+                            <label class="form-label">Standing loss</label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" v-model.number="dhw.cylinder_loss_UA" @change="simulate" />
+                                <span class="input-group-text">W/K</span>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Primary loop volume</label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" v-model.number="dhw.primary_volume" @change="simulate" />
+                                <span class="input-group-text">L</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="input-group mb-3">
+                        <span class="input-group-text">Show cylinder top temperature on graph</span>
+                        <span class="input-group-text"><input type="checkbox" v-model="show_cyl_topT" @change="simulate" /></span>
+                    </div>
+                    <div class="input-group mb-3">
+                        <span class="input-group-text">Show cylinder bottom temperature on graph</span>
+                        <span class="input-group-text"><input type="checkbox" v-model="show_cyl_bottomT" @change="simulate" /></span>
+                    </div>
+
+                    <div class="input-group mb-3">
+                        <span class="input-group-text">Hot water heat</span>
+                        <span class="input-group-text">{{ results.dhw_heat_kwh | toFixed(2) }} kWh</span>
+                        <span class="input-group-text">Electric</span>
+                        <span class="input-group-text">{{ results.dhw_elec_kwh | toFixed(2) }} kWh</span>
+                        <span class="input-group-text">COP</span>
+                        <span class="input-group-text">{{ results.dhw_elec_kwh > 0 ? (results.dhw_heat_kwh / results.dhw_elec_kwh).toFixed(2) : '-' }}</span>
+                    </div>
+                    <div class="input-group mb-3">
+                        <span class="input-group-text">Hot water delivered</span>
+                        <span class="input-group-text">{{ results.dhw_delivered_kwh | toFixed(2) }} kWh</span>
+                        <span class="input-group-text">Standing loss</span>
+                        <span class="input-group-text">{{ results.cylinder_loss_kwh | toFixed(2) }} kWh</span>
+                    </div>
+                    <div class="input-group mb-3">
+                        <span class="input-group-text">Minimum cylinder top temperature</span>
+                        <span class="input-group-text">{{ results.min_cylinder_top_temp | toFixed(1) }} &deg;C</span>
+                    </div>
                 </div>
             </div>
             <br>
