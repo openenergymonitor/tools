@@ -125,7 +125,17 @@ var app = new Vue({
             charge_max: 100,
             discharge_max: 100,
             round_trip_efficiency: 80,
-            cost_mwh: 0
+            capital_cost_per_kwh: 245, // £/kWh based on £147 million for 600 MWh (Kilmarnock South project)
+            cost_mwh: 0,
+            // Dispatch strategy: 'greedy' (charge on surplus, discharge on
+            // deficit) or 'optimal' (perfect-foresight DP over the whole year,
+            // adapted from tools/solarmatching optimiseBatteryDP; targets
+            // backup energy AND backup peak, so the battery shrinks the gas
+            // fleet rather than just displacing a little gas energy).
+            dispatch: "optimal",
+            soc_levels: 200,   // SOC discretisation for 'optimal' (more = finer dispatch, slower)
+            peak_weight: 2,    // peak-shaving weight (relative cost on backup GW^2)
+            backup_value: 150  // £/MWh value placed on displaced backup generation
         },
 
         store2: {
@@ -265,12 +275,14 @@ var app = new Vue({
 
             // Setup store1
             let store1_soc = app.store1.soc_start;
+            let store1_soc_start_used = store1_soc;
             let store1_charge_efficiency = 1 - ((1 - app.store1.round_trip_efficiency * 0.01) / 2);
             let store1_discharge_efficiency = 1 - ((1 - app.store1.round_trip_efficiency * 0.01) / 2);
             app.store1.discharge_max = app.store1.charge_max;
 
             // Setup store2
             let store2_soc = app.store2.starting_soc;
+            let store2_soc_start_used = store2_soc;
             let store2_charge_efficiency = app.store2.charge_efficiency * 0.01;
             let store2_discharge_efficiency = app.store2.discharge_efficiency * 0.01;
 
@@ -283,7 +295,23 @@ var app = new Vue({
             // Max backup demand
             let max_backup_demand = 0;
 
-            for (var i = 0; i < series[0].data.length; i++) {
+            // ---------------------------------------------------------------
+            // Pre-pass: per-interval supply & demand components (GW). None of
+            // these depend on storage state, so they are built once here. The
+            // optimal store1 dispatch (DP) works on the residual balance and
+            // the main loop below reads from these arrays.
+            // ---------------------------------------------------------------
+            let n_intervals = series[0].data.length;
+            let solar_arr = new Array(n_intervals);
+            let wind_arr = new Array(n_intervals);
+            let nuclear_arr = new Array(n_intervals);
+            let trad_arr = new Array(n_intervals);
+            let heatpump_arr = new Array(n_intervals);
+            let ev_arr = new Array(n_intervals);
+            let demand_arr = new Array(n_intervals);
+            let residual_arr = new Array(n_intervals);
+
+            for (var i = 0; i < n_intervals; i++) {
 
                 // Solar generation
                 let solarpv = series[2].data[i][1] * solar_normalisation_factor * app.solar_GWp;
@@ -336,6 +364,76 @@ var app = new Vue({
                     demand = 0;
                 }
 
+                solar_arr[i] = solarpv;
+                wind_arr[i] = wind;
+                nuclear_arr[i] = nuclear;
+                trad_arr[i] = trad_demand;
+                heatpump_arr[i] = heatpump;
+                ev_arr[i] = ev_demand;
+                demand_arr[i] = demand;
+                residual_arr[i] = (solarpv + wind + nuclear) - demand;
+            }
+
+            // Optimal store1 dispatch: perfect-foresight DP over the whole
+            // year (adapted from tools/solarmatching optimiseBatteryDP).
+            // Computed up front on the residual balance; the main loop then
+            // applies the pre-computed schedule instead of the greedy rules.
+            let dp_sched = null;
+            if (app.store1.dispatch == "optimal" && app.store1.capacity > 0) {
+
+                // Store2 (LDES) discharge power actually available per slot,
+                // from a store2-only pre-simulation of the residual balance.
+                // The backup peaks the battery should target are usually set
+                // by the LDES running EMPTY late in the winter, not by
+                // deficits above its discharge cap, so a constant cap is not
+                // enough — the DP needs to know when the LDES can no longer
+                // help. Approximate: the battery's own dispatch shifts the
+                // LDES SOC path a little, but the deep energy droughts that
+                // set the backup fleet size dwarf the battery's capacity.
+                let s2_avail = null;
+                if (app.store2.enabled) {
+                    s2_avail = new Float64Array(n_intervals);
+                    let s2_soc = store2_soc;
+                    for (var si = 0; si < n_intervals; si++) {
+                        let r = residual_arr[si];
+                        if (r > 0) {
+                            let c = Math.min(r, app.store2.charge_max);
+                            s2_soc = Math.min(app.store2.capacity, s2_soc + c * store2_charge_efficiency * power_to_GWh);
+                            s2_avail[si] = Math.min(app.store2.discharge_max, s2_soc * store2_discharge_efficiency / power_to_GWh);
+                        } else {
+                            let avail = Math.min(app.store2.discharge_max, s2_soc * store2_discharge_efficiency / power_to_GWh);
+                            s2_avail[si] = avail;
+                            let d = Math.min(-r, avail);
+                            s2_soc -= d / store2_discharge_efficiency * power_to_GWh;
+                        }
+                    }
+                }
+
+                dp_sched = optimiseStoreDP(residual_arr, {
+                    capacity: app.store1.capacity,
+                    soc_levels: app.store1.soc_levels,
+                    power_to_GWh: power_to_GWh,
+                    charge_efficiency: store1_charge_efficiency,
+                    discharge_efficiency: store1_discharge_efficiency,
+                    charge_max: app.store1.charge_max,
+                    discharge_max: app.store1.discharge_max,
+                    backup_value: app.store1.backup_value,
+                    peak_weight: app.store1.peak_weight,
+                    initial_soc: store1_soc,
+                    s2_avail: s2_avail
+                });
+            }
+
+            for (var i = 0; i < n_intervals; i++) {
+
+                let solarpv = solar_arr[i];
+                let wind = wind_arr[i];
+                let nuclear = nuclear_arr[i];
+                let trad_demand = trad_arr[i];
+                let heatpump = heatpump_arr[i];
+                let ev_demand = ev_arr[i];
+                let demand = demand_arr[i];
+
                 if (demand > max_demand) {
                     max_demand = demand;
                 }
@@ -360,7 +458,23 @@ var app = new Vue({
                 }
 
                 // store1
-                if (app.store1.capacity > 0) {
+                if (app.store1.capacity > 0 && dp_sched != null) {
+                    // Pre-computed optimal schedule: charge/discharge are
+                    // grid-side GW, SOC is taken from the DP trajectory.
+                    let charge = dp_sched.charge[i];
+                    let discharge = dp_sched.discharge[i];
+                    balance -= charge;
+                    balance += discharge;
+                    store1_soc = dp_sched.soc[i];
+                    store1_charge_GWh += charge * power_to_GWh;
+                    store1_discharge_GWh += discharge * power_to_GWh;
+                    if (charge > store1_max_charge) {
+                        store1_max_charge = charge;
+                    }
+                    if (discharge > store1_max_discharge) {
+                        store1_max_discharge = discharge;
+                    }
+                } else if (app.store1.capacity > 0) {
                     if (balance > 0) {
 
                         // Charge store1
@@ -385,8 +499,8 @@ var app = new Vue({
                     } else {
                         // Discharge store1
                         let discharge = -balance;
-                        if (discharge > app.store1.discharge_max * 1000) {
-                            discharge = app.store1.discharge_max * 1000;
+                        if (discharge > app.store1.discharge_max) {
+                            discharge = app.store1.discharge_max;
                         }
                         let discharge_before_loss = discharge / store1_discharge_efficiency;
                         let soc_dec = discharge_before_loss * power_to_GWh;
@@ -547,7 +661,7 @@ var app = new Vue({
             app.backup.CF = 0;
             if (backup_demand_GWh>0) {
                 app.backup.CF = backup_demand_GWh / (app.backup.capacity * 24 * 365);
-            }supply
+            }
 
             app.balance.before_store1 = (demand_GWh - deficit_before_store1_GWh) / demand_GWh;
             app.balance.after_store1 = (demand_GWh - deficit_after_store1_GWh) / demand_GWh;
@@ -568,7 +682,7 @@ var app = new Vue({
             // Copy over to vue (faster than using vue reactive data during model run)
             app.solar_GWh = solar_GWh;
             app.wind_GWh = wind_GWh;
-            app.nuclear_GWh = nuclear_GWh;app.store1.cost_mwh
+            app.nuclear_GWh = nuclear_GWh;
             app.supply_GWh = supply_GWh;
             app.demand_GWh = demand_GWh;
             app.store1_discharge_GWh = store1_discharge_GWh;
@@ -576,21 +690,22 @@ var app = new Vue({
             app.max_demand = max_demand;
             app.backup_demand_GWh = backup_demand_GWh;
             app.model_costs();
-0
+
             console.log("Run count: " + app.run_count);
             console.log("Annual wind: " + wind_GWh.toFixed(0) + " GWh");
             console.log("Annual solar: " + solar_GWh.toFixed(0) + " GWh");
             console.log("Annual nuclear: " + nuclear_GWh.toFixed(0) + " GWh");
 
+            // SOC convergence: feed each store's final SOC back in as its
+            // starting SOC and re-run until the year is in steady state
+            // (start ≈ end), so results don't depend on free initial charge.
+            // Only re-run when a store is actually in use and its SOC moved.
+            let store1_soc_moved = app.store1.capacity > 0 && Math.abs(store1_soc - store1_soc_start_used) > 1;
+            let store2_soc_moved = app.store2.enabled && Math.abs(store2_soc - store2_soc_start_used) > 10;
             app.store1.soc_start = store1_soc;
-            if (store1_soc > 10 && app.run_count < 3) {
-                console.log("Re-running model with store1 SOC start: " + app.store1.soc_start.toFixed(2) + " GWh");
-                app.model();
-            }
-
             app.store2.starting_soc = store2_soc;
-            if (store2_soc > 10 && app.run_count < 3) {
-                console.log("Re-running model with store2 SOC start: " + app.store2.starting_soc.toFixed(2) + " GWh");
+            if ((store1_soc_moved || store2_soc_moved) && app.run_count < 3) {
+                console.log("Re-running model with store1 SOC start: " + store1_soc.toFixed(2) + " GWh, store2 SOC start: " + store2_soc.toFixed(2) + " GWh");
                 app.model();
             }
 
@@ -609,8 +724,8 @@ var app = new Vue({
                     net_power_output_mw: 600,              // 600 MWh, this value makes no difference to LCOE 
                     gross_load_factor: app.store1.cycles/(24*365),
                     availability: 1.0,
-                    pre_development_costs_per_kw: 0,       // assumed part of £245/kWh capital cost
-                    construction_capital_cost_per_kw: 245, // £245/kWh based on £147 million for 600 MWh (Kilmarnock South project)
+                    pre_development_costs_per_kw: 0,       // assumed part of the capital cost
+                    construction_capital_cost_per_kw: app.store1.capital_cost_per_kwh,
                     om_fixed_costs_per_kw_year: 0,
                     om_variable_costs_per_mwh: 3,
                     fuel_price_per_therm: 0.0,
@@ -946,3 +1061,153 @@ function wind_gas_comparison() {
     });
     app.csv_output = csv_output;
 };
+// ---- optimal store1 dispatch (dynamic programming) ----
+// Adapted from tools/solarmatching/model.js optimiseBatteryDP. Same machinery:
+// state-of-charge discretised into `soc_levels` steps, forward DP over the
+// whole year, backtrack to recover the schedule. What differs is the per-slot
+// cost. The solarmatching DP minimises a bill against half-hourly import /
+// export prices; here there are no prices, so the DP minimises a system cost:
+//
+//   - each GWh of backup (gas) generation costs `backup_value` (£/MWh scale,
+//     only relative magnitudes matter)
+//   - backup POWER is additionally penalised quadratically (`peak_weight` per
+//     GW^2 per hour). This is what makes the battery shave the highest
+//     residual peaks — reducing the gas fleet capacity — instead of dumping
+//     its charge into the first shallow deficit of the winter.
+//   - store2 (LDES), when enabled, is modelled as a power-capped downstream
+//     store with effectively unlimited energy: deficits within its discharge
+//     cap cost little (so the battery holds its charge for deficits beyond
+//     the cap, which is where gas actually runs), and surplus within its
+//     charge cap has some value (energy absorbed displaces backup later at
+//     the LDES round-trip efficiency).
+//
+// The DP may charge from the grid (i.e. from backup) ahead of a deep peak:
+// that raises backup energy slightly but can cut the required backup capacity,
+// which the quadratic peak term prices in.
+//
+// All powers are grid-side GW, matching model()'s `balance` convention:
+// charge is drawn from balance (before charge losses), discharge is added to
+// balance (after discharge losses). Returns { charge, discharge, soc } arrays
+// with one entry per interval (soc is GWh at the end of each interval).
+function optimiseStoreDP(residual, opts) {
+    var N = residual.length;
+    var cap = opts.capacity;                                   // GWh
+    var K = Math.max(2, Math.round(opts.soc_levels || 100));   // SOC steps
+    var nLev = K + 1;                                          // SOC levels (states)
+    var step = cap / K;                                        // GWh per level
+    var dt = opts.power_to_GWh;                                // h per interval
+    var ceff = opts.charge_efficiency;
+    var deff = opts.discharge_efficiency;
+
+    // Cost model (relative units, £/MWh scale)
+    var Ce = opts.backup_value;                  // per GWh of backup generation
+    var lam = opts.peak_weight || 0;             // per GW^2 per h of backup power
+    var s2_avail = opts.s2_avail || null;        // LDES discharge power available per slot (GW)
+    var SOC_PEN = 1e-9;                          // tie-break: prefer holding less
+
+    var pmaxCh = opts.charge_max;                // GW
+    var pmaxDch = opts.discharge_max;            // GW
+
+    // Reachable SOC-level change per slot, bounded by the power limits.
+    // Also capped at 64 levels each way: DP cost scales with the number of
+    // reachable transitions, and a store whose power rating can swing a large
+    // fraction of its capacity in one slot would otherwise make the action
+    // space (and runtime) explode. The cap only bites in that degenerate
+    // corner (tiny capacity + huge power), where it acts as a rate limit.
+    var upLevels = Math.floor((pmaxCh * ceff * dt) / step);
+    var dnLevels = Math.floor((pmaxDch / deff * dt) / step);
+    if (upLevels < 1) upLevels = 1; if (upLevels > K) upLevels = K;
+    if (dnLevels < 1) dnLevels = 1; if (dnLevels > K) dnLevels = K;
+    if (upLevels > 64) upLevels = 64;
+    if (dnLevels > 64) dnLevels = 64;
+
+    // Battery grid power (GW) per SOC-level delta; depends only on the delta.
+    var dLo = -dnLevels, dHi = upLevels;
+    var dN = dHi - dLo + 1;
+    var batPower = new Float64Array(dN);   // >0 discharge (adds to balance), <0 charge
+    for (var d = dLo; d <= dHi; d++) {
+        var dsoc = d * step;               // cell-side GWh change
+        if (dsoc >= 0) {                   // charging (d == 0 -> idle, zero power)
+            batPower[d - dLo] = -(dsoc / ceff / dt);
+        } else {                           // discharging
+            batPower[d - dLo] = (-dsoc) * deff / dt;
+        }
+    }
+
+    // System cost of a post-battery balance b (GW) for slot t. All deficit
+    // energy is priced at Ce: when the LDES is net-draining (the usual regime)
+    // a GWh it doesn't have to deliver now is a GWh of backup displaced later,
+    // so deficit within its reach is worth about the same as backup energy.
+    // The quadratic peak term applies only to deficit beyond what the LDES can
+    // actually deliver in that slot (power cap AND remaining energy, via
+    // s2_avail) — the part that really sets the gas fleet size. Surplus is
+    // worth nothing to the optimiser (it is curtailed or absorbed downstream);
+    // pricing it would open a buy-low / sell-high loop that makes the DP churn
+    // the battery against the LDES instead of shaving real peaks.
+    var slotCost = function (b, t) {
+        if (b >= 0) return 0;
+        var deficit = -b;
+        var bp = s2_avail ? Math.max(0, deficit - s2_avail[t]) : deficit;
+        return Ce * deficit * dt + lam * bp * bp * dt;
+    };
+
+    // SOC tie-break penalty per level (nudges the solver off degenerate plateaus).
+    var pen = new Float64Array(nLev);
+    for (var s = 0; s < nLev; s++) pen[s] = SOC_PEN * s * step;
+
+    var INF = Infinity;
+    var dp = new Float64Array(nLev); dp.fill(INF);
+    var newdp = new Float64Array(nLev);
+    var s0 = Math.round((opts.initial_soc || 0) / step);
+    if (s0 < 0) s0 = 0; if (s0 > K) s0 = K;
+    dp[s0] = 0;
+
+    // choice[t*nLev + sp] = SOC level at the start of slot t that optimally
+    // reaches level sp at its end (for backtracking the schedule afterwards).
+    var choice = new Int16Array(N * nLev);
+
+    for (var t = 0; t < N; t++) {
+        newdp.fill(INF);
+        var base = t * nLev;
+        var net = residual[t];                                  // GW, before battery
+        // Charge from renewable surplus only. Charging through a deficit
+        // looks cheap to the DP (backup energy at Ce) but in reality much of
+        // that energy is pulled out of the LDES at its poor discharge
+        // efficiency, draining it early and increasing unmet demand later —
+        // an interaction outside this state space. Surplus-only charging
+        // avoids it and keeps the battery genuinely zero-carbon.
+        var dHiT = net > 0 ? Math.floor((Math.min(pmaxCh, net) * ceff * dt) / step) : 0;
+        if (dHiT > dHi) dHiT = dHi;
+        for (var dd = dLo; dd <= dHiT; dd++) {
+            var cost = slotCost(net + batPower[dd - dLo], t);
+            // Valid start levels s such that sp = s + dd stays within [0, K].
+            var sStart = dd > 0 ? 0 : -dd;
+            var sEnd = dd > 0 ? K - dd : K;
+            for (var ss = sStart; ss <= sEnd; ss++) {
+                var from = dp[ss];
+                if (from === INF) continue;
+                var sp = ss + dd;
+                var cand = from + cost + pen[sp];
+                if (cand < newdp[sp]) { newdp[sp] = cand; choice[base + sp] = ss; }
+            }
+        }
+        var tmp = dp; dp = newdp; newdp = tmp;   // swap rows
+    }
+
+    // Cheapest terminal SOC, then backtrack to recover the dispatch + trajectory.
+    var sBest = 0, best = INF;
+    for (var se = 0; se < nLev; se++) if (dp[se] < best) { best = dp[se]; sBest = se; }
+
+    var charge = new Float64Array(N);
+    var discharge = new Float64Array(N);
+    var soc = new Float64Array(N);
+    var cur = sBest;
+    for (var tb = N - 1; tb >= 0; tb--) {
+        var prev = choice[tb * nLev + cur];
+        var bp2 = batPower[(cur - prev) - dLo];
+        if (bp2 < 0) charge[tb] = -bp2; else discharge[tb] = bp2;
+        soc[tb] = cur * step;     // SOC at end of slot tb
+        cur = prev;
+    }
+    return { charge: charge, discharge: discharge, soc: soc };
+}

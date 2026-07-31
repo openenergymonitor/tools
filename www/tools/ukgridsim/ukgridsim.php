@@ -391,7 +391,12 @@
                                     <td>🔋 Storage</td>
                                     <td class="text-end align-middle"><span v-if="store1.capacity>0">{{ store1_discharge_GWh / demand_GWh * 100 | toFixed(1) }}%</span></td>
                                     <td class="text-end align-middle"><span v-if="store1.capacity>0">{{ store1_discharge_GWh*0.001 | toFixed(1) }}</span></td>
-                                    <td class="text-end align-middle d-none d-md-table-cell">{{ store1.capacity | toFixed(0) }} GWh</td>
+                                    <td class="input-cell text-end d-none d-md-table-cell">
+                                        <div class="input-group input-group-sm">
+                                            <input type="text" class="form-control form-control-sm" v-model.number="store1.capacity" @change="update">
+                                            <span class="input-group-text">GWh</span>
+                                        </div>
+                                    </td>
                                     <td class="align-middle d-none d-md-table-cell">
                                         <small class="text-muted" v-if="store1.capacity>0">@{{ store1.cycles | toFixed(1) }} cycles</small>
                                     </td>
@@ -457,16 +462,44 @@
                                 <input type="text" class="form-control" v-model.number="store1.charge_max" @change="update">
                                 <span class="input-group-text">GW</span>
                             </div>
+                            <label class="form-label">Dispatch strategy</label>
+                            <select class="form-select mb-2" v-model="store1.dispatch" @change="update">
+                                <option value="greedy">Greedy: charge on surplus, discharge on any deficit</option>
+                                <option value="optimal">Optimal: perfect foresight, shaves backup peaks</option>
+                            </select>
+                            <div v-if="store1.dispatch=='optimal'">
+                                <label class="form-label">Peak shaving weight</label>
+                                <div class="input-group mb-2">
+                                    <input type="text" class="form-control" v-model.number="store1.peak_weight" @change="update">
+                                </div>
+                                <p class="text-muted small mb-2">Optimal dispatch holds charge for the deficits that
+                                actually set the gas backup fleet size (reducing backup capacity below), instead of
+                                emptying into the first shallow deficit. Set weight to 0 for energy-only optimisation.</p>
+                            </div>
                             <label class="form-label">Cycles/year</label>
                             <div class="input-group mb-2">
                                 <input type="text" class="form-control" :value="store1.cycles | toFixed(1)" disabled>
+                            </div>
+                            <label class="form-label">Capital cost</label>
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control" v-model.number="store1.capital_cost_per_kwh" @change="model_costs">
+                                <span class="input-group-text">£/kWh</span>
                             </div>
                             <label class="form-label">LCOS</label>
                             <div class="input-group mb-2">
                                 <input type="text" class="form-control" :value="store1.cost_mwh | toFixed(0)" disabled>
                                 <span class="input-group-text">£/MWh</span>
                             </div>
-                            <p class="text-muted small mt-2"><i>Not yet included in cost model</i></p>
+                            <p class="text-muted small mt-2 mb-0"><i>The LCOS (levelised cost of storage) is
+                            calculated with the same discounted-cashflow method as the generator LCOEs:
+                            the capital cost per kWh of capacity above (default £245/kWh, based on the
+                            600&nbsp;MWh Kilmarnock South project at £147m), 1 year pre-development + 2 years
+                            construction, 20 year operating
+                            life, 8.9% hurdle rate and £3/MWh variable O&amp;M. The capital cost is spread over
+                            the energy the battery actually discharges in the simulation, so the £/MWh falls the
+                            more cycles per year the dispatch achieves. Battery cost contribution to the system
+                            cost = annual discharged energy &times; LCOS, shown in the Supply and Cost
+                            breakdown.</i></p>
                         </div>
                     </div>
                 </div>
@@ -518,4 +551,4 @@
 </div><!-- /app -->
 
 <script src="<?php echo $path; ?>lcoe_lib.js?v=1"></script>
-<script src="<?php echo $path; ?>ukgridsim.js?v=30"></script>
+<script src="<?php echo $path; ?>ukgridsim.js?v=33"></script>
