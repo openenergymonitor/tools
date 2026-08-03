@@ -231,12 +231,16 @@
                     <h4>DHW Schedule</h4>
                     <p>Hot water reheat windows. During a window the heat pump reheats the cylinder to the set point
                     (with hysteresis) if needed, taking priority over space heating via a diverter valve.
-                    Set duration to 0 to disable a window.</p>
+                    Set duration to 0 to disable a window. The modulation limit caps heat pump output during
+                    the window &mdash; an eco mode: e.g. 40% of capacity reheats more slowly at a lower flow
+                    temperature and better COP. Values below the heat pump minimum modulation
+                    ({{ heatpump.minimum_modulation }}%) are raised to it.</p>
                     <table class="table">
                         <tr>
                             <th>Time</th>
                             <th>Set point</th>
                             <th>Duration</th>
+                            <th>Modulation limit</th>
                         </tr>
                         <tr v-for="(item,index) in dhw_schedule">
                             <td><input type="text" class="form-control" v-model="item.start" @change="simulate"
@@ -256,6 +260,13 @@
                                     <span class="input-group-text">seconds</span>
                                 </div>
                             </td>
+                            <td>
+                                <div class="input-group mb-3">
+                                    <input type="text" class="form-control" v-model.number="item.modulation"
+                                        @change="simulate" style="width:30px" />
+                                    <span class="input-group-text">%</span>
+                                </div>
+                            </td>
                         </tr>
                     </table>
                 </div>
@@ -264,11 +275,12 @@
             <div class="card">
                 <div class="card-body">
                     <h4>Hot water cylinder</h4>
-                    <p>Stratified cylinder heated by a heat pump coil in the bottom half. Hot water is drawn at
-                    cylinder temperature (no mixing down to a use temperature):
+                    <p>Stratified multi-node cylinder heated by a heat pump coil in the bottom of the tank.
+                    Draws are mixed down to the delivery temperature at the tap, so only the hot fraction
+                    is drawn from the cylinder:
                     showers 07:00 ({{ (dhw.daily_volume*0.4).toFixed(0) }} L),
                     bath 19:00 ({{ (dhw.daily_volume*0.3).toFixed(0) }} L),
-                    3&times; washing up ({{ (dhw.daily_volume*0.1).toFixed(0) }} L each).</p>
+                    3&times; washing up ({{ (dhw.daily_volume*0.1).toFixed(0) }} L each), mixed volumes.</p>
 
                     <div class="row">
                         <div class="col">
@@ -279,27 +291,44 @@
                             </div>
                         </div>
                         <div class="col">
-                            <label class="form-label">Hot water use per day</label>
+                            <label class="form-label">Cylinder height</label>
                             <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="dhw.daily_volume" @change="simulate" />
-                                <span class="input-group-text">L</span>
+                                <input type="text" class="form-control" v-model.number="dhw.cylinder_height" @change="simulate" />
+                                <span class="input-group-text">m</span>
                             </div>
                         </div>
                     </div>
 
                     <div class="row">
                         <div class="col">
-                            <label class="form-label">Coil surface area</label>
+                            <label class="form-label">Hot water use per day <small class="text-muted">(mixed)</small></label>
                             <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="dhw.coil_area" @change="simulate" />
-                                <span class="input-group-text">m&sup2;</span>
+                                <input type="text" class="form-control" v-model.number="dhw.daily_volume" @change="simulate" />
+                                <span class="input-group-text">L</span>
                             </div>
                         </div>
                         <div class="col">
-                            <label class="form-label">Coil U value</label>
+                            <label class="form-label">Mixed delivery temperature</label>
                             <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="dhw.coil_U" @change="simulate" />
-                                <span class="input-group-text">W/m&sup2;K</span>
+                                <input type="text" class="form-control" v-model.number="dhw.mixed_draw_temp" @change="simulate" />
+                                <span class="input-group-text">&deg;C</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col">
+                            <label class="form-label">Coil UA</label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" v-model.number="dhw.coil_UA" @change="simulate" />
+                                <span class="input-group-text">W/K</span>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Coil volume <small class="text-muted">(bottom of tank)</small></label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" v-model.number="dhw.coil_volume" @change="simulate" />
+                                <span class="input-group-text">L</span>
                             </div>
                         </div>
                     </div>
@@ -326,9 +355,11 @@
                             <label class="form-label">Stratification nodes</label>
                             <div class="input-group mb-3">
                                 <select class="form-control" v-model.number="dhw.node_count" @change="simulate">
-                                    <option :value="2">2</option>
                                     <option :value="4">4</option>
                                     <option :value="8">8</option>
+                                    <option :value="12">12</option>
+                                    <option :value="20">20</option>
+                                    <option :value="40">40</option>
                                 </select>
                             </div>
                         </div>
@@ -342,19 +373,30 @@
 
                     <div class="row">
                         <div class="col">
-                            <label class="form-label">Standing loss</label>
+                            <label class="form-label">Insulation U value</label>
                             <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="dhw.cylinder_loss_UA" @change="simulate" />
-                                <span class="input-group-text">W/K</span>
+                                <input type="text" class="form-control" v-model.number="dhw.wall_U" @change="simulate" />
+                                <span class="input-group-text">W/m&sup2;K</span>
                             </div>
                         </div>
                         <div class="col">
-                            <label class="form-label">Primary loop volume</label>
+                            <label class="form-label">Effective vertical conductivity</label>
                             <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="dhw.primary_volume" @change="simulate" />
-                                <span class="input-group-text">L</span>
+                                <input type="text" class="form-control" v-model.number="dhw.k_eff" @change="simulate" />
+                                <span class="input-group-text">W/mK</span>
                             </div>
                         </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col">
+                            <label class="form-label">Max primary flow temperature</label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" v-model.number="dhw.flow_max" @change="simulate" />
+                                <span class="input-group-text">&deg;C</span>
+                            </div>
+                        </div>
+                        <div class="col"></div>
                     </div>
 
                     <div class="input-group mb-3">
@@ -450,10 +492,25 @@
             <div class="card" style="background-color: #f8f9fa;">
                 <div class="card-body">
                     <label class="form-label">Simulate:</label>
-                    <select class="form-control" v-model="mode" @change="change_mode">
+                    <select class="form-control" v-model="mode" @change="change_mode" :disabled="progress.running">
                         <option value="day">Single day</option>
                         <option value="year">Full year</option>
                     </select>
+
+                    <div v-if="mode=='year'" class="mt-3">
+                        <button type="button" class="btn w-100"
+                            :class="needs_run ? 'btn-warning' : 'btn-primary'"
+                            :disabled="progress.running"
+                            @click="run_model">
+                            {{ progress.running ? 'Running…' : (needs_run ? 'Run model (inputs changed)' : 'Run model') }}
+                        </button>
+                        <div class="progress mt-2" v-if="progress.running" style="height: 24px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                :style="{ width: (100 * progress.day / progress.total) + '%' }">
+                                day {{ progress.day }} of {{ progress.total }}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <br>

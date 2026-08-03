@@ -72,7 +72,7 @@ var app = new Vue({
             round_trip_efficiency: 0.85
         },
         external: {
-            mid: 4,
+            mid: 7.1,
             swing: 2,
             min_time: "06:00",
             max_time: "14:00",
@@ -127,20 +127,23 @@ var app = new Vue({
         show_cyl_topT: true,
         show_cyl_bottomT: true,
         dhw_schedule: [
-            { start: "04:00", set_point: 45, duration: 10800 },
-            { start: "13:00", set_point: 45, duration: 7200 },
+            { start: "04:00", set_point: 45, duration: 10800, modulation: 50 },
+            { start: "13:00", set_point: 45, duration: 7200, modulation: 50 },
         ],
         dhw: {
             cylinder_volume: 150,     // Litres
-            node_count: 4,            // Stratification nodes (2, 4 or 8)
-            coil_area: 3,             // m2, heat pump coil in bottom half
-            coil_U: 300,              // W/m2K
+            cylinder_height: 0.95,    // m, diameter derived from volume & height
+            node_count: 8,           // Stratification nodes (2-40)
+            coil_volume: 60,          // Litres, coil occupies the bottom this-many litres
+            coil_UA: 1000,            // W/K, total coil heat-transfer coefficient x area
             cold_feed_temp: 10,       // °C
+            mixed_draw_temp: 40,      // °C, thermostatic mixed delivery temperature at the tap
             reheat_hysteresis: 5,     // K below set_point before reheat starts
             stat_height: 0.75,        // Thermostat height, fraction from bottom
-            daily_volume: 350,        // Litres of hot water drawn per day
-            cylinder_loss_UA: 2.4,    // W/K standing loss
-            primary_volume: 15        // Litres, HP heat exchanger + pipework to coil
+            daily_volume: 350,        // Litres of mixed hot water drawn per day
+            wall_U: 0.8,              // W/m2K cylinder insulation U-value
+            k_eff: 0.6,               // W/mK effective vertical conductivity between nodes
+            flow_max: 60              // °C, primary flow temperature cap
         },
         results: {
             elec_kwh: 0,
@@ -187,7 +190,15 @@ var app = new Vue({
         baseline_enabled: false,
         max_room_temp: 0,
         outsideT_996: 0,
-        outsideT_990: 0
+        outsideT_990: 0,
+        // Manual run state: in annual mode input changes set needs_run and the
+        // model is run with the Run button; progress tracks days processed
+        needs_run: false,
+        progress: {
+            running: false,
+            day: 0,
+            total: 0
+        }
     },
     methods: {
         change_mode: function () {
@@ -214,7 +225,9 @@ var app = new Vue({
                 }
             }
 
-            this.simulate();
+            // Run directly on mode change (simulate() would only flag
+            // needs_run in annual mode); later input changes use the Run button
+            this.run_model();
         },
         load_octopus_cosy: function () {
             this.schedule = JSON.parse(JSON.stringify(cosy_examples_schedule));
@@ -265,7 +278,7 @@ var app = new Vue({
                 
                 console.log(`Loaded ${annual_dataset_outsideT.length} half hourly temperature readings`);
                 // alert(`Successfully loaded ${annual_dataset_outsideT.length} hourly temperature readings from outside_temperature.csv`);
-                this.simulate();
+                this.run_model();
             } else {
                 alert('No valid data found in CSV file');
             }
@@ -275,10 +288,28 @@ var app = new Vue({
             this.baseline_enabled = true;
         },
         simulate: function () {
+            // Instant run when simulating a single day. Annual runs take a
+            // while, so input changes just flag that a re-run is needed and
+            // the model is run manually with the Run button.
+            if (this.mode == "year") {
+                this.needs_run = true;
+                return;
+            }
+            this.run_model();
+        },
+        run_model: function () {
+            if (this.progress.running) return;
+            this.needs_run = false;
             console.log("== Call to simulate ==");
-            
-            // Show loading spinner
-            show_spinner();
+
+            // Long runs get a day-count progress bar, short runs the spinner
+            if (this.days > 31) {
+                this.progress.running = true;
+                this.progress.day = 0;
+                this.progress.total = this.days_pre_sim + this.days;
+            } else {
+                show_spinner();
+            }
 
             setTimeout(() => {
 
@@ -323,26 +354,38 @@ var app = new Vue({
                 var outside_max_time = time_str_to_hour(app.external.max_time);
                 app.external.max_time = hour_to_time_str(outside_max_time);
 
+                // Main run, started after the pre-sim completes
+                var run_main = function () {
+                    app.simulation_index++;
+                    var sim_start = performance.now();
+                    sim({
+                        outside_min_time: outside_min_time,
+                        outside_max_time: outside_max_time,
+                        schedule: app.schedule,
+                        days: app.days
+                    }, function (result) {
+                        app.results.sim_time_ms = performance.now() - sim_start;
+                        apply_results(result);
+                    }, function (days_done) {
+                        app.progress.day = app.days_pre_sim + Math.floor(days_done);
+                    });
+                };
+
                 // Pre-simulation days to stabilise system
                 if (this.days_pre_sim > 0) {
-                    var pre_sim_result = sim({
+                    sim({
                         outside_min_time: outside_min_time,
                         outside_max_time: outside_max_time,
                         schedule: app.schedule,
                         days: app.days_pre_sim
+                    }, run_main, function (days_done) {
+                        app.progress.day = Math.floor(days_done);
                     });
+                } else {
+                    run_main();
                 }
 
-                // Run simulation
-                app.simulation_index++;
-                var sim_start = performance.now();
-                var result = sim({
-                    outside_min_time: outside_min_time,
-                    outside_max_time: outside_max_time,
-                    schedule: app.schedule,
-                    days: app.days
-                });
-                app.results.sim_time_ms = performance.now() - sim_start;
+                function apply_results(result) {
 
                 app.max_room_temp = result.max_room_temp;
 
@@ -380,11 +423,15 @@ var app = new Vue({
                 }
 
                 plot();
-                
-                // Hide loading spinner
+
+                // Hide loading spinner / progress bar
+                app.progress.running = false;
                 hide_spinner();
 
                 console.log("== End of simulate ==");
+
+                }
+                // == End of apply_results ==
             }, 10);
         },
         add_space: function () {
@@ -638,11 +685,11 @@ flow_temperature = room;
 return_temperature = room;
 MWT = room;
 // Hot water cylinder node temperatures (index 0 = bottom, N-1 = top) and
-// DHW primary loop temperature. Globals so they persist across the pre-sim
-// warmup run and the real run (warm start, like MWT). (Re)initialised inside
-// sim() when the node count changes.
+// DHW primary flow temperature entering the coil. Globals so they persist
+// across the pre-sim warmup run and the real run (warm start, like MWT).
+// (Re)initialised inside sim() when the node count changes.
 cyl_T = [];
-dhw_primaryT = 35;
+dhw_flowT = 35;
 
 app.simulate();
 
@@ -677,7 +724,11 @@ function get_from_annual_dataset(time_seconds) {
     return null;
 }
 
-function sim(conf) {
+// Runs the simulation asynchronously in chunks of a few simulated days,
+// yielding to the browser between chunks so the UI can show progress on long
+// runs. Calls on_done(results) on completion and on_progress(days_processed)
+// after each chunk.
+function sim(conf, on_done, on_progress) {
     console.log("Sim run: ", app.simulation_index, "Days: ", conf.days);
 
     // Simulation time parameters
@@ -723,12 +774,22 @@ function sim(conf) {
         return a.hour - b.hour;
     });
 
-    // Pre-process DHW schedule - convert time strings to hours and duration to hours
+    // Pre-process DHW schedule - convert time strings to hours and duration to hours.
+    // Each window has a modulation limit (% of heat pump capacity) so e.g. an
+    // overnight eco window can reheat slowly at low output for better COP.
+    // Clamp between the heat pump minimum modulation and 100%, writing the
+    // clamped value back so the UI reflects it.
     var processed_dhw_schedule = app.dhw_schedule.map(function(entry) {
+        let modulation = parseFloat(entry.modulation);
+        if (isNaN(modulation)) modulation = 100;
+        if (modulation < app.heatpump.minimum_modulation) modulation = app.heatpump.minimum_modulation;
+        if (modulation > 100) modulation = 100;
+        entry.modulation = modulation;
         return {
             start_hour: time_str_to_hour(entry.start),
             end_hour: time_str_to_hour(entry.start) + (entry.duration / 3600),
-            set_point: parseFloat(entry.set_point)
+            set_point: parseFloat(entry.set_point),
+            modulation: modulation
         };
     });
 
@@ -759,6 +820,7 @@ function sim(conf) {
     let last_on_time = 0;
     let dhw_reheat_state = 0;
     let dhw_setpoint = 45;
+    let dhw_modulation = 100;
     let dhw_mode = false;
 
     // Max
@@ -857,29 +919,52 @@ function sim(conf) {
     const schedule_last_index = processed_schedule.length - 1;
     const dhw_schedule_length = processed_dhw_schedule.length;
 
-    // Hot water cylinder parameters
-    // Clamp node count to an even integer between 2 and 8
-    let dhw_node_count = Math.round(app.dhw.node_count / 2) * 2;
+    // Hot water cylinder parameters — stratified multi-node model ported from
+    // cylinder/cylinder_sim.js (node 0 = bottom, node N-1 = top)
+    // Clamp node count to an integer between 2 and 40
+    let dhw_node_count = Math.round(app.dhw.node_count);
     if (dhw_node_count < 2) dhw_node_count = 2;
-    if (dhw_node_count > 8) dhw_node_count = 8;
+    if (dhw_node_count > 40) dhw_node_count = 40;
     app.dhw.node_count = dhw_node_count;
 
-    const dhw_node_volume = app.dhw.cylinder_volume / dhw_node_count;
+    // Geometry: diameter derived from volume and height, r from V = pi r^2 H
+    const dhw_volume_m3 = app.dhw.cylinder_volume / 1000;
+    const dhw_height = app.dhw.cylinder_height;
+    const dhw_radius = Math.sqrt(dhw_volume_m3 / (Math.PI * dhw_height));
+    const dhw_area = Math.PI * dhw_radius * dhw_radius;                          // cross-section m2
+    const dhw_perim = 2 * Math.PI * dhw_radius;                                  // circumference m
+    const dhw_dz = dhw_height / dhw_node_count;                                  // node thickness m
+
+    const dhw_node_volume = app.dhw.cylinder_volume / dhw_node_count;            // Litres
     const dhw_node_heat_capacity = dhw_node_volume * 4187;                       // J/K
-    const dhw_coil_nodes = dhw_node_count / 2;                                   // coil spans bottom half
+
+    // Coil occupies the bottom coil_volume litres of the tank (nodes 0..nCoil-1)
+    let dhw_coil_nodes = Math.round(app.dhw.coil_volume / dhw_node_volume);
+    if (dhw_coil_nodes < 1) dhw_coil_nodes = 1;
+    if (dhw_coil_nodes > dhw_node_count) dhw_coil_nodes = dhw_node_count;
+
+    // Per coil-node NTU effectiveness of the primary-to-tank heat exchange,
+    // expressed as a conductance (W/K), capped so a node cannot overshoot the
+    // primary temperature in a single timestep
+    const dhw_coil_eps = 1 - Math.exp(-(app.dhw.coil_UA / dhw_coil_nodes) / flow_heat_capacity);
+    let dhw_coil_WK = dhw_coil_eps * flow_heat_capacity;
+    if (dhw_coil_WK > dhw_node_heat_capacity / timestep) dhw_coil_WK = dhw_node_heat_capacity / timestep;
+
+    // Standing loss: wall U-value x side area per node, plus end caps on the
+    // bottom and top nodes
+    const dhw_node_loss_UA = [];
+    for (let n = 0; n < dhw_node_count; n++) dhw_node_loss_UA[n] = app.dhw.wall_U * dhw_perim * dhw_dz;
+    dhw_node_loss_UA[0] += app.dhw.wall_U * dhw_area;                            // bottom cap
+    dhw_node_loss_UA[dhw_node_count - 1] += app.dhw.wall_U * dhw_area;           // top cap
+
+    // Inter-node conduction: G = k_eff * A / dz
+    const dhw_internode_WK = app.dhw.k_eff * dhw_area / dhw_dz;
+
     const dhw_stat_node = Math.min(dhw_node_count - 1, Math.floor(app.dhw.stat_height * dhw_node_count));
     const dhw_cold_feed = app.dhw.cold_feed_temp;
     const dhw_hysteresis = app.dhw.reheat_hysteresis;
-    const dhw_node_loss_UA = app.dhw.cylinder_loss_UA / dhw_node_count;          // W/K per node
-    const dhw_primary_heat_capacity = app.dhw.primary_volume * 4187;             // J/K
-    // Inter-node conduction scales with 1/dx: 1.5 W/K per interface at 2 nodes
-    const dhw_internode_WK = 0.75 * dhw_node_count;
-    // Coil UA split equally over the bottom half nodes, converted to an
-    // unconditionally stable effective conductance on the primary side
-    // (exact exponential decay towards a fixed sink temperature)
-    const dhw_coil_UA_per_node = (app.dhw.coil_U * app.dhw.coil_area) / dhw_coil_nodes;
-    const dhw_coil_transfer_WK = (1 - Math.exp(-dhw_coil_UA_per_node * timestep / dhw_primary_heat_capacity))
-                                 * dhw_primary_heat_capacity / timestep;
+    const dhw_mix_temp = app.dhw.mixed_draw_temp;
+    const dhw_flow_max = app.dhw.flow_max;
 
     // Pre-process draw profile into per-timestep litres at fixed clock times
     const dhw_draw_events = dhw_draw_profile.map(function(ev) {
@@ -896,9 +981,25 @@ function sim(conf) {
         cyl_T = [];
         for (let n = 0; n < dhw_node_count; n++) cyl_T[n] = 40;
     }
+    let dhw_return_temp = dhw_flowT;
+
+    // Cylinder energy-conservation bookkeeping (ported from cylinder_sim.js):
+    // the change in stored energy must equal coil input - draws - standing losses
+    let cyl_E_start = 0;
+    for (let n = 0; n < dhw_node_count; n++) cyl_E_start += cyl_T[n] * dhw_node_heat_capacity;
+    let cyl_energy_in = 0;     // J, net external energy into the cylinder
+    let cyl_throughput = 0;    // J, sum of |flux|, scale for the residual tolerance
 
     // == Main simulation loop ==
-    for (var i = 0; i < itterations; i++) {
+    // The loop is processed in chunks by run_chunk() below; all simulation
+    // state lives in the enclosing sim() closure so each chunk carries on
+    // exactly where the last one stopped.
+    var chunk_iterations = 2880 * 4; // 4 simulated days per chunk
+    var i = 0;
+
+    function run_chunk() {
+    var chunk_end = Math.min(i + chunk_iterations, itterations);
+    for (; i < chunk_end; i++) {
         let time = i * timestep;
         let hour = time / 3600;
         hour = hour % 24;
@@ -973,6 +1074,7 @@ function sim(conf) {
                 if (hour >= start || hour < (end - 24)) {
                     DHW_active = true;
                     dhw_setpoint = processed_dhw_schedule[j].set_point;
+                    dhw_modulation = processed_dhw_schedule[j].modulation;
                     break;
                 }
             } else {
@@ -980,6 +1082,7 @@ function sim(conf) {
                 if (hour >= start && hour < end) {
                     DHW_active = true;
                     dhw_setpoint = processed_dhw_schedule[j].set_point;
+                    dhw_modulation = processed_dhw_schedule[j].modulation;
                     break;
                 }
             }
@@ -1095,11 +1198,14 @@ function sim(conf) {
             }
         }
 
-        // DHW priority: diverter valve sends all heat pump output to the cylinder coil
+        // DHW priority: diverter valve sends all heat pump output to the cylinder coil.
+        // The reheat runs at the schedule window's modulation limit (an eco mode:
+        // e.g. 40% of capacity gives a slower reheat at lower flow temperature
+        // and therefore better COP).
         dhw_mode = false;
         if (dhw_reheat_state == 1) {
             dhw_mode = true;
-            heatpump_heat_target = hp_capacity;
+            heatpump_heat_target = hp_capacity * dhw_modulation * 0.01;
         }
 
         // Apply limits
@@ -1165,7 +1271,6 @@ function sim(conf) {
 
         // Diverter valve: heat pump output goes to either space heating or the DHW coil
         let heat_to_space = dhw_mode ? 0 : heatpump_heat;
-        let heat_to_dhw = dhw_mode ? heatpump_heat : 0;
 
         // 1. Heat added to system volume from heat pump
         MWT += (heat_to_space * timestep) / water_heat_capacity
@@ -1179,35 +1284,74 @@ function sim(conf) {
         MWT -= (radiator_heat * timestep) / water_heat_capacity
 
         // == Hot water cylinder ==
+        // Stratified multi-node model ported from cylinder/cylinder_sim.js
 
-        // 4. DHW primary loop and coil: heat pump heats the primary water volume,
-        // which transfers heat through the coil into the bottom half of the cylinder
+        // 4. Coil: march the primary fluid down through the coil nodes (NTU
+        // effectiveness per node) — the hottest primary meets the top coil node
+        // first and cools as it descends. dhw_flowT is the flow temperature
+        // entering the coil, set at the end of the previous step from the
+        // return temperature plus the heat pump output (like cylinder_sim.js,
+        // the primary loop itself has no thermal mass).
+        let system_DT = heatpump_heat / flow_heat_capacity;
         if (dhw_mode) {
-            dhw_primaryT += (heat_to_dhw * timestep) / dhw_primary_heat_capacity;
-            for (let n = 0; n < dhw_coil_nodes; n++) {
-                let Q_coil = dhw_coil_transfer_WK * Math.max(0, dhw_primaryT - cyl_T[n]);
-                dhw_primaryT -= (Q_coil * timestep) / dhw_primary_heat_capacity;
+            let Tf = dhw_flowT;
+            for (let n = dhw_coil_nodes - 1; n >= 0; n--) {
+                let Q_coil = dhw_coil_WK * (Tf - cyl_T[n]);
                 cyl_T[n] += (Q_coil * timestep) / dhw_node_heat_capacity;
+                Tf -= Q_coil / flow_heat_capacity;
+                cyl_energy_in += Q_coil * timestep;
+                cyl_throughput += Math.abs(Q_coil) * timestep;
             }
+            dhw_return_temp = Tf;
+
+            // Next step's flow temperature: return + heat pump output / C,
+            // capped at flow_max. At the cap the heat pump modulates down, so
+            // reduce its output (and hence electricity use) accordingly.
+            let flowT_next = Tf + heatpump_heat / flow_heat_capacity;
+            if (flowT_next > dhw_flow_max) {
+                flowT_next = dhw_flow_max;
+                heatpump_heat = Math.max(0, (dhw_flow_max - Tf) * flow_heat_capacity);
+                system_DT = heatpump_heat / flow_heat_capacity;
+            }
+            dhw_flowT = flowT_next;
+
+            flow_temperature = dhw_flowT;
+            return_temperature = dhw_return_temp;
+        } else {
+            // Space heating: flow & return around the mean water temperature
+            flow_temperature = MWT + (system_DT * 0.5);
+            return_temperature = MWT - (system_DT * 0.5);
         }
 
-        // Flow & return reflect whichever circuit the heat pump is serving
-        let system_DT = heatpump_heat / flow_heat_capacity;
-        let circuitT = dhw_mode ? dhw_primaryT : MWT;
-        flow_temperature = circuitT + (system_DT * 0.5);
-        return_temperature = circuitT - (system_DT * 0.5);
-
-        // 5. Hot water draws: plug flow, hot water leaves the top,
-        // each node's water moves up one place, cold feed enters the bottom
+        // 5. Hot water draws: thermostatic mixing at the tap — only the hot
+        // fraction f = (Tmix - Tcold) / (Ttop - Tcold) of the mixed volume is
+        // drawn from the top of the cylinder (all hot if the top can't reach
+        // Tmix). Plug flow: each node's water moves up one place, cold feed
+        // enters the bottom. Processed in chunks of at most one node volume so
+        // large draws stay stable and see the falling top temperature.
         let draw_litres = 0;
         for (let d = 0; d < dhw_draw_events.length; d++) {
             if (hour >= dhw_draw_events[d].start_hour && hour < dhw_draw_events[d].end_hour) {
                 draw_litres += dhw_draw_events[d].litres_per_step;
             }
         }
-        if (draw_litres > 0) {
-            dhw_delivered_kwh += draw_litres * 4187 * (cyl_T[dhw_node_count - 1] - dhw_cold_feed) / 3600000;
-            let f = Math.min(1, draw_litres / dhw_node_volume);
+        let remaining_draw = draw_litres;
+        while (remaining_draw > 0) {
+            let chunk = Math.min(remaining_draw, dhw_node_volume);
+            remaining_draw -= chunk;
+            let Ttop = cyl_T[dhw_node_count - 1];
+            let f_hot = 1;
+            if (Ttop > dhw_mix_temp) {
+                f_hot = (dhw_mix_temp - dhw_cold_feed) / (Ttop - dhw_cold_feed);
+                if (f_hot < 0) f_hot = 0;
+            }
+            let hot_litres = f_hot * chunk;
+            if (hot_litres <= 0) break;
+            let draw_energy = hot_litres * 4187 * (Ttop - dhw_cold_feed);
+            dhw_delivered_kwh += draw_energy / 3600000;
+            cyl_energy_in -= draw_energy;
+            cyl_throughput += Math.abs(draw_energy);
+            let f = hot_litres / dhw_node_volume;
             for (let n = dhw_node_count - 1; n > 0; n--) {
                 cyl_T[n] += f * (cyl_T[n - 1] - cyl_T[n]);
             }
@@ -1217,33 +1361,38 @@ function sim(conf) {
         // 6. Cylinder standing losses to the room (credited as an internal gain below)
         let cyl_loss = 0;
         for (let n = 0; n < dhw_node_count; n++) {
-            let node_loss = dhw_node_loss_UA * (cyl_T[n] - room);
+            let node_loss = dhw_node_loss_UA[n] * (cyl_T[n] - room);
             cyl_T[n] -= (node_loss * timestep) / dhw_node_heat_capacity;
             cyl_loss += node_loss;
         }
         cylinder_loss_kwh += cyl_loss * power_to_kwh;
+        cyl_energy_in -= cyl_loss * timestep;
+        cyl_throughput += Math.abs(cyl_loss) * timestep;
 
-        // 7. Buoyancy: mix inverted adjacent nodes to their mean, sweeping until sorted
-        let mixed = true;
-        let passes = 0;
-        while (mixed && passes < dhw_node_count) {
-            mixed = false;
-            passes++;
-            for (let n = 0; n < dhw_node_count - 1; n++) {
-                if (cyl_T[n] > cyl_T[n + 1]) {
-                    let mixT = (cyl_T[n] + cyl_T[n + 1]) * 0.5;
-                    cyl_T[n] = mixT;
-                    cyl_T[n + 1] = mixT;
-                    mixed = true;
-                }
-            }
-        }
-
-        // 8. Weak conduction between adjacent nodes when stratified
+        // 7. Conduction between adjacent nodes: G = k_eff * A / dz
+        // (internal flux, cancels in the energy balance)
         for (let n = 0; n < dhw_node_count - 1; n++) {
             let q_cond = dhw_internode_WK * (cyl_T[n + 1] - cyl_T[n]);
             cyl_T[n + 1] -= (q_cond * timestep) / dhw_node_heat_capacity;
             cyl_T[n] += (q_cond * timestep) / dhw_node_heat_capacity;
+        }
+
+        // 8. Buoyancy: mix any inversion (lower node hotter than the one above)
+        // to the mean, sweeping until the profile is stable. Equal node masses,
+        // so a simple average conserves energy.
+        let cyl_unstable = true;
+        let cyl_passes = 0;
+        while (cyl_unstable && cyl_passes < dhw_node_count * 10) {
+            cyl_unstable = false;
+            cyl_passes++;
+            for (let n = 0; n < dhw_node_count - 1; n++) {
+                if (cyl_T[n] > cyl_T[n + 1] + 1e-9) {
+                    let mixT = (cyl_T[n] + cyl_T[n + 1]) * 0.5;
+                    cyl_T[n] = mixT;
+                    cyl_T[n + 1] = mixT;
+                    cyl_unstable = true;
+                }
+            }
         }
 
         if (cyl_T[dhw_node_count - 1] < min_cyl_top) min_cyl_top = cyl_T[dhw_node_count - 1];
@@ -1327,13 +1476,13 @@ function sim(conf) {
         // we will add timestamps to data at the point the data is plotted
         // record here as fixed interval timeseries
 
-        // Exit if any data is NaN
-        if (room == NaN) return;
-        if (outside == NaN) return;
-        if (flow_temperature == NaN) return;
-        if (return_temperature == NaN) return;
-        if (heatpump_elec == NaN) return;
-        if (heatpump_heat == NaN) return;
+        // Abort cleanly (finishing with partial results) if the simulation has gone unstable
+        if (isNaN(room) || isNaN(outside) || isNaN(flow_temperature) ||
+            isNaN(return_temperature) || isNaN(heatpump_elec) || isNaN(heatpump_heat)) {
+            console.error("Simulation aborted, NaN at step " + i);
+            i = itterations;
+            break;
+        }
 
         // Store data for plotting
         roomT_data[i] = room;
@@ -1472,6 +1621,18 @@ function sim(conf) {
         solar_cost += solar_offset * power_to_kwh * price * 0.01;
     }
 
+    if (on_progress) on_progress((i * timestep) / 86400);
+    if (i < itterations) {
+        // Yield to the browser so the progress display can render, then continue
+        setTimeout(run_chunk, 0);
+        return;
+    }
+    sim_finish();
+    }
+    // == End of run_chunk / main simulation loop ==
+
+    function sim_finish() {
+
     calculate_outside_design_temperatures(outsideT_histogram);
 
     let wa_prc_carnot = 0;
@@ -1482,8 +1643,20 @@ function sim(conf) {
     // Print solar kWh console
     console.log("Solar PV kWh: " + solar_pv_kwh.toFixed(2));
 
+    // Cylinder energy-conservation self-test: the change in stored energy must
+    // equal the net external energy in (coil - draws - standing losses).
+    // Conduction and buoyancy mixing are internal and must cancel.
+    let cyl_E_end = 0;
+    for (let n = 0; n < dhw_node_count; n++) cyl_E_end += cyl_T[n] * dhw_node_heat_capacity;
+    let cyl_residual = (cyl_E_end - cyl_E_start) - cyl_energy_in;
+    let cyl_rel_residual = Math.abs(cyl_residual) / (cyl_throughput + Math.abs(cyl_E_start));
+    if (cyl_rel_residual > 1e-9) {
+        console.warn("Cylinder energy conservation residual: " + cyl_residual.toFixed(1) +
+                     " J (relative " + cyl_rel_residual.toExponential(2) + ")");
+    }
 
-    return {
+
+    on_done({
         elec_kwh: elec_kwh,
         heat_kwh: heat_kwh,
         max_room_temp: max_room_temp,
@@ -1505,10 +1678,12 @@ function sim(conf) {
         dhw_delivered_kwh: dhw_delivered_kwh,
         cylinder_loss_kwh: cylinder_loss_kwh,
         min_cylinder_top_temp: min_cyl_top
+    });
     }
-    
-    // Automatic refinement, disabled for now, running simulation 3 times instead.
-    // if (Math.abs(start_t1 - t1) > hs * 1.0) sim();
+    // == End of sim_finish ==
+
+    // Start the first chunk
+    run_chunk();
 }
 
 function calculate_outside_design_temperatures(outsideT_histogram) {
