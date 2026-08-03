@@ -222,7 +222,7 @@ var app = new Vue({
         ],
         dhw: {
             cylinder_volume: 150,     // Litres
-            cylinder_height: 0.95,    // m, diameter derived from volume & height
+            cylinder_height: 1.5,    // m, diameter derived from volume & height
             node_count: 8,           // Stratification nodes (2-40)
             coil_volume: 60,          // Litres, coil occupies the bottom this-many litres
             coil_UA: 1000,            // W/K, total coil heat-transfer coefficient x area
@@ -230,7 +230,7 @@ var app = new Vue({
             mixed_draw_temp: 40,      // °C, thermostatic mixed delivery temperature at the tap
             reheat_hysteresis: 5,     // K below set_point before reheat starts
             stat_height: 0.75,        // Thermostat height, fraction from bottom
-            daily_volume: 350,        // Litres of mixed hot water drawn per day
+            daily_volume: 200,        // Litres of mixed hot water drawn per day
             wall_U: 0.8,              // W/m2K cylinder insulation U-value
             k_eff: 0.6,               // W/mK effective vertical conductivity between nodes
             flow_max: 60              // °C, primary flow temperature cap
