@@ -173,7 +173,7 @@ var app = new Vue({
             pipe: "28",          // 22 | 28 | 35 mm copper
             insulation: "19",    // bare | 13 | 19 | 25 mm nitrile
             unit_volume: 1.5,    // L of water inside the heat pump itself
-            pump_overrun: 0,     // minutes of circulation after the heat pump stops
+            pump_overrun: 5,     // minutes of circulation after the heat pump stops
             segments: [
                 { name: "HP tails",   len: 0.8, type: "cu28_pp19", amb: 18 },
                 { name: "Buried out", len: 5.0, type: "mdpe32_75", amb: 15 },
