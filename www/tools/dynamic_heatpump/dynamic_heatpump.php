@@ -82,8 +82,8 @@
                             <th>Mean temp</th>
                             <th>Max temp</th>
                             <th>Electric</th>
-                            <th>Heat</th>
-                            <th>COP</th>
+                            <th>Heat @ M2</th>
+                            <th>COP @ M2</th>
                             <th>Cost</th>
                             <th v-if="mode=='year' && building.pv_scale>0">Solar offset</th>
                             <th v-if="mode=='year' && building.pv_scale>0">Solar saving</th>
@@ -94,8 +94,8 @@
                             <td>{{ baseline.mean_room_temp | toFixed(2) }} °C</td>
                             <td>{{ baseline.max_room_temp | toFixed(2) }} °C</td>
                             <td>{{ baseline.elec_kwh | toFixed(3) }} kWh</td>
-                            <td>{{ baseline.heat_kwh | toFixed(3) }} kWh</td>
-                            <td>{{ (baseline.heat_kwh/baseline.elec_kwh) | toFixed(2) }}</td>
+                            <td>{{ baseline.heat_kwh_m2 | toFixed(3) }} kWh</td>
+                            <td>{{ (baseline.heat_kwh_m2/baseline.elec_kwh) | toFixed(2) }}</td>
                             <td>£{{ baseline.total_cost | toFixed(2) }}</td>
                             <td v-if="mode=='year' && building.pv_scale>0">{{ baseline.solar_elec_kwh | toFixed(3) }} kWh</td>
                             <td v-if="mode=='year' && building.pv_scale>0">£{{ baseline.solar_cost | toFixed(2) }}</td>
@@ -106,8 +106,8 @@
                             <td>{{ results.mean_room_temp | toFixed(2) }} °C</td>
                             <td>{{ results.max_room_temp | toFixed(2) }} °C</td>
                             <td>{{ results.elec_kwh | toFixed(3) }} kWh</td>
-                            <td>{{ results.heat_kwh | toFixed(3) }} kWh</td>
-                            <td>{{ (results.heat_kwh/results.elec_kwh) | toFixed(2) }}</td>
+                            <td>{{ results.heat_kwh_m2 | toFixed(3) }} kWh</td>
+                            <td>{{ (results.heat_kwh_m2/results.elec_kwh) | toFixed(2) }}</td>
                             <td>£{{ results.total_cost | toFixed(2) }}</td>
                             <td v-if="mode=='year' && building.pv_scale>0">{{ results.solar_elec_kwh | toFixed(3) }} kWh</td>
                             <td v-if="mode=='year' && building.pv_scale>0">£{{ results.solar_cost | toFixed(2) }}</td>
@@ -118,14 +118,48 @@
                             <td>{{ (results.mean_room_temp-baseline.mean_room_temp) | toFixed(2) }} °C</td>
                             <td>{{ (results.max_room_temp-baseline.max_room_temp) | toFixed(2) }} °C</td>
                             <td>{{ (results.elec_kwh-baseline.elec_kwh)*-1 | toFixed(3) }} kWh ({{ ((results.elec_kwh-baseline.elec_kwh)/baseline.elec_kwh*-100) | toFixed(1) }}%)</td>
-                            <td>{{ (results.heat_kwh-baseline.heat_kwh)*-1 | toFixed(3) }} kWh ({{ ((results.heat_kwh-baseline.heat_kwh)/baseline.heat_kwh*-100) | toFixed(1) }}%)</td>
-                            <td>{{ ((results.heat_kwh/results.elec_kwh)-(baseline.heat_kwh/baseline.elec_kwh)) | toFixed(2) }}</td>
+                            <td>{{ (results.heat_kwh_m2-baseline.heat_kwh_m2)*-1 | toFixed(3) }} kWh ({{ ((results.heat_kwh_m2-baseline.heat_kwh_m2)/baseline.heat_kwh_m2*-100) | toFixed(1) }}%)</td>
+                            <td>{{ ((results.heat_kwh_m2/results.elec_kwh)-(baseline.heat_kwh_m2/baseline.elec_kwh)) | toFixed(2) }}</td>
                             <td>£{{ (results.total_cost-baseline.total_cost)*-1 | toFixed(2) }}</td>
                             <td v-if="mode=='year' && building.pv_scale>0">{{ (results.solar_elec_kwh-baseline.solar_elec_kwh) | toFixed(3) }} kWh</td>
                             <td v-if="mode=='year' && building.pv_scale>0">£{{ (results.solar_cost-baseline.solar_cost) | toFixed(2) }}</td>
                             <td v-if="mode=='year'">£{{ (results.agile_cost-baseline.agile_cost)*-1 | toFixed(2) }}</td>
                         </tr>
                     </table>
+
+                    <h5>Performance by metering point</h5>
+                    <table class="table" style="max-width:700px">
+                        <tr>
+                            <th>Metering point</th>
+                            <th>Heat</th>
+                            <th>SPF/COP</th>
+                            <th>vs source</th>
+                        </tr>
+                        <tr>
+                            <td>At source (condenser, pre unit volume)</td>
+                            <td>{{ results.heat_kwh | toFixed(3) }} kWh</td>
+                            <td>{{ (results.heat_kwh/results.elec_kwh) | toFixed(2) }}</td>
+                            <td>100 %</td>
+                        </tr>
+                        <tr>
+                            <td>Point 1 &middot; heat pump connections</td>
+                            <td>{{ results.heat_kwh_m1 | toFixed(3) }} kWh</td>
+                            <td>{{ (results.heat_kwh_m1/results.elec_kwh) | toFixed(2) }}</td>
+                            <td>{{ (100*results.heat_kwh_m1/results.heat_kwh) | toFixed(1) }} %</td>
+                        </tr>
+                        <tr class="table-success">
+                            <td>Point 2 &middot; building entry, after primaries (main)</td>
+                            <td>{{ results.heat_kwh_m2 | toFixed(3) }} kWh</td>
+                            <td>{{ (results.heat_kwh_m2/results.elec_kwh) | toFixed(2) }}</td>
+                            <td>{{ (100*results.heat_kwh_m2/results.heat_kwh) | toFixed(1) }} %</td>
+                        </tr>
+                    </table>
+                    <p class="text-muted">Primary pipework + heat pump volume standing loss:
+                        {{ results.primary_loss_kwh | toFixed(3) }} kWh.
+                        The source &rarr; point 1 gap is the unit's own standing loss; the
+                        point 1 &rarr; point 2 gap is heat lost from the primary pipework
+                        (while flowing, plus stranded loop charge that cools between cycles).</p>
+
                     <button type="button" class="btn btn-warning" @click="simulate" style="float:right">Refine</button>
                     <button type="button" class="btn btn-info" @click="export_config" style="float:right; margin-right:10px;">Export Config</button>
                     <button type="button" class="btn btn-success" @click="import_config" style="float:right; margin-right:10px;">Import Config</button>
@@ -784,7 +818,7 @@
                         </div>
 
                         <div class="col">
-                            <label class="form-label">Sytem volume</label>
+                            <label class="form-label">System volume <small class="text-muted">(indoors, emitters &amp; pipework after point 2)</small></label>
                             <div class="input-group mb-3">
                                 <input type="text" class="form-control"
                                     v-model.number="heatpump.system_water_volume" @change="simulate"
@@ -841,6 +875,115 @@
                 </div>
             </div>
             <br>
+
+            <div class="card">
+                <div class="card-body">
+                    <h4>Primary pipework</h4>
+                    <p>Pipework between the heat pump and the building entry (metering point 2),
+                       modelled as 0.5&nbsp;m finite-volume cells with transport delay, warm-front
+                       propagation and stagnant cool-down between cycles. Heat is metered at
+                       point 1 (heat pump connections) and point 2 (building entry) &mdash; the
+                       gap is the primary pipework penalty.</p>
+
+                    <div class="row">
+                        <div class="col">
+                            <label class="form-label">Pipework model</label>
+                            <div class="input-group mb-3">
+                                <select class="form-control" v-model="primary.mode" @change="simulate">
+                                    <option value="simple">Simple &mdash; uniform pipe in outside air</option>
+                                    <option value="segmented">Segmented &mdash; per-stage material &amp; environment</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Flow rate</label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" v-model.number="heatpump.flow_rate" @change="simulate" />
+                                <span class="input-group-text">L/min</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="primary.mode!='segmented'">
+                        <div class="row">
+                            <div class="col">
+                                <label class="form-label">Length (one way)</label>
+                                <div class="input-group mb-3">
+                                    <input type="text" class="form-control" v-model.number="primary.length" @change="simulate" />
+                                    <span class="input-group-text">m</span>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <label class="form-label">Pipe size</label>
+                                <div class="input-group mb-3">
+                                    <select class="form-control" v-model="primary.pipe" @change="simulate">
+                                        <option value="22">22 mm copper</option>
+                                        <option value="28">28 mm copper</option>
+                                        <option value="35">35 mm copper</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col">
+                                <label class="form-label">Insulation</label>
+                                <div class="input-group mb-3">
+                                    <select class="form-control" v-model="primary.insulation" @change="simulate">
+                                        <option value="bare">Bare pipe (~1.2 W/m&middot;K)</option>
+                                        <option value="13">13 mm nitrile (~0.30 W/m&middot;K)</option>
+                                        <option value="19">19 mm nitrile (~0.23 W/m&middot;K)</option>
+                                        <option value="25">25 mm nitrile / Primary Pro (~0.19 W/m&middot;K)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-muted">Simple mode pipework is exposed to the live outside
+                           air temperature.</p>
+                    </div>
+
+                    <div v-if="primary.mode=='segmented'">
+                        <table class="table">
+                            <tr>
+                                <th>Stage</th>
+                                <th>Length m (one way)</th>
+                                <th>Construction</th>
+                                <th>Ambient &deg;C</th>
+                                <th><button class="btn" @click="add_segment"><i class="fas fa-plus"></i></button></th>
+                            </tr>
+                            <tr v-for="(sg,index) in primary.segments">
+                                <td><input type="text" class="form-control" v-model="sg.name" @change="simulate" /></td>
+                                <td><input type="text" class="form-control" v-model.number="sg.len" @change="simulate" style="width:90px" /></td>
+                                <td><select class="form-control" v-model="sg.type" @change="simulate">
+                                    <option v-for="(t,k) in pw_segtypes" :value="k">{{ t.label }} &middot; {{ t.u }} W/m&middot;K</option>
+                                </select></td>
+                                <td><input type="text" class="form-control" v-model.number="sg.amb" @change="simulate" style="width:90px" /></td>
+                                <td><button class="btn" @click="delete_segment(index)"><i class="fas fa-trash"></i></button></td>
+                            </tr>
+                        </table>
+                        <p class="text-muted">Stage order = heat pump &rarr; building. Stage ambients
+                           are fixed (e.g. ground temperature around buried MDPE); the heat pump
+                           itself sits in the first stage's environment.</p>
+                        <button type="button" class="btn btn-secondary mb-3" @click="load_buried_example">Load example: buried MDPE run</button>
+                    </div>
+
+                    <div class="row">
+                        <div class="col">
+                            <label class="form-label">Water volume inside the heat pump</label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" v-model.number="primary.unit_volume" @change="simulate" />
+                                <span class="input-group-text">L</span>
+                            </div>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Pump overrun after heat pump stops</label>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" v-model.number="primary.pump_overrun" @change="simulate" />
+                                <span class="input-group-text">min</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <br>
+
             <div class="card" v-if="mode=='day'">
                 <div class="card-body">
                     <div class="row">

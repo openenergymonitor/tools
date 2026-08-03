@@ -25,6 +25,77 @@ var dhw_draw_profile = [
     { start: "20:30", duration_min: 5,  fraction: 0.10 }  // washing up
 ];
 
+// == Primary pipework model ==
+// Finite-volume model of the primary pipework between the heat pump and the
+// building entry, ported from primary-pipework-simulator.html. Each leg is
+// split into PW_DX metre cells (water + pipe wall heat capacity) with upwind
+// advection when the pump runs and free cool-down when it stops, so transport
+// delay, warm-front propagation and stagnant losses all emerge naturally.
+var PW_DX = 0.5; // finite volume cell length (m)
+var PW_PIPES = { // inner diameter m, copper wall heat capacity J/K per m
+    "22": { id: 0.0202, wallC: 205 },
+    "28": { id: 0.0262, wallC: 264 },
+    "35": { id: 0.0327, wallC: 385 }
+};
+var PW_INSUL = { bare: 1.2, "13": 0.30, "19": 0.23, "25": 0.19 }; // U' W/m.K
+// Segment types for the segmented path: inner diameter m, wall heat capacity
+// J/K per m (MDPE walls carry over twice the heat capacity of copper),
+// U' = 2*pi*lambda/ln(r2/r1) W/m.K
+var PW_SEGTYPES = {
+    cu28_pp19: { label: "28mm Cu + 19mm Primary Pro", id: 0.0262, wallC: 264, u: 0.2565 },
+    cu28_25:   { label: "28mm Cu + 25mm nitrile",     id: 0.0262, wallC: 264, u: 0.19 },
+    cu28_bare: { label: "28mm Cu bare",               id: 0.0262, wallC: 264, u: 1.2 },
+    mdpe32_75: { label: "32mm MDPE in 75mm jacket",   id: 0.026,  wallC: 591, u: 0.2582 },
+    cu22_pp19: { label: "22mm Cu + 19mm Primary Pro", id: 0.0202, wallC: 205, u: 0.30 }
+};
+
+// Build per-cell property arrays for the one-way path (heat pump -> building).
+// amb: null means every cell tracks the live outside air temperature (simple
+// mode); in segmented mode each cell has its own fixed ambient (e.g. ground
+// temperature for buried MDPE).
+function pw_build_path(primary) {
+    var cap = [], u = [], amb = [], areas = [];
+    if (primary.mode != "segmented") {
+        var pd = PW_PIPES[primary.pipe];
+        var area = Math.PI * pd.id * pd.id / 4;
+        var n = Math.max(2, Math.round(primary.length / PW_DX));
+        for (var j = 0; j < n; j++) {
+            cap.push((area * 1000 * 4187 + pd.wallC) * PW_DX);
+            u.push(PW_INSUL[primary.insulation]);
+            areas.push(area);
+        }
+        return {
+            N: n,
+            cap: Float64Array.from(cap),
+            u: Float64Array.from(u),
+            amb: null,
+            area: Float64Array.from(areas)
+        };
+    }
+    for (var s = 0; s < primary.segments.length; s++) {
+        var sg = primary.segments[s];
+        var t = PW_SEGTYPES[sg.type];
+        var nseg = Math.max(1, Math.round(sg.len / PW_DX));
+        var a = Math.PI * t.id * t.id / 4;
+        for (var k = 0; k < nseg; k++) {
+            cap.push((a * 1000 * 4187 + t.wallC) * PW_DX);
+            u.push(t.u);
+            amb.push(sg.amb * 1);
+            areas.push(a);
+        }
+    }
+    while (cap.length < 2) {
+        cap.push(cap[0]); u.push(u[0]); amb.push(amb[0]); areas.push(areas[0]);
+    }
+    return {
+        N: cap.length,
+        cap: Float64Array.from(cap),
+        u: Float64Array.from(u),
+        amb: Float64Array.from(amb),
+        area: Float64Array.from(areas)
+    };
+}
+
 // Object to hold time series data for plotting
 var series = [];
 
@@ -92,6 +163,25 @@ var app = new Vue({
             minimum_modulation: 30,
             ramp_rate: 1
         },
+        // Primary pipework between the heat pump and the building entry.
+        // "simple" = uniform copper pipe exposed to the live outside air
+        // temperature; "segmented" = per-stage material & fixed ambient
+        // (e.g. the buried MDPE example).
+        primary: {
+            mode: "simple",
+            length: 10,          // m, one way
+            pipe: "28",          // 22 | 28 | 35 mm copper
+            insulation: "19",    // bare | 13 | 19 | 25 mm nitrile
+            unit_volume: 1.5,    // L of water inside the heat pump itself
+            pump_overrun: 0,     // minutes of circulation after the heat pump stops
+            segments: [
+                { name: "HP tails",   len: 0.8, type: "cu28_pp19", amb: 18 },
+                { name: "Buried out", len: 5.0, type: "mdpe32_75", amb: 15 },
+                { name: "Buried in",  len: 3.5, type: "mdpe32_75", amb: 16 },
+                { name: "To meter",   len: 0.6, type: "cu28_pp19", amb: 20 }
+            ]
+        },
+        pw_segtypes: PW_SEGTYPES,
         control: {
             mode: AUTO_ADAPT,
             wc_use_outside_mean: 1,
@@ -148,6 +238,9 @@ var app = new Vue({
         results: {
             elec_kwh: 0,
             heat_kwh: 0,
+            heat_kwh_m1: 0,
+            heat_kwh_m2: 0,
+            primary_loss_kwh: 0,
             mean_room_temp: 0,
             max_room_temp: 0,
             total_cost: 0,
@@ -166,6 +259,9 @@ var app = new Vue({
         baseline: {
             elec_kwh: 0,
             heat_kwh: 0,
+            heat_kwh_m1: 0,
+            heat_kwh_m2: 0,
+            primary_loss_kwh: 0,
             mean_room_temp: 0,
             max_room_temp: 0,
             total_cost: 0,
@@ -391,6 +487,9 @@ var app = new Vue({
 
                 app.results.elec_kwh = result.elec_kwh;
                 app.results.heat_kwh = result.heat_kwh;
+                app.results.heat_kwh_m1 = result.heat_kwh_m1;
+                app.results.heat_kwh_m2 = result.heat_kwh_m2;
+                app.results.primary_loss_kwh = result.primary_loss_kwh;
                 app.results.mean_room_temp = result.mean_room_temp;
                 app.results.max_room_temp = result.max_room_temp;
                 app.results.total_cost = result.total_cost;
@@ -449,6 +548,29 @@ var app = new Vue({
         },
         delete_space: function (index) {
             this.schedule.splice(index, 1);
+            this.simulate();
+        },
+        add_segment: function () {
+            this.primary.segments.push({
+                name: "stage " + (this.primary.segments.length + 1),
+                len: 2, type: "cu28_pp19", amb: 10
+            });
+            this.simulate();
+        },
+        delete_segment: function (index) {
+            if (this.primary.segments.length > 1) {
+                this.primary.segments.splice(index, 1);
+                this.simulate();
+            }
+        },
+        load_buried_example: function () {
+            this.primary.mode = "segmented";
+            this.primary.segments = [
+                { name: "HP tails",   len: 0.8, type: "cu28_pp19", amb: 18 },
+                { name: "Buried out", len: 5.0, type: "mdpe32_75", amb: 15 },
+                { name: "Buried in",  len: 3.5, type: "mdpe32_75", amb: 16 },
+                { name: "To meter",   len: 0.6, type: "cu28_pp19", amb: 20 }
+            ];
             this.simulate();
         },
 
@@ -535,6 +657,7 @@ var app = new Vue({
                 building: JSON.parse(JSON.stringify(this.building)),
                 external: JSON.parse(JSON.stringify(this.external)),
                 heatpump: JSON.parse(JSON.stringify(this.heatpump)),
+                primary: JSON.parse(JSON.stringify(this.primary)),
                 control: JSON.parse(JSON.stringify(this.control)),
                 schedule: JSON.parse(JSON.stringify(this.schedule)),
                 dhw: JSON.parse(JSON.stringify(this.dhw)),
@@ -582,6 +705,9 @@ var app = new Vue({
                         }
                         if (config.heatpump) {
                             Object.assign(this.heatpump, config.heatpump);
+                        }
+                        if (config.primary) {
+                            Object.assign(this.primary, JSON.parse(JSON.stringify(config.primary)));
                         }
                         if (config.control) {
                             Object.assign(this.control, config.control);
@@ -683,13 +809,17 @@ error_outer = 0
 update_fabric_starting_temperatures();
 flow_temperature = room;
 return_temperature = room;
-MWT = room;
-// Hot water cylinder node temperatures (index 0 = bottom, N-1 = top) and
-// DHW primary flow temperature entering the coil. Globals so they persist
-// across the pre-sim warmup run and the real run (warm start, like MWT).
-// (Re)initialised inside sim() when the node count changes.
+// Primary pipework & emitter state: flow/ret are per-cell temperature arrays
+// (heat pump -> building), Th the unit's internal volume, Te the indoor
+// emitter node. Globals so they persist across the pre-sim warmup run and the
+// real run (warm start, like cyl_T); (re)initialised inside sim() when the
+// pipework configuration changes.
+pw = { sig: "", flow: null, ret: null, Th: room, Te: room };
+// Hot water cylinder node temperatures (index 0 = bottom, N-1 = top).
+// Globals so they persist across the pre-sim warmup run and the real run
+// (warm start, like pw). (Re)initialised inside sim() when the node count
+// changes. The coil is fed from the primary pipework flow leg.
 cyl_T = [];
-dhw_flowT = 35;
 
 app.simulate();
 
@@ -740,6 +870,10 @@ function sim(conf, on_done, on_progress) {
     // Limit fixed compressor speed to 100% and minimum modulation
     if (app.control.fixed_compressor_speed>100) app.control.fixed_compressor_speed = 100;
     if (app.control.fixed_compressor_speed<app.heatpump.minimum_modulation) app.control.fixed_compressor_speed = app.heatpump.minimum_modulation;
+
+    // Keep the circulation flow rate physical (division by mcp below)
+    if (!(app.heatpump.flow_rate >= 1)) app.heatpump.flow_rate = 1;
+    if (app.heatpump.flow_rate > 40) app.heatpump.flow_rate = 40;
 
     // Outside temperature parameters
     var outside_min_time = conf.outside_min_time;
@@ -919,6 +1053,70 @@ function sim(conf, on_done, on_progress) {
     const schedule_last_index = processed_schedule.length - 1;
     const dhw_schedule_length = processed_dhw_schedule.length;
 
+    // == Primary pipework setup ==
+    const prim = app.primary;
+    const pw_path = pw_build_path(prim);
+    const pw_N = pw_path.N;
+    const pw_cap = pw_path.cap;
+    const pw_u = pw_path.u;
+    const pw_amb = pw_path.amb;    // null => cells track live outside temperature
+    const pw_area = pw_path.area;
+
+    // (Re)initialise cell temperatures if the pipework configuration changed,
+    // otherwise warm start from the previous run. Return cell i sits at path
+    // position N-1-i (ret[0] at the building, ret[N-1] at the heat pump).
+    const pw_sig = JSON.stringify([prim.mode, prim.length, prim.pipe,
+        prim.insulation, prim.unit_volume, prim.segments]);
+    if (pw.sig !== pw_sig || !pw.flow || pw.flow.length != pw_N) {
+        pw.sig = pw_sig;
+        pw.flow = new Float64Array(pw_N);
+        pw.ret = new Float64Array(pw_N);
+        for (let c = 0; c < pw_N; c++) {
+            pw.flow[c] = pw_amb ? pw_amb[c] : ext_mid;
+            pw.ret[c] = pw_amb ? pw_amb[pw_N - 1 - c] : ext_mid;
+        }
+        pw.Th = pw_amb ? pw_amb[0] : ext_mid;
+        pw.Te = room;
+    }
+
+    // Heat pump internal volume node (+10% for HX metal), losing heat to its
+    // ambient like an equivalent length of the first pipe cell
+    const pw_Ch = Math.max(0.5, prim.unit_volume) / 1000 * 1000 * 4187 * 1.1;
+    const pw_UAh = pw_u[0] * (prim.unit_volume / 1000) / pw_area[0];
+
+    // Emitter node: the indoor system volume downstream of metering point 2
+    const pw_Ce = water_heat_capacity;
+
+    // Advection sub-stepping: the 30 s building timestep is far larger than
+    // the pipe cell transport time, so while the pump runs the pipework
+    // advances in sub-steps sized to keep the upwind advection fraction
+    // below 0.9 (and no longer than 2 s).
+    // The advection fraction is mcp*dt/cap rather than v*dt/DX: the warm
+    // front travels slower than the water because it heats the pipe wall as
+    // it advances, and with this scaling every cell-boundary energy exchange
+    // is exactly mcp*dT, so the scheme conserves energy and the M1/M2 heat
+    // metering ties up with the reported pipework loss.
+    let pw_fmax = 1e-9; // largest advection fraction per second across the path
+    for (let c = 0; c < pw_N; c++) pw_fmax = Math.max(pw_fmax, flow_heat_capacity / pw_cap[c]);
+    const pw_nsub = Math.max(1, Math.ceil(timestep / Math.min(2, 0.9 / pw_fmax)));
+    const pw_dt = timestep / pw_nsub;
+    // Per-cell advection fractions for flow and return legs
+    const pw_fF = new Float64Array(pw_N);
+    const pw_fR = new Float64Array(pw_N);
+    for (let c = 0; c < pw_N; c++) {
+        pw_fF[c] = Math.min(1, flow_heat_capacity * pw_dt / pw_cap[c]);
+        pw_fR[c] = Math.min(1, flow_heat_capacity * pw_dt / pw_cap[pw_N - 1 - c]);
+    }
+    const pw_overrun_s = (prim.pump_overrun * 1 || 0) * 60;
+
+    // Metering accumulators: source is the condenser output (heat_kwh),
+    // M1 the heat metered at the heat pump connections, M2 at the building
+    // entry after the primary pipework
+    let heat_m1_kwh = 0;
+    let heat_m2_kwh = 0;
+    let primary_loss_kwh = 0;
+    let last_heat_time = -1e12;
+
     // Hot water cylinder parameters — stratified multi-node model ported from
     // cylinder/cylinder_sim.js (node 0 = bottom, node N-1 = top)
     // Clamp node count to an integer between 2 and 40
@@ -981,7 +1179,7 @@ function sim(conf, on_done, on_progress) {
         cyl_T = [];
         for (let n = 0; n < dhw_node_count; n++) cyl_T[n] = 40;
     }
-    let dhw_return_temp = dhw_flowT;
+    let dhw_return_temp = 35;
 
     // Cylinder energy-conservation bookkeeping (ported from cylinder_sim.js):
     // the change in stored energy must equal coil input - draws - standing losses
@@ -1260,68 +1458,143 @@ function sim(conf, on_done, on_progress) {
             heatpump_heat = heatpump_heat_target;
         }
 
-        // Implementation includes system volume
+        // == Primary pipework, emitter & DHW coil ==
+        // The heat pump condenser heats a small internal water volume (pw.Th).
+        // Water is pumped through the primary pipework (finite volume cells
+        // with upwind advection and heat loss to each cell's ambient) to the
+        // building entry, where a diverter valve sends it either to the
+        // emitter node (space heating) or down the DHW cylinder coil.
+        // Metering point 1 sits at the heat pump connections, metering
+        // point 2 at the building entry after the primary pipework.
 
-        // Important conceptual simplification is to model the whole system as a single volume of water
-        // a bit like a water or oil filled radiator. The heat pump condencer sits inside this volume and
-        // the volume radiates heat according to it's mean water temperature.
-
-        // The important system temperature is therefore mean water temperature
-        // Flow and return temperatures are calculated later as an output based on flow rate.
-
-        // Diverter valve: heat pump output goes to either space heating or the DHW coil
-        let heat_to_space = dhw_mode ? 0 : heatpump_heat;
-
-        // 1. Heat added to system volume from heat pump
-        MWT += (heat_to_space * timestep) / water_heat_capacity
-
-        // 2. Calculate radiator output based on Room temp and MWT
-        Delta_T = MWT - room;
-        if (Delta_T < 0) Delta_T = 0;
-        radiator_heat = hp_radiatorRatedOutput * Math.pow(Delta_T / hp_radiatorRatedDT, 1.3);
-
-        // 3. Subtract this heat output from MWT
-        MWT -= (radiator_heat * timestep) / water_heat_capacity
-
-        // == Hot water cylinder ==
-        // Stratified multi-node model ported from cylinder/cylinder_sim.js
-
-        // 4. Coil: march the primary fluid down through the coil nodes (NTU
-        // effectiveness per node) — the hottest primary meets the top coil node
-        // first and cools as it descends. dhw_flowT is the flow temperature
-        // entering the coil, set at the end of the previous step from the
-        // return temperature plus the heat pump output (like cylinder_sim.js,
-        // the primary loop itself has no thermal mass).
         let system_DT = heatpump_heat / flow_heat_capacity;
-        if (dhw_mode) {
-            let Tf = dhw_flowT;
-            for (let n = dhw_coil_nodes - 1; n >= 0; n--) {
-                let Q_coil = dhw_coil_WK * (Tf - cyl_T[n]);
-                cyl_T[n] += (Q_coil * timestep) / dhw_node_heat_capacity;
-                Tf -= Q_coil / flow_heat_capacity;
-                cyl_energy_in += Q_coil * timestep;
-                cyl_throughput += Math.abs(Q_coil) * timestep;
-            }
-            dhw_return_temp = Tf;
 
-            // Next step's flow temperature: return + heat pump output / C,
-            // capped at flow_max. At the cap the heat pump modulates down, so
-            // reduce its output (and hence electricity use) accordingly.
-            let flowT_next = Tf + heatpump_heat / flow_heat_capacity;
-            if (flowT_next > dhw_flow_max) {
-                flowT_next = dhw_flow_max;
-                heatpump_heat = Math.max(0, (dhw_flow_max - Tf) * flow_heat_capacity);
+        // Circulation pump runs while the heat pump runs, plus optional overrun
+        if (heatpump_heat > 0) last_heat_time = time;
+        let pump_on = heatpump_heat > 0 || (time - last_heat_time) <= pw_overrun_s;
+
+        // Flow temperature limiter: as the unit outlet approaches the cap the
+        // heat pump modulates down (and electricity use falls accordingly).
+        // DHW reheat caps at dhw.flow_max, space heating at 75C.
+        if (heatpump_heat > 0) {
+            let flowT_cap = dhw_mode ? dhw_flow_max : 75;
+            let max_heat = flow_heat_capacity * (flowT_cap - pw.Th);
+            if (max_heat < 0) max_heat = 0;
+            if (heatpump_heat > max_heat) {
+                heatpump_heat = max_heat;
                 system_DT = heatpump_heat / flow_heat_capacity;
             }
-            dhw_flowT = flowT_next;
-
-            flow_temperature = dhw_flowT;
-            return_temperature = dhw_return_temp;
-        } else {
-            // Space heating: flow & return around the mean water temperature
-            flow_temperature = MWT + (system_DT * 0.5);
-            return_temperature = MWT - (system_DT * 0.5);
         }
+
+        let E1_step = 0;      // J through metering point 1 (heat pump connections)
+        let E2_step = 0;      // J through metering point 2 (building entry)
+        let Erad_step = 0;    // J emitted by the radiators
+        let Eloss_step = 0;   // J lost by the primaries + unit volume to ambient
+        const pw_amb_unit = pw_amb ? pw_amb[0] : outside;
+
+        if (pump_on) {
+            for (let s = 0; s < pw_nsub; s++) {
+                const ThIn = pw.ret[pw_N - 1];     // unit inlet from the return leg
+                E1_step += flow_heat_capacity * (pw.Th - ThIn) * pw_dt;
+                const Tf2 = pw.flow[pw_N - 1];     // flow temperature at the building entry
+
+                // Diverter valve: the building return comes from either the
+                // DHW coil or the emitter node
+                let Tret_building;
+                if (dhw_mode) {
+                    // March the primary down through the coil nodes (NTU
+                    // effectiveness per node) — the hottest primary meets the
+                    // top coil node first and cools as it descends
+                    let Tf = Tf2;
+                    for (let n = dhw_coil_nodes - 1; n >= 0; n--) {
+                        let Q_coil = dhw_coil_WK * (Tf - cyl_T[n]);
+                        cyl_T[n] += (Q_coil * pw_dt) / dhw_node_heat_capacity;
+                        Tf -= Q_coil / flow_heat_capacity;
+                        cyl_energy_in += Q_coil * pw_dt;
+                        cyl_throughput += Math.abs(Q_coil) * pw_dt;
+                    }
+                    dhw_return_temp = Tf;
+                    Tret_building = Tf;
+                } else {
+                    Tret_building = pw.Te;
+                }
+                E2_step += flow_heat_capacity * (Tf2 - Tret_building) * pw_dt;
+
+                // Heat pump internal volume node
+                pw.Th += (flow_heat_capacity * (ThIn - pw.Th) + heatpump_heat) * pw_dt / pw_Ch;
+
+                // Advect flow leg (upstream = unit outlet)
+                for (let c = pw_N - 1; c > 0; c--) pw.flow[c] += pw_fF[c] * (pw.flow[c - 1] - pw.flow[c]);
+                pw.flow[0] += pw_fF[0] * (pw.Th - pw.flow[0]);
+
+                // Emitter node & radiator output (isolated during DHW reheat).
+                // While circulating, the radiators emit at the mean of the
+                // incoming flow (Tf2) and the well-mixed node (the return),
+                // matching the mean-emitter-temperature basis of DT50 ratings.
+                let Delta_T = (dhw_mode ? pw.Te : (Tf2 + pw.Te) * 0.5) - room;
+                if (Delta_T < 0) Delta_T = 0;
+                let Prad = hp_radiatorRatedOutput * Math.pow(Delta_T / hp_radiatorRatedDT, 1.3);
+                if (dhw_mode) {
+                    pw.Te -= Prad * pw_dt / pw_Ce;
+                } else {
+                    pw.Te += (flow_heat_capacity * (Tf2 - pw.Te) - Prad) * pw_dt / pw_Ce;
+                }
+                Erad_step += Prad * pw_dt;
+
+                // Advect return leg (upstream = building return)
+                for (let c = pw_N - 1; c > 0; c--) pw.ret[c] += pw_fR[c] * (pw.ret[c - 1] - pw.ret[c]);
+                pw.ret[0] += pw_fR[0] * (Tret_building - pw.ret[0]);
+
+                // Ambient losses: every pipe cell + the unit's internal volume
+                for (let c = 0; c < pw_N; c++) {
+                    const af = pw_amb ? pw_amb[c] : outside;
+                    let q = pw_u[c] * PW_DX * pw_dt * (pw.flow[c] - af);
+                    pw.flow[c] -= q / pw_cap[c]; Eloss_step += q;
+                    const m = pw_N - 1 - c;
+                    const ar = pw_amb ? pw_amb[m] : outside;
+                    q = pw_u[m] * PW_DX * pw_dt * (pw.ret[c] - ar);
+                    pw.ret[c] -= q / pw_cap[m]; Eloss_step += q;
+                }
+                const qh = pw_UAh * (pw.Th - pw_amb_unit) * pw_dt;
+                pw.Th -= qh / pw_Ch; Eloss_step += qh;
+            }
+        } else {
+            // Pump off: no advection — the radiators drain the emitter node
+            // and the pipes + unit volume cool towards their ambients (loss
+            // rates are small enough for a single 30 s step to be stable)
+            let Delta_T = pw.Te - room;
+            if (Delta_T < 0) Delta_T = 0;
+            let Prad = hp_radiatorRatedOutput * Math.pow(Delta_T / hp_radiatorRatedDT, 1.3);
+            pw.Te -= Prad * timestep / pw_Ce;
+            Erad_step = Prad * timestep;
+
+            for (let c = 0; c < pw_N; c++) {
+                const af = pw_amb ? pw_amb[c] : outside;
+                let q = pw_u[c] * PW_DX * timestep * (pw.flow[c] - af);
+                pw.flow[c] -= q / pw_cap[c]; Eloss_step += q;
+                const m = pw_N - 1 - c;
+                const ar = pw_amb ? pw_amb[m] : outside;
+                q = pw_u[m] * PW_DX * timestep * (pw.ret[c] - ar);
+                pw.ret[c] -= q / pw_cap[m]; Eloss_step += q;
+            }
+            const qh = pw_UAh * (pw.Th - pw_amb_unit) * timestep;
+            pw.Th -= qh / pw_Ch; Eloss_step += qh;
+        }
+
+        radiator_heat = Erad_step / timestep;
+        heat_m1_kwh += E1_step / 3600000;
+        heat_m2_kwh += E2_step / 3600000;
+        primary_loss_kwh += Eloss_step / 3600000;
+
+        // Flow and return temperatures at the heat pump connections (the
+        // unit's own flow sensor — used by the controller and the COP model)
+        flow_temperature = pw.Th;
+        return_temperature = pw.ret[pw_N - 1];
+
+        // == Hot water cylinder ==
+        // Stratified multi-node model ported from cylinder/cylinder_sim.js.
+        // The coil heat input is applied inside the pipework sub-step loop
+        // above; draws, standing losses, conduction and buoyancy follow here.
 
         // 5. Hot water draws: thermostatic mixing at the tap — only the hot
         // fraction f = (Tmix - Tcold) / (Ttop - Tcold) of the mixed volume is
@@ -1429,8 +1702,8 @@ function sim(conf, on_done, on_progress) {
             heatpump_elec = 0;
         }
 
-        // Add standby power and pump power
-        if (heatpump_elec > 0) {
+        // Add standby power and pump power (pump also draws during overrun)
+        if (heatpump_elec > 0 || pump_on) {
             heatpump_elec += hp_pumps;
         }
         heatpump_elec += hp_standby;
@@ -1478,7 +1751,8 @@ function sim(conf, on_done, on_progress) {
 
         // Abort cleanly (finishing with partial results) if the simulation has gone unstable
         if (isNaN(room) || isNaN(outside) || isNaN(flow_temperature) ||
-            isNaN(return_temperature) || isNaN(heatpump_elec) || isNaN(heatpump_heat)) {
+            isNaN(return_temperature) || isNaN(heatpump_elec) || isNaN(heatpump_heat) ||
+            isNaN(pw.Th) || isNaN(pw.Te)) {
             console.error("Simulation aborted, NaN at step " + i);
             i = itterations;
             break;
@@ -1659,6 +1933,9 @@ function sim(conf, on_done, on_progress) {
     on_done({
         elec_kwh: elec_kwh,
         heat_kwh: heat_kwh,
+        heat_kwh_m1: heat_m1_kwh,
+        heat_kwh_m2: heat_m2_kwh,
+        primary_loss_kwh: primary_loss_kwh,
         max_room_temp: max_room_temp,
         mean_room_temp: room_temp_sum / stats_count,
         total_cost: total_cost,

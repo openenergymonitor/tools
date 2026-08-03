@@ -103,6 +103,14 @@ function report() {
     console.log('sim time:            ', r.sim_time_ms.toFixed(0), 'ms');
     console.log('space elec kWh:      ', (r.elec_kwh - r.dhw_elec_kwh).toFixed(3));
     console.log('space heat kWh:      ', (r.heat_kwh - r.dhw_heat_kwh).toFixed(3));
+    if (r.heat_kwh_m1 !== undefined) { // metering fields absent in pre-pipework versions
+        console.log('heat @ source kWh:   ', r.heat_kwh.toFixed(3));
+        console.log('heat @ M1 kWh:       ', r.heat_kwh_m1.toFixed(3));
+        console.log('heat @ M2 kWh:       ', r.heat_kwh_m2.toFixed(3));
+        console.log('primary loss kWh:    ', r.primary_loss_kwh.toFixed(3));
+        console.log('COP source/M1/M2:    ', (r.heat_kwh / r.elec_kwh).toFixed(3) + ' / ' +
+            (r.heat_kwh_m1 / r.elec_kwh).toFixed(3) + ' / ' + (r.heat_kwh_m2 / r.elec_kwh).toFixed(3));
+    }
     console.log('mean room T:         ', r.mean_room_temp.toFixed(3));
     console.log('max room T:          ', r.max_room_temp.toFixed(3));
     console.log('total cost:          ', r.total_cost.toFixed(2));
