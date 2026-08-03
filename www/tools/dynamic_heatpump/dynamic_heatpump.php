@@ -586,16 +586,6 @@
                                     @change="simulate" />
                             </div>
                         </div>
-                        <!--
-                        <div class="col">
-                            <label class="form-label">Derivative</label>
-                            <div class="input-group mb-3">
-                                <span class="input-group-text">Kd</span>
-                                <input type="text" class="form-control" v-model.number="control.Kd"
-                                    @change="simulate" />
-                            </div>
-                        </div>
-                        -->
                     </div>
 
                 </div>
@@ -757,14 +747,6 @@
                                 <input type="text" class="form-control" v-model.number="heatpump.capacity" :disabled="heatpump.cop_model=='vaillant5' || heatpump.cop_model == 'vaillant12'"
                                     @change="simulate" />
                                 <span class="input-group-text">W</span>
-                            </div>
-                        </div>
-                        <div class="col">
-                            <label class="form-label">System DT</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="heatpump.system_DT"
-                                    @change="simulate" />
-                                <span class="input-group-text">K</span>
                             </div>
                         </div>
                     </div>
@@ -1099,15 +1081,13 @@
                     </div>
                 </div>
             </div>
-            <!--
-            <label class="form-label">Minimum modulation</label>
-            <div class="input-group mb-3">
-                <input type="text" class="form-control" v-model.number="heatpump.min_modulation" @change="simulate"/>
-                <span class="input-group-text">W</span>
-            </div>
-            -->
         </div>
     </div>
 </div>
+<script src="<?php echo $path; ?>model/pipework.js?v=<?php echo time(); ?>"></script>
+<script src="<?php echo $path; ?>model/cylinder.js?v=<?php echo time(); ?>"></script>
+<script src="<?php echo $path; ?>model/controller.js?v=<?php echo time(); ?>"></script>
+<script src="<?php echo $path; ?>model/building.js?v=<?php echo time(); ?>"></script>
+<script src="<?php echo $path; ?>model/simulator.js?v=<?php echo time(); ?>"></script>
+<script src="<?php echo $path; ?>plot.js?v=<?php echo time(); ?>"></script>
 <script src="<?php echo $path; ?>dynamic_heatpump.js?v=<?php echo time(); ?>"></script>
-<script src="<?php echo $path; ?>timeseries.js?v=1"></script>

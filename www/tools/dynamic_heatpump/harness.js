@@ -78,7 +78,20 @@ function load(file) {
 }
 load(path.join(LIB, 'ecodan.js'));
 load(path.join(LIB, 'vaillant.js'));
-load(path.join(BASE, 'timeseries.js'));
+// Model modules and plot glue (order matters); older self-contained app
+// versions passed via --app may predate the split, so only load what exists
+const MODEL_FILES = ['pipework.js', 'cylinder.js', 'controller.js', 'building.js', 'simulator.js'];
+const model_dir = path.join(path.dirname(app_file), 'model');
+if (fs.existsSync(model_dir)) {
+    for (const f of MODEL_FILES) {
+        const p = path.join(model_dir, f);
+        if (fs.existsSync(p)) load(p);
+    }
+}
+const timeseries_file = path.join(BASE, 'timeseries.js');
+if (fs.existsSync(timeseries_file)) load(timeseries_file);
+const plot_file = path.join(path.dirname(app_file), 'plot.js');
+if (fs.existsSync(plot_file)) load(plot_file);
 load(app_file);
 
 // --- Completion detection ---------------------------------------------------
@@ -120,9 +133,14 @@ function report() {
     console.log('dhw delivered kWh:   ', r.dhw_delivered_kwh.toFixed(3));
     console.log('cylinder loss kWh:   ', r.cylinder_loss_kwh.toFixed(3));
     console.log('min cyl top T:       ', r.min_cylinder_top_temp.toFixed(2));
-    console.log('cyl_T (bottom->top): ', cyl_T.map(t => t.toFixed(1)).join(' '));
+    // Post-refactor state/series live on app.state / sim_series; fall back to
+    // the old globals when testing a pre-refactor version via --app
+    const cyl = (app.state && app.state.cyl_T) ? app.state.cyl_T : (typeof cyl_T !== 'undefined' ? cyl_T : []);
+    console.log('cyl_T (bottom->top): ', cyl.map(t => t.toFixed(1)).join(' '));
+    const flowT = (typeof sim_series !== 'undefined' && sim_series) ? sim_series.flowT_data
+        : (typeof flowT_data !== 'undefined' ? flowT_data : []);
     let max_flow = -Infinity;
-    for (let i = 0; i < flowT_data.length; i++) if (flowT_data[i] > max_flow) max_flow = flowT_data[i];
+    for (let i = 0; i < flowT.length; i++) if (flowT[i] > max_flow) max_flow = flowT[i];
     console.log('max flow T:          ', max_flow.toFixed(2));
 }
 
