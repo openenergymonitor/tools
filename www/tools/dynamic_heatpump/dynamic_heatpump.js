@@ -293,6 +293,7 @@ var app = new Vue({
         show_cyl_topT: true,
         show_cyl_bottomT: true,
         show_frost: false,
+        show_agile: false,
         // Evaporator frosting & reverse-cycle defrost (model/frost.js);
         // defaults anchored to the literature review in frost-literature.md
         frost: {
@@ -487,6 +488,11 @@ var app = new Vue({
             } else {
                 this.days = 365;
             }
+
+            // Cylinder temperatures clutter the annual chart; show them by
+            // default in day view only (the checkboxes still override)
+            this.show_cyl_topT = this.mode == "day";
+            this.show_cyl_bottomT = this.mode == "day";
 
             var timestep = 30;
             var itterations = 3600 * 24 * app.days / timestep;

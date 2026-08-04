@@ -86,12 +86,12 @@
         background: var(--hp-dark);
     }
     .hp-title {
-        font-size: .95rem;
+        font-size: 1.02rem;
         font-weight: 600;
         color: #fff;
     }
     .hp-subtitle {
-        font-size: .75rem;
+        font-size: .83rem;
         color: #eae6df;
         margin-left: .5rem;
     }
@@ -125,7 +125,7 @@
         border: 0;
         background: transparent;
         text-align: left;
-        font-size: .78rem;
+        font-size: .84rem;
         line-height: 1.3;
         color: #1f1d1a;
         padding: .5rem .75rem;
@@ -147,7 +147,7 @@
         display: block;
     }
     .hp-rail-heading {
-        font-size: .65rem;
+        font-size: .71rem;
         font-weight: 600;
         letter-spacing: .08em;
         color: #44403a;
@@ -161,7 +161,7 @@
         margin-top: auto;
         padding: .75rem 1rem;
         border-top: 1px solid var(--hp-border-soft);
-        font-size: .68rem;
+        font-size: .73rem;
         line-height: 1.6;
         color: #44403a;
     }
@@ -171,7 +171,7 @@
     }
     @media (min-width: 992px) {
         .hp-rail { flex-basis: 200px; padding: .6rem 0; }
-        .hp-rail-btn { font-size: .8rem; padding: .5rem 1rem; }
+        .hp-rail-btn { font-size: .87rem; padding: .5rem 1rem; }
     }
 
     /* Narrow-only button that slides the group rail away / back */
@@ -183,7 +183,7 @@
         width: 30px;
         height: 30px;
         font-family: var(--bs-font-monospace);
-        font-size: .9rem;
+        font-size: .97rem;
         color: #000;
         background: var(--hp-rail-bg);
         border: 1px solid #ddd8d1;
@@ -216,18 +216,18 @@
     .hp-panel-header { padding: 1rem 1.25rem .5rem; }
     .hp-panel-title {
         margin: 0;
-        font-size: .95rem;
+        font-size: 1.02rem;
         font-weight: 600;
     }
     .hp-panel-desc {
         margin: .25rem 0 0;
-        font-size: .76rem;
+        font-size: .83rem;
         line-height: 1.55;
         color: var(--hp-muted);
     }
     .hp-panel-fields { padding: .5rem 1.25rem 1.25rem; }
     .hp-badge-essentials {
-        font-size: .65rem;
+        font-size: .71rem;
         font-weight: 500;
         color: #4d3c00;
         background: #fff5cc;
@@ -236,7 +236,7 @@
         white-space: nowrap;
     }
     .hp-subheading {
-        font-size: .8rem;
+        font-size: .87rem;
         font-weight: 600;
         margin: 1.25rem 0 .5rem;
         padding-top: .75rem;
@@ -262,7 +262,7 @@
         gap: .25rem;
     }
     .hp-field-label {
-        font-size: .74rem;
+        font-size: .81rem;
         color: #1f1d1a;
     }
     .hp-field-label small { color: #44403a; }
@@ -296,12 +296,12 @@
         background: transparent;
         text-align: right;
         font-family: var(--bs-font-monospace);
-        font-size: .82rem;
+        font-size: .88rem;
         font-weight: 500;
         padding: .3rem .3rem;
     }
     .hp-stepper .hp-unit {
-        font-size: .68rem;
+        font-size: .73rem;
         font-family: var(--bs-font-monospace);
         color: #44403a;
         padding-right: .4rem;
@@ -314,7 +314,7 @@
         display: flex;
         justify-content: space-between;
         gap: .75rem;
-        font-size: .78rem;
+        font-size: .84rem;
         color: #000;
         padding: .3rem 0;
         border-top: 1px dashed var(--hp-border-soft);
@@ -324,7 +324,7 @@
         color: var(--hp-ink);
         white-space: nowrap;
     }
-    .hp-switch { font-size: .78rem; }
+    .hp-switch { font-size: .84rem; }
 
     /* Run bar at the bottom of the parameter panel. On narrow screens it
        sticks just above the KPI strip while the config is edited, then
@@ -384,18 +384,18 @@
         background: var(--hp-surface);
     }
     .hp-kpi-strip-label {
-        font-size: .6rem;
+        font-size: .66rem;
         color: var(--hp-muted);
     }
     .hp-kpi-strip-value {
         font-family: var(--bs-font-monospace);
-        font-size: .85rem;
+        font-size: .92rem;
         font-weight: 600;
         white-space: nowrap;
     }
-    .hp-kpi-strip .hp-kpi-delta { font-size: .6rem; }
+    .hp-kpi-strip .hp-kpi-delta { font-size: .66rem; }
     .hp-badge-unrun {
-        font-size: .72rem;
+        font-size: .79rem;
         font-weight: 500;
         color: #5c4400;
         background: #fff8e1;
@@ -405,7 +405,7 @@
         white-space: nowrap;
     }
     .hp-run-hint {
-        font-size: .72rem;
+        font-size: .79rem;
         color: var(--hp-muted);
     }
     .hp-run-progress { flex: 1; }
@@ -444,7 +444,7 @@
     .hp-tab {
         border: 0;
         background: transparent;
-        font-size: .8rem;
+        font-size: .87rem;
         font-weight: 500;
         color: var(--hp-muted);
         padding: .25rem .9rem;
@@ -461,7 +461,7 @@
         display: flex;
         align-items: center;
         gap: .45rem;
-        font-size: .74rem;
+        font-size: .81rem;
         color: var(--hp-muted);
     }
     .hp-run-dot {
@@ -491,18 +491,18 @@
         padding: .6rem .75rem;
     }
     .hp-kpi-label {
-        font-size: .7rem;
+        font-size: .77rem;
         color: var(--hp-muted);
         margin-bottom: .15rem;
         white-space: nowrap;
     }
     .hp-kpi-value {
         font-family: var(--bs-font-monospace);
-        font-size: 1.15rem;
+        font-size: 1.25rem;
         font-weight: 600;
     }
     .hp-kpi-delta {
-        font-size: .7rem;
+        font-size: .77rem;
         font-family: var(--bs-font-monospace);
     }
     .hp-kpi-delta.good { color: var(--hp-good); }
@@ -523,21 +523,21 @@
         justify-content: space-between;
         flex-wrap: wrap;
         gap: .5rem;
-        font-size: .82rem;
+        font-size: .88rem;
         font-weight: 600;
         margin-bottom: .5rem;
     }
     .hp-card .table {
-        font-size: .78rem;
+        font-size: .84rem;
         margin-bottom: 0;
     }
     .hp-card .table td, .hp-card .table th { padding: .3rem .5rem; }
     .hp-note {
-        font-size: .74rem;
+        font-size: .81rem;
         color: var(--hp-muted);
         margin: .5rem 0 0;
     }
-    .hp-table-panel { font-size: .78rem; }
+    .hp-table-panel { font-size: .84rem; }
     .hp-table-panel td, .hp-table-panel th { padding: .25rem .3rem; vertical-align: middle; }
 
     /* Chart */
@@ -1204,6 +1204,10 @@
                     </div>
                 </div>
                 <template v-else>
+                    <select class="form-select form-select-sm hp-mode-select" v-model="mode" @change="change_mode" :disabled="progress.running">
+                        <option value="day">Single day</option>
+                        <option value="year">Full year</option>
+                    </select>
                     <span v-if="needs_run" class="hp-badge-unrun">{{ pending_changes }} unrun change{{ pending_changes == 1 ? '' : 's' }}</span>
                     <span v-else class="hp-run-hint">{{ mode == 'day' ? 'runs automatically on change' : 'results up to date' }}</span>
                     <button type="button" class="btn btn-sm btn-outline-secondary ms-auto"
@@ -1233,10 +1237,6 @@
                     <button type="button" class="hp-tab" :class="{active: ui.view == 'chart'}" @click="select_view('chart')">Chart</button>
                     <button type="button" class="hp-tab" :class="{active: ui.view == 'tables'}" @click="select_view('tables')">Tables</button>
                 </div>
-                <select class="form-select form-select-sm hp-mode-select" v-model="mode" @change="change_mode" :disabled="progress.running">
-                    <option value="day">Single day</option>
-                    <option value="year">Full year</option>
-                </select>
                 <span class="hp-run-indicator ms-auto">
                     <span class="hp-run-dot" :class="{stale: needs_run}"></span>
                     {{ needs_run ? 'inputs changed — run to update' : 'results from run ' + simulation_index }}
@@ -1291,6 +1291,10 @@
                             <div class="form-check form-check-inline hp-switch m-0">
                                 <input class="form-check-input" type="checkbox" id="show_frost" v-model="show_frost" @change="replot">
                                 <label class="form-check-label" for="show_frost">Frost mass</label>
+                            </div>
+                            <div class="form-check form-check-inline hp-switch m-0">
+                                <input class="form-check-input" type="checkbox" id="show_agile" v-model="show_agile" @change="replot">
+                                <label class="form-check-label" for="show_agile">Agile price</label>
                             </div>
                         </div>
                     </div>

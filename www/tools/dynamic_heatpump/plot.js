@@ -24,7 +24,7 @@ function view_calc_interval() {
     var range_seconds = view.end - view.start;
 
     // Target ~6000-9000 data points on screen for optimal performance
-    var ideal_interval = range_seconds / 6000;
+    var ideal_interval = range_seconds / 2000;
 
     // Available downsample intervals (in seconds)
     var intervals = [3600, 1800, 900, 600, 300, 60, 30];
@@ -144,8 +144,8 @@ function plot() {
         { label: "Frost", data: window.frost_data, color: "#00aacc", yaxis: 5, lines: { show: true, fill: true } }
     ];
 
-    if (app.mode != "year") {
-        series[8].lines.show = false; // hide agile in day mode
+    if (!app.show_agile) {
+        series[8].lines.show = false;
     }
 
     if (!app.show_targetT) {
@@ -185,7 +185,9 @@ function plot() {
 var previousPoint = false;
 
 // flot tooltip
-$('#graph').bind("plothover", function (event, pos, item) {
+// Delegated via document: #graph lives inside the Vue app, so the node this
+// script sees at load time is replaced when Vue mounts and re-renders
+$(document).on("plothover", "#graph", function (event, pos, item) {
     if (item) {
         var z = item.dataIndex;
 
@@ -227,8 +229,8 @@ $('#graph').bind("plothover", function (event, pos, item) {
     } else $("#tooltip").remove();
 });
 
-// plot selection to zoom
-$('#graph').bind("plotselected", function (event, ranges) {
+// plot selection to zoom (delegated for the same reason as plothover above)
+$(document).on("plotselected", "#graph", function (event, ranges) {
     // Zooming
     view.start = ranges.xaxis.from*0.001;
     view.end = ranges.xaxis.to*0.001;
