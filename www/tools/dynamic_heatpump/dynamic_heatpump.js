@@ -185,10 +185,12 @@ var app = new Vue({
         days_pre_sim: 5,
         // These are days to simulate and include in results
         days: 1,
-        // UI state: selected parameter group and results view
+        // UI state: selected parameter group, results view and whether the
+        // group rail is shown beside the fields on narrow screens
         ui: {
             group: "essentials",
-            view: "chart"
+            view: "chart",
+            rail_open: true
         },
         group_info: GROUP_INFO,
         group_list: GROUP_ORDER.map(function (id) {
@@ -390,7 +392,9 @@ var app = new Vue({
         }
     },
     computed: {
-        // Headline result cards, with deltas against the saved baseline
+        // Headline result cards, with deltas against the saved baseline.
+        // `short` labels the narrow-screen KPI strip, which shows the first
+        // four entries; the full cards use `label`.
         kpis: function () {
             var r = this.results;
             var b = this.baseline;
@@ -413,12 +417,14 @@ var app = new Vue({
             var list = [
                 {
                     label: "COP @ building entry",
+                    short: "COP",
                     value: cop.toFixed(2),
                     delta: has_baseline ? signed(cop - cop_b, 2) : "",
                     cls: cls(cop - cop_b, 1)
                 },
                 {
                     label: "Electric input",
+                    short: "Electric",
                     value: r.elec_kwh.toFixed(dp) + " kWh",
                     delta: has_baseline && b.elec_kwh > 0
                         ? signed(100 * (r.elec_kwh - b.elec_kwh) / b.elec_kwh, 1, "%") : "",
@@ -426,6 +432,7 @@ var app = new Vue({
                 },
                 {
                     label: "Heat delivered @ M2",
+                    short: "Heat",
                     value: r.heat_kwh_m2.toFixed(dp) + " kWh",
                     delta: has_baseline && b.heat_kwh_m2 > 0
                         ? signed(100 * (r.heat_kwh_m2 - b.heat_kwh_m2) / b.heat_kwh_m2, 1, "%") : "",
@@ -433,6 +440,7 @@ var app = new Vue({
                 },
                 {
                     label: "Cost",
+                    short: "Cost",
                     value: "£" + r.total_cost.toFixed(2),
                     delta: has_baseline ? signed(r.total_cost - b.total_cost, 2, "", "£") : "",
                     cls: cls(r.total_cost - b.total_cost, -1)
@@ -441,6 +449,7 @@ var app = new Vue({
             if (this.mode == "year") {
                 list.push({
                     label: "Cost (Agile 2024)",
+                    short: "Agile",
                     value: "£" + r.agile_cost.toFixed(2),
                     delta: has_baseline ? signed(r.agile_cost - b.agile_cost, 2, "", "£") : "",
                     cls: cls(r.agile_cost - b.agile_cost, -1)
@@ -448,6 +457,7 @@ var app = new Vue({
             }
             list.push({
                 label: "Mean room temp",
+                short: "Room",
                 value: r.mean_room_temp.toFixed(2) + " °C",
                 delta: has_baseline ? signed(r.mean_room_temp - b.mean_room_temp, 2, " °C") : "",
                 cls: "neutral"

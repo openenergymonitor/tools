@@ -17,9 +17,12 @@
     /* ====================================================================
        Dynamic heat pump simulator — app shell
        Wide (>=992px): three columns (group rail | parameters | results),
-       each scrolling internally within the viewport. Narrow: the columns
-       stack, the rail becomes a horizontal chip row and the run bar
-       sticks to the bottom of the screen.
+       each scrolling internally within the viewport. Narrow: one page
+       scroller — the rail sits beside the parameter fields as a
+       collapsible sidebar, and the run bar + headline KPI strip stick to
+       the bottom of the screen while the config is edited, settling into
+       their natural position once scrolled past.
+       (Layout reference: heat-pump-simulator-vue-reference.html)
        ==================================================================== */
     .hp-app {
         --hp-bg: #f6f4f0;
@@ -33,18 +36,43 @@
         --hp-accent: #f0c400;
         --hp-good: #2e9e5b;
         --hp-bad: #c0392b;
+        --hp-strip-h: 56px;   /* mobile KPI strip height = run bar offset */
         display: flex;
         flex-direction: column;
         background: var(--hp-bg);
         color: var(--hp-ink);
     }
+    /* Narrow: a wrapping flex row — rail and panel share the first line,
+       the KPI strip and results each take a full line below. Wide: the
+       classic three-column row. */
     .hp-body {
         display: flex;
-        flex-direction: column;
+        flex-flow: row wrap;
+    }
+    @media (max-width: 991.98px) {
+        /* Non-zero basis so the panel wraps onto a fresh line (a zero-basis
+           item would "fit" on the full-width section label's line and
+           collapse to 0 width when the rail is hidden), but small enough to
+           share a line with the 145px rail on narrow phones. */
+        .hp-body > .hp-panel { flex: 1 1 160px; min-width: 0; }
+        .hp-body > .hp-kpi-strip,
+        .hp-body > .hp-results { flex: 0 0 100%; }
     }
     @media (min-width: 992px) {
         .hp-app { height: calc(100vh - 58px); }
-        .hp-body { flex: 1 1 auto; flex-direction: row; min-height: 0; }
+        .hp-body { flex: 1 1 auto; flex-wrap: nowrap; min-height: 0; }
+    }
+
+    /* Narrow-only section label above the rail + panel pair */
+    .hp-section-label {
+        flex: 0 0 100%;
+        padding: .55rem .9rem;
+        font-size: .65rem;
+        font-weight: 600;
+        letter-spacing: .08em;
+        color: #a8a29a;
+        background: var(--hp-rail-bg);
+        border-bottom: 1px solid var(--hp-border-soft);
     }
 
     /* --- Header bar ----------------------------------------------------- */
@@ -79,13 +107,17 @@
     }
 
     /* --- Parameter group rail ------------------------------------------- */
+    /* A vertical list at every width. On narrow screens it sits beside the
+       parameter fields and slides away via the toggle in the panel header
+       (.hp-rail-toggle) to give the fields the full width. */
     .hp-rail {
-        flex: none;
+        flex: 0 0 145px;
         display: flex;
-        flex-direction: row;
-        overflow-x: auto;
+        flex-direction: column;
+        overflow-y: auto;
+        padding: .4rem 0;
         background: var(--hp-rail-bg);
-        border-bottom: 1px solid var(--hp-border);
+        border-right: 1px solid var(--hp-border);
     }
     .hp-rail-btn {
         display: flex;
@@ -94,19 +126,21 @@
         border: 0;
         background: transparent;
         text-align: left;
-        white-space: nowrap;
-        font-size: .8rem;
+        font-size: .78rem;
+        line-height: 1.3;
         color: #6b665e;
-        padding: .55rem .9rem;
-        border-bottom: 3px solid transparent;
+        padding: .5rem .75rem;
+        border-left: 3px solid transparent;
     }
     .hp-rail-btn.active {
         color: var(--hp-ink);
         font-weight: 600;
         background: var(--hp-surface);
-        border-bottom-color: #0d6efd;
+        border-left-color: #0d6efd;
     }
+    .hp-rail-btn-essentials.active { border-left-color: var(--hp-accent); }
     .hp-rail-btn .hp-dot {
+        flex: none;
         width: 6px;
         height: 6px;
         border-radius: 50%;
@@ -132,25 +166,29 @@
         line-height: 1.6;
         color: #a8a29a;
     }
+    @media (max-width: 991.98px) {
+        .hp-rail-btn { min-height: 44px; }   /* comfortable touch target */
+        .hp-rail.hp-rail-closed { display: none; }
+    }
     @media (min-width: 992px) {
-        .hp-rail {
-            flex: 0 0 200px;
-            flex-direction: column;
-            overflow-x: hidden;
-            overflow-y: auto;
-            padding: .6rem 0;
-            border-bottom: 0;
-            border-right: 1px solid var(--hp-border);
-        }
-        .hp-rail-btn {
-            white-space: normal;
-            padding: .5rem 1rem;
-            border-bottom: 0;
-            border-left: 3px solid transparent;
-        }
-        .hp-rail-btn.active { border-left-color: #0d6efd; }
-        .hp-rail-btn.active .hp-dot { background: var(--hp-accent); }
-        .hp-rail-btn-essentials.active { border-left-color: var(--hp-accent); }
+        .hp-rail { flex-basis: 200px; padding: .6rem 0; }
+        .hp-rail-btn { font-size: .8rem; padding: .5rem 1rem; }
+    }
+
+    /* Narrow-only button that slides the group rail away / back */
+    .hp-rail-toggle {
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        font-family: var(--bs-font-monospace);
+        font-size: .9rem;
+        color: #3d3a35;
+        background: var(--hp-rail-bg);
+        border: 1px solid #ddd8d1;
+        border-radius: .375rem;
     }
 
     /* --- Parameter panel ------------------------------------------------- */
@@ -158,6 +196,11 @@
         display: flex;
         flex-direction: column;
         background: var(--hp-surface);
+    }
+    @media (max-width: 991.98px) {
+        .hp-panel-header,
+        .hp-panel-fields,
+        .hp-runbar { padding-left: .9rem; padding-right: .9rem; }
     }
     @media (min-width: 992px) {
         .hp-panel {
@@ -210,7 +253,9 @@
     }
     .hp-field-wide { grid-column: 1 / -1; }
     @media (max-width: 575.98px) {
-        .hp-field-grid { grid-template-columns: 1fr; }
+        /* minmax(0, 1fr) so the track can shrink below the steppers'
+           min-content width when the group rail is open beside the panel */
+        .hp-field-grid { grid-template-columns: minmax(0, 1fr); }
     }
     .hp-field {
         display: flex;
@@ -263,6 +308,13 @@
         padding-right: .4rem;
         white-space: nowrap;
     }
+    /* Narrow: grow the -/+ buttons towards a 44px touch target */
+    @media (max-width: 991.98px) {
+        .hp-stepper button {
+            padding: .5rem .8rem;
+            font-size: 1rem;
+        }
+    }
 
     /* Read-only stat rows */
     .hp-stats { margin-top: .75rem; }
@@ -282,7 +334,9 @@
     }
     .hp-switch { font-size: .78rem; }
 
-    /* Run bar at the bottom of the parameter panel */
+    /* Run bar at the bottom of the parameter panel. On narrow screens it
+       sticks just above the KPI strip while the config is edited, then
+       settles into its natural place at the end of the panel. */
     .hp-runbar {
         flex: none;
         display: flex;
@@ -295,11 +349,50 @@
     @media (max-width: 991.98px) {
         .hp-runbar {
             position: sticky;
-            bottom: 0;
+            bottom: var(--hp-strip-h);
             z-index: 10;
+            flex-wrap: wrap;
+            border-bottom: 1px solid var(--hp-border-soft);
             box-shadow: 0 -3px 10px rgba(0, 0, 0, .05);
         }
     }
+
+    /* Narrow-only headline results strip: sticks to the bottom edge below
+       the run bar. 1px grid gaps over the border colour draw the
+       separators between cells. */
+    .hp-kpi-strip {
+        position: sticky;
+        bottom: 0;
+        z-index: 9;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 1px;
+        height: var(--hp-strip-h);
+        background: var(--hp-border);
+        border-top: 1px solid #d8d3cb;
+        border-bottom: 1px solid #d8d3cb;
+    }
+    .hp-kpi-strip-cell {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1px;
+        padding: .25rem;
+        overflow: hidden;
+        background: var(--hp-surface);
+    }
+    .hp-kpi-strip-label {
+        font-size: .6rem;
+        color: var(--hp-muted);
+    }
+    .hp-kpi-strip-value {
+        font-family: var(--bs-font-monospace);
+        font-size: .85rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .hp-kpi-strip .hp-kpi-delta { font-size: .6rem; }
     .hp-badge-unrun {
         font-size: .72rem;
         font-weight: 500;
@@ -379,12 +472,16 @@
     }
     .hp-run-dot.stale { background: #b8860b; }
 
-    /* KPI cards */
+    /* KPI cards. On narrow screens the sticky strip is the results line,
+       so the full cards are wide-only (the tables view has every value). */
     .hp-kpi-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
         gap: .75rem;
         margin-bottom: .9rem;
+    }
+    @media (max-width: 991.98px) {
+        .hp-kpi-grid { display: none; }
     }
     .hp-kpi {
         background: var(--hp-surface);
@@ -492,8 +589,12 @@
 
     <div class="hp-body">
 
+        <div class="hp-section-label d-lg-none">PARAMETER GROUPS</div>
+
         <!-- ================= Parameter group rail ================= -->
-        <nav class="hp-rail">
+        <!-- Narrow: sits beside the parameter fields; the panel header
+             toggle adds hp-rail-closed to give the fields full width -->
+        <nav class="hp-rail" :class="{'hp-rail-closed': !ui.rail_open}">
             <button type="button" class="hp-rail-btn hp-rail-btn-essentials"
                 :class="{active: ui.group == 'essentials'}" @click="select_group('essentials')">
                 <span class="hp-dot"></span>Essentials
@@ -515,6 +616,10 @@
         <section class="hp-panel">
             <div class="hp-panel-header">
                 <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="hp-rail-toggle d-lg-none"
+                        :aria-expanded="ui.rail_open ? 'true' : 'false'"
+                        :aria-label="ui.rail_open ? 'Hide group list' : 'Show group list'"
+                        @click="ui.rail_open = !ui.rail_open">{{ ui.rail_open ? '&lsaquo;' : '&rsaquo;' }}</button>
                     <h2 class="hp-panel-title">{{ group_info[ui.group].title }}</h2>
                     <span v-if="ui.group == 'essentials'" class="hp-badge-essentials">most-changed</span>
                 </div>
@@ -561,31 +666,33 @@
 
                 <!-- Room thermostat schedule -->
                 <div v-show="ui.group == 'schedule'">
-                    <table class="table table-sm hp-table-panel">
-                        <tr>
-                            <th>Time</th>
-                            <th>Set point</th>
-                            <th>Price</th>
-                            <th class="text-end"><button type="button" class="btn btn-sm btn-outline-secondary" @click="add_space"><i class="fas fa-plus"></i></button></th>
-                        </tr>
-                        <tr v-for="(item, index) in schedule">
-                            <td><input type="text" class="form-control form-control-sm" style="width:70px"
-                                v-model="item.start" @change="simulate"></td>
-                            <td>
-                                <div class="input-group input-group-sm">
-                                    <input type="text" class="form-control" v-model.number="item.set_point" @change="simulate">
-                                    <span class="input-group-text">&deg;C</span>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="input-group input-group-sm">
-                                    <input type="text" class="form-control" v-model.number="item.price" @change="simulate">
-                                    <span class="input-group-text">p</span>
-                                </div>
-                            </td>
-                            <td class="text-end"><button type="button" class="btn btn-sm btn-outline-secondary" @click="delete_space(index)"><i class="fas fa-trash"></i></button></td>
-                        </tr>
-                    </table>
+                    <div class="table-responsive">
+                        <table class="table table-sm hp-table-panel">
+                            <tr>
+                                <th>Time</th>
+                                <th>Set point</th>
+                                <th>Price</th>
+                                <th class="text-end"><button type="button" class="btn btn-sm btn-outline-secondary" @click="add_space"><i class="fas fa-plus"></i></button></th>
+                            </tr>
+                            <tr v-for="(item, index) in schedule">
+                                <td><input type="text" class="form-control form-control-sm" style="width:70px"
+                                    v-model="item.start" @change="simulate"></td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" class="form-control" v-model.number="item.set_point" @change="simulate">
+                                        <span class="input-group-text">&deg;C</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" class="form-control" v-model.number="item.price" @change="simulate">
+                                        <span class="input-group-text">p</span>
+                                    </div>
+                                </td>
+                                <td class="text-end"><button type="button" class="btn btn-sm btn-outline-secondary" @click="delete_space(index)"><i class="fas fa-trash"></i></button></td>
+                            </tr>
+                        </table>
+                    </div>
 
                     <div class="hp-stats">
                         <div class="hp-stat">
@@ -610,36 +717,38 @@
 
                 <!-- DHW schedule -->
                 <div v-show="ui.group == 'dhw_schedule'">
-                    <table class="table table-sm hp-table-panel">
-                        <tr>
-                            <th>Time</th>
-                            <th>Set point</th>
-                            <th>Duration</th>
-                            <th>Mod. limit</th>
-                        </tr>
-                        <tr v-for="(item, index) in dhw_schedule">
-                            <td><input type="text" class="form-control form-control-sm" style="width:70px"
-                                v-model="item.start" @change="simulate"></td>
-                            <td>
-                                <div class="input-group input-group-sm">
-                                    <input type="text" class="form-control" v-model.number="item.set_point" @change="simulate">
-                                    <span class="input-group-text">&deg;C</span>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="input-group input-group-sm">
-                                    <input type="text" class="form-control" v-model.number="item.duration" @change="simulate">
-                                    <span class="input-group-text">s</span>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="input-group input-group-sm">
-                                    <input type="text" class="form-control" v-model.number="item.modulation" @change="simulate">
-                                    <span class="input-group-text">%</span>
-                                </div>
-                            </td>
-                        </tr>
-                    </table>
+                    <div class="table-responsive">
+                        <table class="table table-sm hp-table-panel">
+                            <tr>
+                                <th>Time</th>
+                                <th>Set point</th>
+                                <th>Duration</th>
+                                <th>Mod. limit</th>
+                            </tr>
+                            <tr v-for="(item, index) in dhw_schedule">
+                                <td><input type="text" class="form-control form-control-sm" style="width:70px"
+                                    v-model="item.start" @change="simulate"></td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" class="form-control" v-model.number="item.set_point" @change="simulate">
+                                        <span class="input-group-text">&deg;C</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" class="form-control" v-model.number="item.duration" @change="simulate">
+                                        <span class="input-group-text">s</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" class="form-control" v-model.number="item.modulation" @change="simulate">
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
                     <p class="hp-note">Set duration to 0 to disable a window. Modulation limits below the
                         heat pump minimum modulation ({{ heatpump.minimum_modulation }}%) are raised to it.</p>
                 </div>
@@ -927,35 +1036,37 @@
 
                     <p class="hp-note"><b>Layer 1:</b> external, <b>Layer 3:</b> internal.</p>
 
-                    <table class="table table-sm hp-table-panel">
-                        <tr>
-                            <th>Layer</th>
-                            <th>Proportion</th>
-                            <th>W/K</th>
-                            <th>kWh/K</th>
-                        </tr>
-                        <tr v-for="(layer, index) in building.fabric">
-                            <td>{{ index + 1 }}</td>
-                            <td>
-                                <div class="input-group input-group-sm">
-                                    <input type="text" class="form-control" v-model.number="layer.proportion" @change="simulate" :disabled="index == 0">
-                                    <span class="input-group-text">%</span>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="input-group input-group-sm">
-                                    <input type="text" class="form-control" :value="layer.WK | toFixed(0)" disabled>
-                                    <span class="input-group-text">W/K</span>
-                                </div>
-                            </td>
-                            <td>
-                                <div class="input-group input-group-sm">
-                                    <input type="text" class="form-control" v-model.number="layer.kWhK" @change="simulate">
-                                    <span class="input-group-text">kWh/K</span>
-                                </div>
-                            </td>
-                        </tr>
-                    </table>
+                    <div class="table-responsive">
+                        <table class="table table-sm hp-table-panel">
+                            <tr>
+                                <th>Layer</th>
+                                <th>Proportion</th>
+                                <th>W/K</th>
+                                <th>kWh/K</th>
+                            </tr>
+                            <tr v-for="(layer, index) in building.fabric">
+                                <td>{{ index + 1 }}</td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" class="form-control" v-model.number="layer.proportion" @change="simulate" :disabled="index == 0">
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" class="form-control" :value="layer.WK | toFixed(0)" disabled>
+                                        <span class="input-group-text">W/K</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" class="form-control" v-model.number="layer.kWhK" @change="simulate">
+                                        <span class="input-group-text">kWh/K</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
                 </div>
 
                 <!-- Evaporator frosting & defrost -->
@@ -1103,6 +1214,18 @@
                 </template>
             </div>
         </section>
+
+        <!-- ================= Headline results strip (narrow only) ================= -->
+        <!-- Sticks to the bottom edge with the run bar just above it, so the
+             edit -> run -> read loop stays on screen while scrolled up in the
+             config; settles here, above the results, once scrolled past -->
+        <div class="hp-kpi-strip d-lg-none">
+            <div class="hp-kpi-strip-cell" v-for="k in kpis.slice(0, 4)">
+                <span class="hp-kpi-strip-label">{{ k.short }}</span>
+                <span class="hp-kpi-strip-value">{{ k.value }}</span>
+                <span v-if="k.delta" class="hp-kpi-delta" :class="k.cls">{{ k.delta }}</span>
+            </div>
+        </div>
 
         <!-- ================= Results column ================= -->
         <section class="hp-results">
