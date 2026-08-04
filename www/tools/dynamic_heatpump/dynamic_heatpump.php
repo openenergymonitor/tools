@@ -12,7 +12,7 @@
 
 <style>
     /* Hide the raw template until Vue has mounted */
-    [v-cloak] { display: none; }
+    [v-cloak] { display: none !important; }
 
     /* ====================================================================
        Dynamic heat pump simulator — app shell
@@ -568,10 +568,9 @@
             <span class="hp-title">Dynamic heat pump simulator</span>
             <span class="hp-subtitle">{{ mode == 'day' ? 'single day' : 'full year' }} &middot; run {{ simulation_index }}<span v-if="baseline_enabled"> &middot; vs baseline</span></span>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-none d-lg-flex gap-2">
             <button type="button" class="btn btn-sm hp-btn-dark" @click="import_config">Import</button>
             <button type="button" class="btn btn-sm hp-btn-dark" @click="export_config">Export</button>
-            <button type="button" class="btn btn-sm hp-btn-dark" @click="save_baseline">Save as baseline</button>
         </div>
     </header>
 
@@ -1323,7 +1322,10 @@
                 <!-- Tables view -->
                 <div v-show="ui.view == 'tables'">
                     <div class="hp-card">
-                        <div class="hp-card-header">Results{{ baseline_enabled ? ' vs baseline' : '' }}</div>
+                        <div class="hp-card-header">
+                            <span>Results{{ baseline_enabled ? ' vs baseline' : '' }}</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @click="save_baseline">Save as baseline</button>
+                        </div>
                         <div class="table-responsive">
                             <table class="table">
                                 <tr>
@@ -1376,7 +1378,7 @@
                                 </tr>
                             </table>
                         </div>
-                        <p class="hp-note" v-if="!baseline_enabled">Use <b>Save as baseline</b> (top right) to
+                        <p class="hp-note" v-if="!baseline_enabled">Use <b>Save as baseline</b> (above) to
                             keep the current results for comparison as you change parameters.</p>
                     </div>
 
