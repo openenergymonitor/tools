@@ -46,7 +46,7 @@ var GROUP_INFO = {
         label: "Essentials",
         title: "Essentials",
         desc: "The handful of numbers that change between most runs. Everything " +
-              "else keeps its current value — open a group below to go deeper."
+              "else keeps its current value, open a group below to go deeper."
     },
     schedule: {
         label: "Room schedule",
@@ -60,7 +60,7 @@ var GROUP_INFO = {
         desc: "Hot water reheat windows. During a window the heat pump reheats " +
               "the cylinder to the set point (with hysteresis) if needed, taking " +
               "priority over space heating via a diverter valve. The modulation " +
-              "limit caps output during the window — an eco mode: e.g. 40% of " +
+              "limit caps output during the window, an eco mode: e.g. 40% of " +
               "capacity reheats more slowly at a lower flow temperature and " +
               "better COP."
     },
@@ -84,7 +84,7 @@ var GROUP_INFO = {
         desc: "Pipework between the heat pump and the building entry (metering " +
               "point 2), modelled as 0.5 m finite-volume cells with transport " +
               "delay, warm-front propagation and stagnant cool-down between " +
-              "cycles — the point 1 → point 2 gap is the primary pipework penalty."
+              "cycles, the point 1 → point 2 gap is the primary pipework penalty."
     },
     fabric: {
         label: "Building fabric",
@@ -97,7 +97,7 @@ var GROUP_INFO = {
         label: "Frost & defrost",
         title: "Evaporator frosting & defrost",
         desc: "Frost builds on the outdoor coil when it runs below 0°C in moist " +
-              "air — worst in the 0–5°C high-humidity band. Capacity and COP " +
+              "air, worst in the 0–5°C high-humidity band. Capacity and COP " +
               "fall linearly as frost builds; at the trigger threshold the unit " +
               "runs a reverse-cycle defrost, plus a fixed per-cycle overhead. " +
               "See frost-literature.md for the published model basis."

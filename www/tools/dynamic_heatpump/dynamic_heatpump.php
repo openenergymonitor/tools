@@ -714,7 +714,7 @@
             <div class="hp-rail-footer d-none d-lg-block">
                 Sim {{ results.sim_time_ms | toFixed(0) }} ms &middot; run {{ simulation_index }}<br>
                 Frost model {{ frost.enabled ? 'on' : 'off' }}<br>
-                <a href="https://github.com/openenergymonitor/tools/tree/main/www/tools/dynamic_heatpump" target="_blank" rel="noopener">Open source &mdash; help improve</a>
+                <a href="https://github.com/openenergymonitor/tools/tree/main/www/tools/dynamic_heatpump" target="_blank" rel="noopener">Open source: help improve</a>
             </div>
         </nav>
 
@@ -1050,8 +1050,8 @@
                         <div class="hp-field">
                             <label class="hp-field-label">Pipework model</label>
                             <select class="form-select form-select-sm" v-model="primary.mode" @change="simulate">
-                                <option value="simple">Simple &mdash; uniform pipe in outside air</option>
-                                <option value="segmented">Segmented &mdash; per-stage material &amp; environment</option>
+                                <option value="simple">Simple: uniform pipe in outside air</option>
+                                <option value="segmented">Segmented: per-stage material &amp; environment</option>
                             </select>
                         </div>
                         <param-field label="Flow rate" unit="L/min" :step="1" :min="1" :max="40"
@@ -1261,7 +1261,7 @@
                         </div>
                     </div>
                     <p class="hp-note" v-if="mode == 'day'">Solar gains, PV output and battery storage use the
-                        annual dataset &mdash; switch to full year mode to explore them.</p>
+                        annual dataset, switch to full year mode to explore them.</p>
                 </div>
 
                 <!-- Outside temperature -->
