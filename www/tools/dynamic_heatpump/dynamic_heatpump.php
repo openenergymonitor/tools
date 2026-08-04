@@ -32,7 +32,7 @@
         --hp-border-soft: #e9e5df;
         --hp-dark: #1f1d1a;
         --hp-ink: #1f1d1a;
-        --hp-muted: #8a857d;
+        --hp-muted: #55504a;
         --hp-accent: #f0c400;
         --hp-good: #2e9e5b;
         --hp-bad: #c0392b;
@@ -70,7 +70,7 @@
         font-size: .65rem;
         font-weight: 600;
         letter-spacing: .08em;
-        color: #a8a29a;
+        color: #6b665e;
         background: var(--hp-rail-bg);
         border-bottom: 1px solid var(--hp-border-soft);
     }
@@ -93,7 +93,7 @@
     }
     .hp-subtitle {
         font-size: .75rem;
-        color: #9b958c;
+        color: #d5d0c8;
         margin-left: .5rem;
     }
     .hp-btn-dark {
@@ -128,7 +128,7 @@
         text-align: left;
         font-size: .78rem;
         line-height: 1.3;
-        color: #6b665e;
+        color: #423e38;
         padding: .5rem .75rem;
         border-left: 3px solid transparent;
     }
@@ -151,7 +151,7 @@
         font-size: .65rem;
         font-weight: 600;
         letter-spacing: .08em;
-        color: #a8a29a;
+        color: #6b665e;
         padding: .15rem 1rem .4rem;
     }
     .hp-rail-divider {
@@ -164,7 +164,7 @@
         border-top: 1px solid var(--hp-border-soft);
         font-size: .68rem;
         line-height: 1.6;
-        color: #a8a29a;
+        color: #6b665e;
     }
     @media (max-width: 991.98px) {
         .hp-rail-btn { min-height: 44px; }   /* comfortable touch target */
@@ -185,7 +185,7 @@
         height: 30px;
         font-family: var(--bs-font-monospace);
         font-size: .9rem;
-        color: #3d3a35;
+        color: #26231f;
         background: var(--hp-rail-bg);
         border: 1px solid #ddd8d1;
         border-radius: .375rem;
@@ -230,7 +230,7 @@
     .hp-badge-essentials {
         font-size: .65rem;
         font-weight: 500;
-        color: #8a6d00;
+        color: #6b5400;
         background: #fff5cc;
         border-radius: 3px;
         padding: 2px 6px;
@@ -264,15 +264,15 @@
     }
     .hp-field-label {
         font-size: .74rem;
-        color: #6b665e;
+        color: #423e38;
     }
-    .hp-field-label small { color: #a8a29a; }
+    .hp-field-label small { color: #6b665e; }
 
     /* Stepper input: [-] value unit [+] */
     .hp-stepper {
         display: flex;
         align-items: center;
-        border: 1px solid #ccc7bf;
+        border: 1px solid #aaa49b;
         border-radius: .375rem;
         background: var(--hp-surface);
         overflow: hidden;
@@ -281,7 +281,7 @@
     .hp-stepper button {
         border: 0;
         background: transparent;
-        color: #6b665e;
+        color: #423e38;
         font-family: var(--bs-font-monospace);
         padding: .25rem .6rem;
         line-height: 1.5;
@@ -304,7 +304,7 @@
     .hp-stepper .hp-unit {
         font-size: .68rem;
         font-family: var(--bs-font-monospace);
-        color: #a8a29a;
+        color: #6b665e;
         padding-right: .4rem;
         white-space: nowrap;
     }
@@ -323,7 +323,7 @@
         justify-content: space-between;
         gap: .75rem;
         font-size: .78rem;
-        color: #3d3a35;
+        color: #26231f;
         padding: .3rem 0;
         border-top: 1px dashed var(--hp-border-soft);
     }
@@ -396,7 +396,7 @@
     .hp-badge-unrun {
         font-size: .72rem;
         font-weight: 500;
-        color: #b8860b;
+        color: #8a6500;
         background: #fff8e1;
         border: 1px solid #f0e2b0;
         border-radius: 4px;
