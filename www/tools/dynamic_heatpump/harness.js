@@ -39,6 +39,7 @@ const set_snippet = arg_value('--set');
 
 // --- Browser stubs ----------------------------------------------------------
 global.window = global;
+global.document = {};
 global.alert = function (msg) { console.log('[alert]', msg); };
 global.prompt = function () { return null; };
 

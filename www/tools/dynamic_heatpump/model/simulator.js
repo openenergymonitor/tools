@@ -207,6 +207,9 @@ var simulator = (function () {
         var cylTopT_data = [];
         var cylBottomT_data = [];
         var frost_data = [];
+        var dhw_mode_data = [];
+        var ch_mode_data = [];
+        var defrost_data = [];
 
         var outsideT_histogram = {};
 
@@ -611,6 +614,11 @@ var simulator = (function () {
                 cylTopT_data[i] = cyl_T[cyl_params.node_count - 1];
                 cylBottomT_data[i] = cyl_T[0];
                 frost_data[i] = frost_state.mass;
+                // Mode indicators (powergraph-style shading) and the reverse
+                // cycle defrost draw on the heating circuit
+                dhw_mode_data[i] = dhw_mode ? 1 : 0;
+                ch_mode_data[i] = (heatpump_heat > 0 && !dhw_mode) ? 1 : 0;
+                defrost_data[i] = defrost_draw;
 
                 // == Stats ==
 
@@ -806,7 +814,10 @@ var simulator = (function () {
                     solar_pv_data: solar_pv_data,
                     cylTopT_data: cylTopT_data,
                     cylBottomT_data: cylBottomT_data,
-                    frost_data: frost_data
+                    frost_data: frost_data,
+                    dhw_mode_data: dhw_mode_data,
+                    ch_mode_data: ch_mode_data,
+                    defrost_data: defrost_data
                 }
             });
         }

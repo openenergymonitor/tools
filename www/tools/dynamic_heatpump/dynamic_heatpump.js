@@ -289,11 +289,28 @@ var app = new Vue({
             { start: "15:00", set_point: 19, price: price_cap },
             { start: "22:00", set_point: 17, price: price_cap }
         ],
-        show_targetT: false,
-        show_cyl_topT: true,
-        show_cyl_bottomT: true,
-        show_frost: false,
-        show_agile: false,
+        // Chart legend: one entry per series, rendered as clickable pills.
+        // `show` is the default visibility; colours are shared with the plot
+        // so the legend dots always match the chart. Order = legend order.
+        chart_series: {
+            dhw:        { label: "DHW",         color: "#8888ff", show: true },
+            ch:         { label: "CH",          color: "#ffbb66", show: false },
+            heat:       { label: "Heat",        color: "#edc240", show: true },
+            elec:       { label: "Electric",    color: "#afd8f8", show: true },
+            solar_pv:   { label: "Solar PV",    color: "#f5a623", show: true },
+            flowT:      { label: "Flow T",      color: "#cb4b4b", show: true },
+            returnT:    { label: "Return T",    color: "#4da74d", show: true },
+            outsideT:   { label: "Outside T",   color: "#c880ff", show: true },
+            roomT:      { label: "Room T",      color: "#000000", show: true },
+            targetT:    { label: "Target T",    color: "#cccccc", show: false },
+            cylTopT:    { label: "Cyl top",     color: "#cc0000", show: true },
+            cylBottomT: { label: "Cyl bottom",  color: "#e08080", show: true },
+            agile:      { label: "Agile price", color: "#a6196b", show: false },
+            frost:      { label: "Frost",       color: "#00aacc", show: false }
+        },
+        // Show the reverse-cycle defrost draw as negative heat, as a heat
+        // meter on the circuit would register it
+        show_negative_heat: true,
         // Evaporator frosting & reverse-cycle defrost (model/frost.js);
         // defaults anchored to the literature review in frost-literature.md
         frost: {
@@ -375,6 +392,10 @@ var app = new Vue({
             window_flowT_weighted: 0,
             window_outsideT_weighted: 0,
             window_flowT_minus_outsideT_weighted: 0,
+            // Energy & COP over the visible chart window (set by plot())
+            window_heat_kwh: 0,
+            window_elec_kwh: 0,
+            window_cop: 0,
             degree_hours_above_setpoint: 0,
             degree_hours_below_setpoint: 0
 
@@ -481,6 +502,11 @@ var app = new Vue({
         replot: function () {
             plot();
         },
+        // Legend pill click: flip a series on/off and redraw
+        toggle_series: function (key) {
+            this.chart_series[key].show = !this.chart_series[key].show;
+            plot();
+        },
         change_mode: function () {
 
             if (this.mode == "day") {
@@ -491,8 +517,8 @@ var app = new Vue({
 
             // Cylinder temperatures clutter the annual chart; show them by
             // default in day view only (the checkboxes still override)
-            this.show_cyl_topT = this.mode == "day";
-            this.show_cyl_bottomT = this.mode == "day";
+            this.chart_series.cylTopT.show = this.mode == "day";
+            this.chart_series.cylBottomT.show = this.mode == "day";
 
             var timestep = 30;
             var itterations = 3600 * 24 * app.days / timestep;

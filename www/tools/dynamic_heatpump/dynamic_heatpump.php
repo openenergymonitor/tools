@@ -540,6 +540,44 @@
     .hp-table-panel { font-size: .84rem; }
     .hp-table-panel td, .hp-table-panel th { padding: .25rem .3rem; vertical-align: middle; }
 
+    /* Chart legend: clickable series pills with colour dots */
+    .hp-legend {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: .35rem;
+    }
+    .hp-legend-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: .38rem;
+        border: 1px solid var(--hp-border);
+        border-radius: 999px;
+        background: var(--hp-surface);
+        font-size: .78rem;
+        line-height: 1.4;
+        color: var(--hp-ink);
+        padding: .14rem .6rem .14rem .45rem;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .hp-legend-pill:hover { border-color: #b5afa6; }
+    .hp-legend-pill.off {
+        color: #8a857d;
+        background: var(--hp-bg);
+        border-style: dashed;
+    }
+    .hp-legend-dot {
+        flex: none;
+        display: block;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        /* Hidden series: hollow dot (no inline background set) */
+        border: 1.5px solid #b5afa6;
+    }
+    .hp-legend-pill:not(.off) .hp-legend-dot { border: 0; }
+
     /* Chart */
     .hp-graph-bound {
         width: 100%;
@@ -1261,6 +1299,9 @@
                     <div class="hp-card">
                         <div class="hp-card-header">
                             <span>Timeseries</span>
+                            <span class="hp-note m-0 fw-normal">Window: {{ stats.window_heat_kwh | toFixed(1) }} kWh heat &middot;
+                                {{ stats.window_elec_kwh | toFixed(1) }} kWh elec &middot;
+                                COP {{ stats.window_cop > 0 ? stats.window_cop.toFixed(2) : '—' }}</span>
                             <div class="btn-group btn-group-sm" role="group">
                                 <button type="button" class="btn btn-outline-secondary" @click="zoom_in">+</button>
                                 <button type="button" class="btn btn-outline-secondary" @click="zoom_out">&minus;</button>
@@ -1275,26 +1316,21 @@
                                 <div class="spinner"></div>
                             </div>
                         </div>
-                        <div class="d-flex flex-wrap gap-3 mt-2">
-                            <div class="form-check form-check-inline hp-switch m-0">
-                                <input class="form-check-input" type="checkbox" id="show_targetT" v-model="show_targetT" @change="replot">
-                                <label class="form-check-label" for="show_targetT">Target temperature</label>
-                            </div>
-                            <div class="form-check form-check-inline hp-switch m-0">
-                                <input class="form-check-input" type="checkbox" id="show_cyl_topT" v-model="show_cyl_topT" @change="replot">
-                                <label class="form-check-label" for="show_cyl_topT">Cylinder top</label>
-                            </div>
-                            <div class="form-check form-check-inline hp-switch m-0">
-                                <input class="form-check-input" type="checkbox" id="show_cyl_bottomT" v-model="show_cyl_bottomT" @change="replot">
-                                <label class="form-check-label" for="show_cyl_bottomT">Cylinder bottom</label>
-                            </div>
-                            <div class="form-check form-check-inline hp-switch m-0">
-                                <input class="form-check-input" type="checkbox" id="show_frost" v-model="show_frost" @change="replot">
-                                <label class="form-check-label" for="show_frost">Frost mass</label>
-                            </div>
-                            <div class="form-check form-check-inline hp-switch m-0">
-                                <input class="form-check-input" type="checkbox" id="show_agile" v-model="show_agile" @change="replot">
-                                <label class="form-check-label" for="show_agile">Agile price</label>
+                        <!-- Interactive legend: one pill per series, click to
+                             show/hide. Dots share the plot colours; hidden
+                             series render dimmed with a hollow dot. -->
+                        <div class="hp-legend mt-2">
+                            <template v-for="(s, key) in chart_series">
+                                <button type="button" v-if="key != 'solar_pv' || mode == 'year'" :key="key"
+                                    class="hp-legend-pill" :class="{off: !s.show}"
+                                    :aria-pressed="s.show ? 'true' : 'false'"
+                                    @click="toggle_series(key)">
+                                    <span class="hp-legend-dot" :style="s.show ? {background: s.color} : {}"></span>{{ s.label }}
+                                </button>
+                            </template>
+                            <div class="form-check form-check-inline hp-switch m-0 ms-auto">
+                                <input class="form-check-input" type="checkbox" id="show_negative_heat" v-model="show_negative_heat" @change="replot">
+                                <label class="form-check-label" for="show_negative_heat">Negative heat during defrosts</label>
                             </div>
                         </div>
                     </div>
