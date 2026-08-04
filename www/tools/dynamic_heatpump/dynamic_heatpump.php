@@ -44,7 +44,7 @@
         --hp-border: #e3e0da;
         --hp-border-soft: #e9e5df;
         --hp-dark: #1f1d1a;
-        --hp-oem: #44b3e2;
+        --hp-oem: #45a2c9;
         --hp-ink: #000;
         --hp-muted: #33302b;
         --hp-accent: #f0c400;
