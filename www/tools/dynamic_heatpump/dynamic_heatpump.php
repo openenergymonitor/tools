@@ -31,11 +31,11 @@
         --hp-border: #e3e0da;
         --hp-border-soft: #e9e5df;
         --hp-dark: #1f1d1a;
-        --hp-ink: #1f1d1a;
-        --hp-muted: #55504a;
+        --hp-ink: #000;
+        --hp-muted: #33302b;
         --hp-accent: #f0c400;
-        --hp-good: #2e9e5b;
-        --hp-bad: #c0392b;
+        --hp-good: #1e7a43;
+        --hp-bad: #a8281a;
         --hp-strip-h: 56px;   /* mobile KPI strip height = run bar offset */
         display: flex;
         flex-direction: column;
@@ -70,7 +70,7 @@
         font-size: .65rem;
         font-weight: 600;
         letter-spacing: .08em;
-        color: #6b665e;
+        color: #44403a;
         background: var(--hp-rail-bg);
         border-bottom: 1px solid var(--hp-border-soft);
     }
@@ -93,11 +93,11 @@
     }
     .hp-subtitle {
         font-size: .75rem;
-        color: #d5d0c8;
+        color: #eae6df;
         margin-left: .5rem;
     }
     .hp-btn-dark {
-        color: #e8e4dd;
+        color: #f5f2ec;
         border: 1px solid #4a4640;
         background: transparent;
     }
@@ -128,7 +128,7 @@
         text-align: left;
         font-size: .78rem;
         line-height: 1.3;
-        color: #423e38;
+        color: #1f1d1a;
         padding: .5rem .75rem;
         border-left: 3px solid transparent;
     }
@@ -151,7 +151,7 @@
         font-size: .65rem;
         font-weight: 600;
         letter-spacing: .08em;
-        color: #6b665e;
+        color: #44403a;
         padding: .15rem 1rem .4rem;
     }
     .hp-rail-divider {
@@ -164,7 +164,7 @@
         border-top: 1px solid var(--hp-border-soft);
         font-size: .68rem;
         line-height: 1.6;
-        color: #6b665e;
+        color: #44403a;
     }
     @media (max-width: 991.98px) {
         .hp-rail-btn { min-height: 44px; }   /* comfortable touch target */
@@ -185,7 +185,7 @@
         height: 30px;
         font-family: var(--bs-font-monospace);
         font-size: .9rem;
-        color: #26231f;
+        color: #000;
         background: var(--hp-rail-bg);
         border: 1px solid #ddd8d1;
         border-radius: .375rem;
@@ -230,7 +230,7 @@
     .hp-badge-essentials {
         font-size: .65rem;
         font-weight: 500;
-        color: #6b5400;
+        color: #4d3c00;
         background: #fff5cc;
         border-radius: 3px;
         padding: 2px 6px;
@@ -264,9 +264,9 @@
     }
     .hp-field-label {
         font-size: .74rem;
-        color: #423e38;
+        color: #1f1d1a;
     }
-    .hp-field-label small { color: #6b665e; }
+    .hp-field-label small { color: #44403a; }
 
     /* Stepper input: [-] value unit [+] */
     .hp-stepper {
@@ -281,7 +281,7 @@
     .hp-stepper button {
         border: 0;
         background: transparent;
-        color: #423e38;
+        color: #1f1d1a;
         font-family: var(--bs-font-monospace);
         padding: .25rem .6rem;
         line-height: 1.5;
@@ -304,16 +304,9 @@
     .hp-stepper .hp-unit {
         font-size: .68rem;
         font-family: var(--bs-font-monospace);
-        color: #6b665e;
+        color: #44403a;
         padding-right: .4rem;
         white-space: nowrap;
-    }
-    /* Narrow: grow the -/+ buttons towards a 44px touch target */
-    @media (max-width: 991.98px) {
-        .hp-stepper button {
-            padding: .5rem .8rem;
-            font-size: 1rem;
-        }
     }
 
     /* Read-only stat rows */
@@ -323,7 +316,7 @@
         justify-content: space-between;
         gap: .75rem;
         font-size: .78rem;
-        color: #26231f;
+        color: #000;
         padding: .3rem 0;
         border-top: 1px dashed var(--hp-border-soft);
     }
@@ -354,6 +347,11 @@
             flex-wrap: wrap;
             border-bottom: 1px solid var(--hp-border-soft);
             box-shadow: 0 -3px 10px rgba(0, 0, 0, .05);
+        }
+        /* When the group rail is open beside the panel, bleed the bar left
+           under the rail's 145px column so it spans the full screen width */
+        .hp-rail:not(.hp-rail-closed) ~ .hp-panel .hp-runbar {
+            margin-left: -145px;
         }
     }
 
@@ -396,7 +394,7 @@
     .hp-badge-unrun {
         font-size: .72rem;
         font-weight: 500;
-        color: #8a6500;
+        color: #5c4400;
         background: #fff8e1;
         border: 1px solid #f0e2b0;
         border-radius: 4px;
