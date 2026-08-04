@@ -37,6 +37,50 @@ function view_calc_interval() {
     }) || 30;
 }
 
+// Pan / zoom a {start, end} window (seconds) within 0..max, refusing to zoom
+// tighter than min_span. Shared by the power view (`view`) and the daily bar
+// chart (`bar_view` in bargraph.js) so both drive the same nav control
+function view_nav(v, max, min_span, action) {
+    var range = v.end - v.start;
+    var center = (v.start + v.end) / 2;
+
+    if (action == "zoom_out") {
+        range = range * 2;
+        v.start = center - range / 2;
+        v.end = center + range / 2;
+        if (v.start < 0) v.start = 0;
+        if (v.end > max) v.end = max;
+
+    } else if (action == "zoom_in") {
+        range = range / 2;
+        if (range < min_span) range = min_span;
+        v.start = center - range / 2;
+        v.end = center + range / 2;
+
+    } else if (action == "pan_left") {
+        var shift_left = range * 0.25;
+        v.start -= shift_left;
+        v.end -= shift_left;
+        if (v.start < 0) {
+            v.end = range;
+            v.start = 0;
+        }
+
+    } else if (action == "pan_right") {
+        var shift_right = range * 0.25;
+        v.start += shift_right;
+        v.end += shift_right;
+        if (v.end > max) {
+            v.start = max - range;
+            v.end = max;
+        }
+
+    } else if (action == "reset") {
+        v.start = 0;
+        v.end = max;
+    }
+}
+
 // Downsample a fixed 30 s interval series to [time_ms, value] pairs over the
 // current view window. aggregate: "mean" (default) or "max" — max keeps short
 // on/off mode bands visible at coarse zoom levels
@@ -253,6 +297,9 @@ var previousPoint = false;
 // Delegated via document: #graph lives inside the Vue app, so the node this
 // script sees at load time is replaced when Vue mounts and re-renders
 $(document).on("plothover", "#graph", function (event, pos, item) {
+    // The daily bar chart has its own tooltip (bargraph.js)
+    if (app && app.ui.chart == "daily") return;
+
     if (item) {
         if (previousPoint != item.datapoint) {
             previousPoint = item.datapoint;
@@ -293,6 +340,9 @@ $(document).on("plothover", "#graph", function (event, pos, item) {
 
 // plot selection to zoom (delegated for the same reason as plothover above)
 $(document).on("plotselected", "#graph", function (event, ranges) {
+    // The daily bar chart zooms its own window (bargraph.js)
+    if (app && app.ui.chart == "daily") return;
+
     // Zooming
     view.start = ranges.xaxis.from*0.001;
     view.end = ranges.xaxis.to*0.001;
@@ -336,7 +386,8 @@ function tooltip(x, y, contents, bgColour, borderColour = "rgb(255, 221, 221)") 
 
 $(window).resize(function () {
     $('#graph').width($('#graph_bound').width());
-    plot();
+    // chart_redraw() (bargraph.js) dispatches to whichever chart is showing
+    chart_redraw();
 });
 
 function show_spinner() {

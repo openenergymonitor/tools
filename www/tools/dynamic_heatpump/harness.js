@@ -49,6 +49,8 @@ global.Vue = function (opts) {
     if (opts.methods) {
         for (const k in opts.methods) this[k] = opts.methods[k].bind(this);
     }
+    // No render cycle to wait for, so run the callback straight away
+    this.$nextTick = function (cb) { cb(); };
     return this;
 };
 Vue.filter = function () {};
@@ -94,6 +96,8 @@ const timeseries_file = path.join(BASE, 'timeseries.js');
 if (fs.existsSync(timeseries_file)) load(timeseries_file);
 const plot_file = path.join(path.dirname(app_file), 'plot.js');
 if (fs.existsSync(plot_file)) load(plot_file);
+const bargraph_file = path.join(path.dirname(app_file), 'bargraph.js');
+if (fs.existsSync(bargraph_file)) load(bargraph_file);
 load(app_file);
 
 // --- Completion detection ---------------------------------------------------
@@ -150,6 +154,25 @@ function report() {
     let max_flow = -Infinity;
     for (let i = 0; i < flowT.length; i++) if (flowT[i] > max_flow) max_flow = flowT[i];
     console.log('max flow T:          ', max_flow.toFixed(2));
+
+    // Daily bar chart aggregates (bargraph.js): the per-day totals must add
+    // back up to the run totals, so this doubles as a conservation check
+    if (typeof daily !== 'undefined' && daily.length) {
+        let heat = 0, elec = 0, space_heat = 0, water_heat = 0;
+        for (const d of daily) {
+            heat += d.combined.heat;
+            elec += d.combined.elec;
+            space_heat += d.space.heat;
+            water_heat += d.water.heat;
+        }
+        console.log('--- daily aggregates ---');
+        console.log('days:                ', daily.length);
+        console.log('sum heat kWh:        ', heat.toFixed(3),
+            '(net of defrost: run ' + (r.heat_kwh - r.defrost_heat_kwh).toFixed(3) + ')');
+        console.log('sum elec kWh:        ', elec.toFixed(3), '(run ' + r.elec_kwh.toFixed(3) + ')');
+        console.log('space / water heat:  ', space_heat.toFixed(3), '/', water_heat.toFixed(3));
+        console.log('mean daily COP:      ', elec > 0 ? (heat / elec).toFixed(3) : '-');
+    }
 }
 
 // --- Run --------------------------------------------------------------------

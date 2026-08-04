@@ -190,6 +190,9 @@ var app = new Vue({
         ui: {
             group: "essentials",
             view: "chart",
+            // Chart resolution: "power" is the 30 s timeseries, "daily" the
+            // myheatpump-style daily bar chart (bargraph.js)
+            chart: "power",
             rail_open: true
         },
         group_info: GROUP_INFO,
@@ -315,6 +318,22 @@ var app = new Vue({
         // plot() — the `view` global is mutated outside Vue, so the chart
         // nav's enabled/disabled states track this copy instead
         chart_view: { start: 0, end: 0, max: 0 },
+        // Daily bar chart: legend, mode (which energy split the bars show),
+        // reactive mirror of `bar_view` and the totals across visible bars
+        daily_series: {
+            heat:     { label: "Heat",       color: "#edc240", show: true },
+            elec:     { label: "Electric",   color: "#afd8f8", show: true },
+            outsideT: { label: "Outside T",  color: "#c880ff", show: true },
+            cop:      { label: "COP",        color: "#44b3e2", show: true }
+        },
+        bargraph_mode: "combined",
+        bargraph_modes: [
+            { id: "combined", label: "All",   title: "Space heating and hot water combined" },
+            { id: "space",    label: "Space", title: "Space heating only" },
+            { id: "water",    label: "Water", title: "Hot water only" }
+        ],
+        bar_view: { start: 0, end: 0, max: 0 },
+        daily_stats: { heat_kwh: 0, elec_kwh: 0, cop: 0, days: 0 },
         // Evaporator frosting & reverse-cycle defrost (model/frost.js);
         // defaults anchored to the literature review in frost-literature.md
         frost: {
@@ -419,27 +438,35 @@ var app = new Vue({
     },
     computed: {
         // --- Chart navigation state -------------------------------------
+        // The nav drives whichever chart is showing, so its state reads from
+        // that chart's window: the 30 s power view or the daily bar chart
+        nav_view: function () {
+            return this.ui.chart == "daily" ? this.bar_view : this.chart_view;
+        },
+        // Tightest window the nav will zoom to: one hour of power, one day of bars
+        nav_min_span: function () {
+            return this.ui.chart == "daily" ? 86400 : 3600;
+        },
         // Each control greys out at the limit it would hit, so the nav shows
         // how much room is left to zoom or pan
         can_pan_left: function () {
-            return this.chart_view.start > 0;
+            return this.nav_view.start > 0;
         },
         can_pan_right: function () {
-            return this.chart_view.end < this.chart_view.max;
+            return this.nav_view.end < this.nav_view.max;
         },
         can_zoom_out: function () {
-            return (this.chart_view.end - this.chart_view.start) < this.chart_view.max;
+            return (this.nav_view.end - this.nav_view.start) < this.nav_view.max;
         },
         can_zoom_in: function () {
-            // zoom_in() clamps the window at one hour
-            return (this.chart_view.end - this.chart_view.start) > 3600;
+            return (this.nav_view.end - this.nav_view.start) > this.nav_min_span;
         },
         can_reset: function () {
             return this.can_pan_left || this.can_pan_right;
         },
         // Visible span, e.g. "12 hours" / "1.5 days" — reads as the zoom level
         view_range_label: function () {
-            var seconds = this.chart_view.end - this.chart_view.start;
+            var seconds = this.nav_view.end - this.nav_view.start;
             if (!(seconds > 0)) return "";
             var value, unit;
             if (seconds >= 86400) {
@@ -534,8 +561,27 @@ var app = new Vue({
             this.ui.view = id;
             // The chart needs a redraw once its container is visible again
             if (id == "chart") {
-                this.$nextTick(function () { plot(); });
+                this.$nextTick(function () { chart_redraw(); });
             }
+        },
+        // Switch between the 30 s power view and the daily bar chart. Each
+        // keeps its own window, so switching back lands where you left off
+        select_chart: function (id) {
+            this.ui.chart = id;
+            this.$nextTick(function () { chart_redraw(); });
+        },
+        // Daily bars: which energy split to show (all / space / water)
+        select_bargraph_mode: function (id) {
+            this.bargraph_mode = id;
+            bargraph_draw();
+        },
+        // Click-through from a daily bar: open that day in the power view
+        show_day: function (index) {
+            view.start = index * 86400;
+            view.end = view.start + 86400;
+            view_calc_interval();
+            this.ui.chart = "power";
+            this.$nextTick(function () { plot(); });
         },
         // Redraw the chart without re-running the model (series display flags)
         replot: function () {
@@ -545,6 +591,10 @@ var app = new Vue({
         toggle_series: function (key) {
             this.chart_series[key].show = !this.chart_series[key].show;
             plot();
+        },
+        toggle_daily_series: function (key) {
+            this.daily_series[key].show = !this.daily_series[key].show;
+            bargraph_draw();
         },
         change_mode: function () {
 
@@ -558,6 +608,9 @@ var app = new Vue({
             // default in day view only (the checkboxes still override)
             this.chart_series.cylTopT.show = this.mode == "day";
             this.chart_series.cylBottomT.show = this.mode == "day";
+
+            // A single day has nothing to show as daily bars
+            if (this.days <= 1) this.ui.chart = "power";
 
             var timestep = 30;
             var itterations = 3600 * 24 * app.days / timestep;
@@ -812,6 +865,10 @@ var app = new Vue({
                 // Keep the plotting series from the main run
                 sim_series = result.series;
 
+                // Roll the 30 s series up into the per-day totals behind the
+                // daily bar chart
+                bargraph_build();
+
                 // Set view if not already set
                 if (view.start == 0 && view.end == 0) {
                     view.start = 0;
@@ -823,7 +880,7 @@ var app = new Vue({
                     view_calc_interval();
                 }
 
-                plot();
+                chart_redraw();
 
                 // Hide loading spinner / progress bar
                 app.progress.running = false;
@@ -876,81 +933,28 @@ var app = new Vue({
             this.simulate();
         },
 
-        zoom_out: function () {
-            var range = view.end - view.start;
-            var center = (view.start + view.end) / 2;
-
-            // Zoom out by 2x
-            var new_range = range * 2;
-            view.start = center - new_range / 2;
-            view.end = center + new_range / 2;
-
-            // Clamp to simulation bounds (0 to total simulation time)
-            var max_time = app.days * 24 * 3600;
-            if (view.start < 0) view.start = 0;
-            if (view.end > max_time) view.end = max_time;
-
-            view_calc_interval();
-            plot();
-        },
-        zoom_in: function () {
-            var range = view.end - view.start;
-            var center = (view.start + view.end) / 2;
-
-            // Zoom in by 2x
-            var new_range = range / 2;
-            view.start = center - new_range / 2;
-            view.end = center + new_range / 2;
-
-            // Minimum range of 1 hour
-            if (view.end - view.start < 3600) {
-                view.start = center - 1800;
-                view.end = center + 1800;
+        // Pan / zoom / reset act on whichever chart is showing; view_nav()
+        // (plot.js) does the arithmetic and clamping for both windows
+        chart_nav: function (action) {
+            if (this.ui.chart == "daily") {
+                view_nav(bar_view, bar_view.max, DAY_SECONDS, action);
+                // Bars only make sense on whole-day boundaries
+                bar_view.start = Math.floor(bar_view.start / DAY_SECONDS) * DAY_SECONDS;
+                bar_view.end = Math.ceil(bar_view.end / DAY_SECONDS) * DAY_SECONDS;
+                if (bar_view.start < 0) bar_view.start = 0;
+                if (bar_view.end > bar_view.max) bar_view.end = bar_view.max;
+                bargraph_draw();
+            } else {
+                view_nav(view, this.days * 24 * 3600, 3600, action);
+                view_calc_interval();
+                plot();
             }
-
-            view_calc_interval();
-            plot();
         },
-        pan_left: function () {
-            var range = view.end - view.start;
-            var shift = range * 0.25; // Pan by 25% of current view
-
-            view.start -= shift;
-            view.end -= shift;
-
-            // Clamp to simulation bounds
-            if (view.start < 0) {
-                view.end = view.end - view.start;
-                view.start = 0;
-            }
-
-            view_calc_interval();
-            plot();
-        },
-        pan_right: function () {
-            var range = view.end - view.start;
-            var shift = range * 0.25; // Pan by 25% of current view
-            var max_time = app.days * 24 * 3600;
-
-            view.start += shift;
-            view.end += shift;
-
-            // Clamp to simulation bounds
-            if (view.end > max_time) {
-                view.start = max_time - range;
-                view.end = max_time;
-            }
-
-            view_calc_interval();
-            plot();
-        },
-        reset: function () {
-            // Reset to full simulation view
-            view.start = 0;
-            view.end = app.days * 24 * 3600;
-            view_calc_interval();
-            plot();
-        },
+        zoom_out: function () { this.chart_nav("zoom_out"); },
+        zoom_in: function () { this.chart_nav("zoom_in"); },
+        pan_left: function () { this.chart_nav("pan_left"); },
+        pan_right: function () { this.chart_nav("pan_right"); },
+        reset: function () { this.chart_nav("reset"); },
 
         // Deep copy of every user-settable parameter, shared by export,
         // the last-run snapshot (Revert) and import validation

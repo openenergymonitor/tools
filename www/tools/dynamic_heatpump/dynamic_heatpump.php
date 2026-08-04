@@ -580,6 +580,14 @@
         color: #b3ada3;
         cursor: default;
     }
+    /* Selected segment in a nav group used as a toggle (chart resolution,
+       daily energy split) — lifts out of the track like the active tab */
+    .hp-nav-btn.active {
+        background: var(--hp-surface);
+        color: var(--hp-ink);
+        font-weight: 600;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
+    }
     .hp-nav-btn-text {
         font-weight: 500;
         padding: 0 .55rem;
@@ -1360,14 +1368,35 @@
                     <div class="hp-card">
                         <div class="hp-card-header">
                             <div class="d-flex align-items-baseline flex-wrap gap-2">
-                                <span>Timeseries</span>
-                                <span class="hp-note m-0 fw-normal">Window: {{ stats.window_heat_kwh | toFixed(1) }} kWh heat &middot;
+                                <span>{{ ui.chart == 'daily' ? 'Daily energy' : 'Timeseries' }}</span>
+                                <span v-if="ui.chart != 'daily'" class="hp-note m-0 fw-normal">Window: {{ stats.window_heat_kwh | toFixed(1) }} kWh heat &middot;
                                     {{ stats.window_elec_kwh | toFixed(1) }} kWh elec &middot;
                                     COP {{ stats.window_cop > 0 ? stats.window_cop.toFixed(2) : '—' }}</span>
+                                <span v-else class="hp-note m-0 fw-normal">{{ daily_stats.days }} days &middot;
+                                    {{ daily_stats.heat_kwh | toFixed(0) }} kWh heat &middot;
+                                    {{ daily_stats.elec_kwh | toFixed(0) }} kWh elec &middot;
+                                    COP {{ daily_stats.cop > 0 ? daily_stats.cop.toFixed(2) : '—' }}</span>
                             </div>
                             <!-- Chart nav: pan / zoom / reset as one segmented
                                  control; each control greys out at its limit -->
                             <div class="d-flex align-items-center gap-2 ms-auto">
+                                <!-- Resolution: 30 s power view or daily bars.
+                                     Only offered on multi-day runs -->
+                                <div v-if="days > 1" class="hp-chart-nav" role="group" aria-label="Chart resolution">
+                                    <button type="button" class="hp-nav-btn hp-nav-btn-text"
+                                        :class="{active: ui.chart == 'power'}" @click="select_chart('power')"
+                                        title="Power timeseries">Power</button>
+                                    <button type="button" class="hp-nav-btn hp-nav-btn-text"
+                                        :class="{active: ui.chart == 'daily'}" @click="select_chart('daily')"
+                                        title="Daily energy bars">Daily</button>
+                                </div>
+                                <!-- Daily bars: all / space heating / hot water -->
+                                <div v-if="ui.chart == 'daily'" class="hp-chart-nav" role="group" aria-label="Daily energy split">
+                                    <button type="button" class="hp-nav-btn hp-nav-btn-text"
+                                        v-for="m in bargraph_modes" :key="m.id"
+                                        :class="{active: bargraph_mode == m.id}"
+                                        @click="select_bargraph_mode(m.id)" :title="m.title">{{ m.label }}</button>
+                                </div>
                                 <span class="hp-nav-range">{{ view_range_label }}</span>
                                 <div class="hp-chart-nav" role="group" aria-label="Chart navigation">
                                     <button type="button" class="hp-nav-btn" @click="pan_left"
@@ -1395,10 +1424,22 @@
                                 <div class="spinner"></div>
                             </div>
                         </div>
+                        <!-- Daily legend: same pills, plus the hint that bars
+                             open the day in the power view -->
+                        <div class="hp-legend mt-2" v-if="ui.chart == 'daily'">
+                            <button type="button" v-for="(s, key) in daily_series" :key="key"
+                                class="hp-legend-pill" :class="{off: !s.show}"
+                                :aria-pressed="s.show ? 'true' : 'false'"
+                                @click="toggle_daily_series(key)">
+                                <span class="hp-legend-dot" :style="s.show ? {background: s.color} : {}"></span>{{ s.label }}
+                            </button>
+                            <span class="hp-note m-0 ms-auto">Click a bar to open that day &middot; drag to zoom</span>
+                        </div>
+
                         <!-- Interactive legend: one pill per series, click to
                              show/hide. Dots share the plot colours; hidden
                              series render dimmed with a hollow dot. -->
-                        <div class="hp-legend mt-2">
+                        <div class="hp-legend mt-2" v-else>
                             <template v-for="(s, key) in chart_series">
                                 <button type="button" v-if="key != 'solar_pv' || mode == 'year'" :key="key"
                                     class="hp-legend-pill" :class="{off: !s.show}"
@@ -1558,6 +1599,7 @@
 <script src="<?php echo $path; ?>model/frost.js?v=<?php echo time(); ?>"></script>
 <script src="<?php echo $path; ?>model/simulator.js?v=<?php echo time(); ?>"></script>
 <script src="<?php echo $path; ?>plot.js?v=<?php echo time(); ?>"></script>
+<script src="<?php echo $path; ?>bargraph.js?v=<?php echo time(); ?>"></script>
 <script src="<?php echo $path; ?>dynamic_heatpump.js?v=<?php echo time(); ?>"></script>
 
 <!-- Shared tool navigation sidebar, pulled in from the core -->
