@@ -44,6 +44,7 @@
         --hp-border: #e3e0da;
         --hp-border-soft: #e9e5df;
         --hp-dark: #1f1d1a;
+        --hp-oem: #44b3e2;
         --hp-ink: #000;
         --hp-muted: #33302b;
         --hp-accent: #f0c400;
@@ -83,7 +84,7 @@
         gap: .75rem;
         flex-wrap: wrap;
         padding: .6rem 1.25rem;
-        background: var(--hp-dark);
+        background: var(--hp-oem);
     }
     .hp-title {
         font-size: 1.02rem;
@@ -92,17 +93,26 @@
     }
     .hp-subtitle {
         font-size: .83rem;
-        color: #eae6df;
+        color: rgba(255, 255, 255, .85);
         margin-left: .5rem;
     }
+    /* Header buttons: outlined in the header's own colour rather than a fixed
+       shade, so they stay legible if --hp-oem changes */
     .hp-btn-dark {
-        color: #f5f2ec;
-        border: 1px solid #4a4640;
-        background: transparent;
-    }
-    .hp-btn-dark:hover {
         color: #fff;
-        border-color: #6a655e;
+        border: 1px solid rgba(255, 255, 255, .55);
+        background: rgba(255, 255, 255, .12);
+    }
+    .hp-btn-dark:hover,
+    .hp-btn-dark:focus {
+        color: #fff;
+        border-color: #fff;
+        background: rgba(255, 255, 255, .24);
+    }
+    .hp-btn-dark:focus-visible {
+        outline: 2px solid #fff;
+        outline-offset: 1px;
+        box-shadow: none;
     }
 
     /* --- Parameter group rail ------------------------------------------- */
