@@ -741,8 +741,15 @@
                     <param-field label="Heat pump capacity" unit="W" :step="500" :min="0"
                         :disabled="heatpump.cop_model == 'vaillant5' || heatpump.cop_model == 'vaillant12'"
                         v-model="heatpump.capacity" @change="simulate"></param-field>
-                    <param-field label="Heat emitter rated output" unit="W" :step="100" :min="0"
-                        v-model="heatpump.radiatorRatedOutput" @change="simulate"></param-field>
+                    <param-field label="Design flow temperature" unit="&deg;C" :step="1" :min="21" :max="75"
+                        v-model="heatpump.design_flowT" @change="simulate"></param-field>
+                    <div class="hp-field">
+                        <label class="hp-field-label">Heat emitter output at DT{{ heatpump.radiatorRatedDT }}</label>
+                        <div class="input-group input-group-sm">
+                            <input type="text" class="form-control" :value="emitter_rated_output | toFixed(0)" disabled>
+                            <span class="input-group-text">W</span>
+                        </div>
+                    </div>
                     <param-field label="Flow rate" unit="L/min" :step="1" :min="1" :max="40"
                         v-model="heatpump.flow_rate" @change="simulate"></param-field>
                     <param-field label="Cylinder volume" unit="L" :step="10" :min="0"
@@ -959,8 +966,6 @@
                                 <span class="input-group-text">W/step</span>
                             </div>
                         </div>
-                        <param-field label="Heat emitter rated output" unit="W" :step="100" :min="0"
-                            v-model="heatpump.radiatorRatedOutput" @change="simulate"></param-field>
                         <param-field label="System volume (after point 2)" unit="L" :step="10" :min="0"
                             v-model="heatpump.system_water_volume" @change="simulate"></param-field>
                         <param-field label="Standby / controls" unit="W" :step="1" :min="0"
@@ -968,6 +973,35 @@
                         <param-field label="Pump power" unit="W" :step="1" :min="0"
                             v-model="heatpump.pumps" @change="simulate"></param-field>
                     </div>
+
+                    <div class="hp-subheading">Heat emitters</div>
+                    <div class="hp-field-grid">
+                        <param-field label="Design flow temperature" unit="&deg;C" :step="1" :min="21" :max="75"
+                            v-model="heatpump.design_flowT" @change="simulate"></param-field>
+                        <param-field label="Design room temperature" unit="&deg;C" :step="0.5"
+                            v-model="heatpump.design_roomT" @change="simulate"></param-field>
+                        <param-field label="Emitter rated DT" unit="&deg;K" :step="5" :min="5"
+                            v-model="heatpump.radiatorRatedDT" @change="simulate"></param-field>
+                        <div class="hp-field">
+                            <label class="hp-field-label">Design system DT</label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" class="form-control" :value="design_system_dT | toFixed(1)" disabled>
+                                <span class="input-group-text">&deg;K</span>
+                            </div>
+                        </div>
+                        <div class="hp-field">
+                            <label class="hp-field-label">Heat emitter output at DT{{ heatpump.radiatorRatedDT }}</label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" class="form-control" :value="emitter_rated_output | toFixed(0)" disabled>
+                                <span class="input-group-text">W</span>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="hp-note">The emitter spec is sized from the design flow temperature with the
+                        radiator equation: emitters big enough to emit the design heat loss
+                        ({{ building.heat_loss }} W) into a room at the design room temperature, when supplied
+                        at the design flow temperature. The design system DT is the drop across the emitters
+                        when the flow rate carries the whole design heat loss.</p>
 
                     <div class="hp-subheading">Control</div>
                     <div class="hp-field-grid">

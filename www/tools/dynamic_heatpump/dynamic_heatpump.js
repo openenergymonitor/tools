@@ -26,6 +26,49 @@ var dhw_draw_profile = [
 
 // Primary pipework physics live in model/pipework.js (loaded before this file)
 
+// ============================================================================
+// Heat emitter sizing
+//
+// The emitter spec the simulator needs is a rated output at DT50, but the
+// number a designer actually chooses is the design flow temperature: the flow
+// temperature at which the emitters emit the design heat loss into a room at
+// its design temperature. The two conversions below are the radiator equation
+// (see tools/radequation) run forwards and backwards:
+//
+//   output = rated * ((MWT - room) / rated_DT) ^ 1.3
+//
+// MWT is the mean water temperature, flow - DT/2, the same basis the emitter
+// node in pipework.js emits on. The design system DT is not a separate input:
+// it is the drop across the emitters when the circulation carries the whole
+// design heat loss at the configured flow rate.
+// ============================================================================
+var RADIATOR_EXPONENT = 1.3;
+
+// Design system DT (K) from the design heat loss (W) and flow rate (L/min)
+function design_system_dT(heat_loss, flow_rate) {
+    var mcp = Math.max(0.1, flow_rate) / 60 * 4187; // W/K
+    return heat_loss / mcp;
+}
+
+// Design flow temperature -> rated emitter output at the rated DT (W)
+function rated_output_from_design_flowT(heatpump, building) {
+    var dT = design_system_dT(building.heat_loss, heatpump.flow_rate);
+    var rad_DT = (heatpump.design_flowT - 0.5 * dT) - heatpump.design_roomT;
+    // Guard: emitters at or below room temperature emit nothing, so the
+    // implied rated output would run away to infinity
+    if (rad_DT < 1) rad_DT = 1;
+    return building.heat_loss / Math.pow(rad_DT / heatpump.radiatorRatedDT, RADIATOR_EXPONENT);
+}
+
+// Rated emitter output (W) -> design flow temperature, the exact inverse
+function design_flowT_from_rated_output(heatpump, building) {
+    var dT = design_system_dT(building.heat_loss, heatpump.flow_rate);
+    var rated = heatpump.radiatorRatedOutput > 0 ? heatpump.radiatorRatedOutput : 1;
+    var rad_DT = heatpump.radiatorRatedDT *
+        Math.pow(building.heat_loss / rated, 1 / RADIATOR_EXPONENT);
+    return heatpump.design_roomT + rad_DT + 0.5 * dT;
+}
+
 // Per-timestep simulation series from the last main run (result.series from
 // model/simulator.js); plot.js reads this. The plot view state and flot glue
 // live in plot.js.
@@ -76,7 +119,8 @@ var GROUP_INFO = {
         label: "Heat pump & control",
         title: "Heat pump & control",
         desc: "Capacity, modulation limits, COP model and the control mode that " +
-              "drives the compressor. Ramp rate applies in modulating modes only."
+              "drives the compressor. Ramp rate applies in modulating modes " +
+              "only. Heat emitters are sized from the design flow temperature."
     },
     pipework: {
         label: "Primary pipework",
@@ -234,6 +278,10 @@ var app = new Vue({
             capacity: 8500,
             system_water_volume: 120, // Litres
             flow_rate: 12, // Litres per minute
+            // Emitter spec: design_flowT is the input, radiatorRatedOutput is
+            // derived from it by the radiator equation on every run
+            design_flowT: 50,
+            design_roomT: 20,
             radiatorRatedOutput: 7400,
             radiatorRatedDT: 50,
             prc_carnot: 47,
@@ -437,6 +485,17 @@ var app = new Vue({
         }
     },
     computed: {
+        // --- Heat emitter sizing ----------------------------------------
+        // Live readouts of the emitter spec implied by the design flow
+        // temperature, so the panel updates as the design inputs are edited.
+        // simulate() writes the same rated output into heatpump before a run
+        design_system_dT: function () {
+            return design_system_dT(this.building.heat_loss, this.heatpump.flow_rate);
+        },
+        emitter_rated_output: function () {
+            return rated_output_from_design_flowT(this.heatpump, this.building);
+        },
+
         // --- Chart navigation state -------------------------------------
         // The nav drives whichever chart is showing, so its state reads from
         // that chart's window: the 30 s power view or the daily bar chart
@@ -766,6 +825,11 @@ var app = new Vue({
                 if (node_count > 40) node_count = 40;
                 app.dhw.node_count = node_count;
 
+                // Size the emitters from the design flow temperature (after
+                // the flow rate clamp, which sets the design system DT)
+                app.heatpump.radiatorRatedOutput =
+                    Math.round(rated_output_from_design_flowT(app.heatpump, app.building));
+
                 // Snapshot the config actually used for this run, for Revert
                 app.last_run_config = JSON.stringify(app.get_config());
 
@@ -988,7 +1052,16 @@ var app = new Vue({
                 Object.assign(this.external, config.external);
             }
             if (config.heatpump) {
+                // Configs exported before the design flow temperature input
+                // carry the emitter spec as a rated output only: run the
+                // radiator equation backwards so the import is preserved
+                var legacy_emitter = config.heatpump.design_flowT === undefined &&
+                    config.heatpump.radiatorRatedOutput !== undefined;
                 Object.assign(this.heatpump, config.heatpump);
+                if (legacy_emitter) {
+                    this.heatpump.design_flowT = Math.round(
+                        design_flowT_from_rated_output(this.heatpump, this.building) * 10) / 10;
+                }
             }
             if (config.primary) {
                 Object.assign(this.primary, JSON.parse(JSON.stringify(config.primary)));
