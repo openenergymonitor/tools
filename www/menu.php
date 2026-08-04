@@ -34,7 +34,8 @@ $menu = array(
         "category" => "Dynamic Simulation",
         "case" => "dynamic_heatpump",
         "title" => "Dynamic heat pump simulator",
-        "description" => "Explore continuous vs intermittent heating, temperature set-backs and schedules"
+        "description" => "Explore continuous vs intermittent heating, temperature set-backs and schedules",
+        "standalone" => true
     ),
     "vaillant_cop_model" => array(
         "category" => "Vaillant COP model",

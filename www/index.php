@@ -29,6 +29,11 @@ $moved = array(
 );
 if (isset($moved[$q])) $q = $moved[$q];
 
+// Tools with 'standalone' => true in the menu render the full page
+// themselves (own <html> wrapper, no theme.php); they can pull in shared
+// components e.g. view("components/tool_sidebar.php", array('menu'=>$menu))
+$standalone = false;
+
 // Check if page exists in menu
 if (isset($menu[$q])) {
     $title = $menu[$q]['title'];
@@ -36,9 +41,14 @@ if (isset($menu[$q])) {
     $github .= "/tree/main/www/tools/$q";
     $path = "tools/$q/";
     $path_lib = "lib/";
+    $standalone = !empty($menu[$q]['standalone']);
     $content = view("tools/$q/$q.php", array(
         'path' => $path,
-        'path_lib' => $path_lib
+        'path_lib' => $path_lib,
+        'menu' => $menu,
+        'title' => $title,
+        'description' => $description,
+        'github' => $github
     ));
 } else if ($q == 'home') {
     $title = 'Tools';
@@ -55,14 +65,19 @@ if (isset($menu[$q])) {
     $content = view('404.php');
 }
 
-// Load the theme
-echo view("theme.php", array(
-    'menu' => $menu,
-    'title' => $title,
-    'description' => $description,
-    'content' => $content,
-    'github' => $github
-));
+if ($standalone) {
+    // Tool provides its own full theme wrapper
+    echo $content;
+} else {
+    // Load the theme
+    echo view("theme.php", array(
+        'menu' => $menu,
+        'title' => $title,
+        'description' => $description,
+        'content' => $content,
+        'github' => $github
+    ));
+}
 
 // Increase view count to this page
 if ($redis && $q != 'stats') {

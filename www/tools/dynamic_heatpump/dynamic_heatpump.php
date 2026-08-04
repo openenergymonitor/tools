@@ -1,3 +1,16 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><?php echo $title; ?></title>
+    <meta name="description" content="<?php echo $description; ?>">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body>
+
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
 
 <script src="https://code.jquery.com/jquery-3.6.3.min.js"></script>
@@ -57,7 +70,7 @@
         .hp-body > .hp-results { flex: 0 0 100%; }
     }
     @media (min-width: 992px) {
-        .hp-app { height: calc(100vh - 58px); }
+        .hp-app { height: 100vh; }
         .hp-body { flex: 1 1 auto; flex-wrap: nowrap; min-height: 0; }
     }
 
@@ -565,6 +578,7 @@
     <!-- ================= Header bar ================= -->
     <header class="hp-header">
         <div class="d-flex align-items-baseline flex-wrap">
+            <button type="button" class="btn btn-sm hp-btn-dark me-2" data-bs-toggle="offcanvas" data-bs-target="#sidebar" aria-controls="sidebar" aria-label="Open tools menu"><i class="fa-solid fa-bars"></i></button>
             <span class="hp-title">Dynamic heat pump simulator</span>
             <span class="hp-subtitle">{{ mode == 'day' ? 'single day' : 'full year' }} &middot; run {{ simulation_index }}<span v-if="baseline_enabled"> &middot; vs baseline</span></span>
         </div>
@@ -1426,3 +1440,12 @@
 <script src="<?php echo $path; ?>model/simulator.js?v=<?php echo time(); ?>"></script>
 <script src="<?php echo $path; ?>plot.js?v=<?php echo time(); ?>"></script>
 <script src="<?php echo $path; ?>dynamic_heatpump.js?v=<?php echo time(); ?>"></script>
+
+<!-- Shared tool navigation sidebar, pulled in from the core -->
+<?php echo view("components/tool_sidebar.php", array('menu' => $menu)); ?>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+
+</html>
