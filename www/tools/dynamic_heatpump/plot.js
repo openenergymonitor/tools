@@ -80,6 +80,15 @@ function timeseries(data_array, aggregate) {
 $('#graph').width($('#graph_bound').width()).height($('#graph_bound').height());
 
 function plot() {
+    // Publish the view window for the chart nav (enabled states & zoom
+    // label). Done before the early returns below so the nav stays correct
+    // while the chart is hidden on the Tables tab.
+    if (app && app.chart_view) {
+        app.chart_view.start = view.start;
+        app.chart_view.end = view.end;
+        app.chart_view.max = app.days * 24 * 3600;
+    }
+
     if (!sim_series) return;
 
     // Skip when the chart container is hidden (Tables view active) and pick

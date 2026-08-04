@@ -311,6 +311,10 @@ var app = new Vue({
         // Show the reverse-cycle defrost draw as negative heat, as a heat
         // meter on the circuit would register it
         show_negative_heat: true,
+        // Reactive mirror of the plot view window (seconds), written by
+        // plot() — the `view` global is mutated outside Vue, so the chart
+        // nav's enabled/disabled states track this copy instead
+        chart_view: { start: 0, end: 0, max: 0 },
         // Evaporator frosting & reverse-cycle defrost (model/frost.js);
         // defaults anchored to the literature review in frost-literature.md
         frost: {
@@ -414,6 +418,41 @@ var app = new Vue({
         }
     },
     computed: {
+        // --- Chart navigation state -------------------------------------
+        // Each control greys out at the limit it would hit, so the nav shows
+        // how much room is left to zoom or pan
+        can_pan_left: function () {
+            return this.chart_view.start > 0;
+        },
+        can_pan_right: function () {
+            return this.chart_view.end < this.chart_view.max;
+        },
+        can_zoom_out: function () {
+            return (this.chart_view.end - this.chart_view.start) < this.chart_view.max;
+        },
+        can_zoom_in: function () {
+            // zoom_in() clamps the window at one hour
+            return (this.chart_view.end - this.chart_view.start) > 3600;
+        },
+        can_reset: function () {
+            return this.can_pan_left || this.can_pan_right;
+        },
+        // Visible span, e.g. "12 hours" / "1.5 days" — reads as the zoom level
+        view_range_label: function () {
+            var seconds = this.chart_view.end - this.chart_view.start;
+            if (!(seconds > 0)) return "";
+            var value, unit;
+            if (seconds >= 86400) {
+                value = seconds / 86400;
+                unit = "day";
+            } else {
+                value = seconds / 3600;
+                unit = "hour";
+            }
+            var rounded = Math.round(value * 10) / 10;
+            return (Number.isInteger(rounded) ? rounded : rounded.toFixed(1)) +
+                " " + unit + (rounded == 1 ? "" : "s");
+        },
         // Headline result cards, with deltas against the saved baseline.
         // `short` labels the narrow-screen KPI strip, which shows the first
         // four entries; the full cards use `label`.

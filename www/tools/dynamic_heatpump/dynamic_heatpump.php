@@ -540,6 +540,67 @@
     .hp-table-panel { font-size: .84rem; }
     .hp-table-panel td, .hp-table-panel th { padding: .25rem .3rem; vertical-align: middle; }
 
+    /* Chart nav: segmented pan / zoom / reset control, sharing the tab
+       strip's recessed-track look (soft track, segments lift to white) */
+    .hp-chart-nav {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        background: #f2efea;
+        border-radius: .45rem;
+        padding: 2px;
+    }
+    .hp-nav-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 30px;
+        height: 26px;
+        border: 0;
+        background: transparent;
+        border-radius: .35rem;
+        font-size: .78rem;
+        color: var(--hp-muted);
+        padding: 0 .4rem;
+    }
+    .hp-nav-btn:hover:not(:disabled) {
+        background: var(--hp-surface);
+        color: var(--hp-ink);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
+    }
+    .hp-nav-btn:active:not(:disabled) {
+        background: #e7e3dc;
+        box-shadow: none;
+    }
+    .hp-nav-btn:focus-visible {
+        outline: 2px solid #0d6efd;
+        outline-offset: 1px;
+    }
+    .hp-nav-btn:disabled {
+        color: #b3ada3;
+        cursor: default;
+    }
+    .hp-nav-btn-text {
+        font-weight: 500;
+        padding: 0 .55rem;
+    }
+    .hp-nav-sep {
+        width: 1px;
+        height: 15px;
+        margin: 0 2px;
+        background: #ddd8d1;
+    }
+    .hp-nav-range {
+        font-family: var(--bs-font-monospace);
+        font-size: .74rem;
+        color: var(--hp-muted);
+        white-space: nowrap;
+    }
+    @media (max-width: 991.98px) {
+        /* Comfortable touch targets on phones */
+        .hp-nav-btn { min-width: 38px; height: 32px; }
+    }
+
     /* Chart legend: clickable series pills with colour dots */
     .hp-legend {
         display: flex;
@@ -1298,16 +1359,34 @@
                 <div v-show="ui.view == 'chart'">
                     <div class="hp-card">
                         <div class="hp-card-header">
-                            <span>Timeseries</span>
-                            <span class="hp-note m-0 fw-normal">Window: {{ stats.window_heat_kwh | toFixed(1) }} kWh heat &middot;
-                                {{ stats.window_elec_kwh | toFixed(1) }} kWh elec &middot;
-                                COP {{ stats.window_cop > 0 ? stats.window_cop.toFixed(2) : '—' }}</span>
-                            <div class="btn-group btn-group-sm" role="group">
-                                <button type="button" class="btn btn-outline-secondary" @click="zoom_in">+</button>
-                                <button type="button" class="btn btn-outline-secondary" @click="zoom_out">&minus;</button>
-                                <button type="button" class="btn btn-outline-secondary" @click="pan_left">&lsaquo;</button>
-                                <button type="button" class="btn btn-outline-secondary" @click="pan_right">&rsaquo;</button>
-                                <button type="button" class="btn btn-outline-secondary" @click="reset">Reset</button>
+                            <div class="d-flex align-items-baseline flex-wrap gap-2">
+                                <span>Timeseries</span>
+                                <span class="hp-note m-0 fw-normal">Window: {{ stats.window_heat_kwh | toFixed(1) }} kWh heat &middot;
+                                    {{ stats.window_elec_kwh | toFixed(1) }} kWh elec &middot;
+                                    COP {{ stats.window_cop > 0 ? stats.window_cop.toFixed(2) : '—' }}</span>
+                            </div>
+                            <!-- Chart nav: pan / zoom / reset as one segmented
+                                 control; each control greys out at its limit -->
+                            <div class="d-flex align-items-center gap-2 ms-auto">
+                                <span class="hp-nav-range">{{ view_range_label }}</span>
+                                <div class="hp-chart-nav" role="group" aria-label="Chart navigation">
+                                    <button type="button" class="hp-nav-btn" @click="pan_left"
+                                        :disabled="!can_pan_left" title="Pan left" aria-label="Pan left">
+                                        <i class="fa-solid fa-chevron-left"></i></button>
+                                    <button type="button" class="hp-nav-btn" @click="pan_right"
+                                        :disabled="!can_pan_right" title="Pan right" aria-label="Pan right">
+                                        <i class="fa-solid fa-chevron-right"></i></button>
+                                    <span class="hp-nav-sep"></span>
+                                    <button type="button" class="hp-nav-btn" @click="zoom_out"
+                                        :disabled="!can_zoom_out" title="Zoom out" aria-label="Zoom out">
+                                        <i class="fa-solid fa-magnifying-glass-minus"></i></button>
+                                    <button type="button" class="hp-nav-btn" @click="zoom_in"
+                                        :disabled="!can_zoom_in" title="Zoom in" aria-label="Zoom in">
+                                        <i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                                    <span class="hp-nav-sep"></span>
+                                    <button type="button" class="hp-nav-btn hp-nav-btn-text" @click="reset"
+                                        :disabled="!can_reset" title="Reset to the full simulation range">Reset</button>
+                                </div>
                             </div>
                         </div>
                         <div id="graph_bound" class="hp-graph-bound">
