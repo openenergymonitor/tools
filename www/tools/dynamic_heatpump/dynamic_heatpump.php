@@ -9,7 +9,445 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/solid.min.css">
 <script src="<?php echo $path_lib;?>ecodan.js?v=1"></script>
 <script src="<?php echo $path_lib;?>vaillant.js?v=11"></script>
+
 <style>
+    /* Hide the raw template until Vue has mounted */
+    [v-cloak] { display: none; }
+
+    /* ====================================================================
+       Dynamic heat pump simulator — app shell
+       Wide (>=992px): three columns (group rail | parameters | results),
+       each scrolling internally within the viewport. Narrow: the columns
+       stack, the rail becomes a horizontal chip row and the run bar
+       sticks to the bottom of the screen.
+       ==================================================================== */
+    .hp-app {
+        --hp-bg: #f6f4f0;
+        --hp-surface: #fff;
+        --hp-rail-bg: #faf8f5;
+        --hp-border: #e3e0da;
+        --hp-border-soft: #e9e5df;
+        --hp-dark: #1f1d1a;
+        --hp-ink: #1f1d1a;
+        --hp-muted: #8a857d;
+        --hp-accent: #f0c400;
+        --hp-good: #2e9e5b;
+        --hp-bad: #c0392b;
+        display: flex;
+        flex-direction: column;
+        background: var(--hp-bg);
+        color: var(--hp-ink);
+    }
+    .hp-body {
+        display: flex;
+        flex-direction: column;
+    }
+    @media (min-width: 992px) {
+        .hp-app { height: calc(100vh - 58px); }
+        .hp-body { flex: 1 1 auto; flex-direction: row; min-height: 0; }
+    }
+
+    /* --- Header bar ----------------------------------------------------- */
+    .hp-header {
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        flex-wrap: wrap;
+        padding: .6rem 1.25rem;
+        background: var(--hp-dark);
+    }
+    .hp-title {
+        font-size: .95rem;
+        font-weight: 600;
+        color: #fff;
+    }
+    .hp-subtitle {
+        font-size: .75rem;
+        color: #9b958c;
+        margin-left: .5rem;
+    }
+    .hp-btn-dark {
+        color: #e8e4dd;
+        border: 1px solid #4a4640;
+        background: transparent;
+    }
+    .hp-btn-dark:hover {
+        color: #fff;
+        border-color: #6a655e;
+    }
+
+    /* --- Parameter group rail ------------------------------------------- */
+    .hp-rail {
+        flex: none;
+        display: flex;
+        flex-direction: row;
+        overflow-x: auto;
+        background: var(--hp-rail-bg);
+        border-bottom: 1px solid var(--hp-border);
+    }
+    .hp-rail-btn {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        border: 0;
+        background: transparent;
+        text-align: left;
+        white-space: nowrap;
+        font-size: .8rem;
+        color: #6b665e;
+        padding: .55rem .9rem;
+        border-bottom: 3px solid transparent;
+    }
+    .hp-rail-btn.active {
+        color: var(--hp-ink);
+        font-weight: 600;
+        background: var(--hp-surface);
+        border-bottom-color: #0d6efd;
+    }
+    .hp-rail-btn .hp-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--hp-accent);
+        display: block;
+    }
+    .hp-rail-heading {
+        font-size: .65rem;
+        font-weight: 600;
+        letter-spacing: .08em;
+        color: #a8a29a;
+        padding: .15rem 1rem .4rem;
+    }
+    .hp-rail-divider {
+        margin: .6rem 1rem .4rem;
+        border-top: 1px solid var(--hp-border-soft);
+    }
+    .hp-rail-footer {
+        margin-top: auto;
+        padding: .75rem 1rem;
+        border-top: 1px solid var(--hp-border-soft);
+        font-size: .68rem;
+        line-height: 1.6;
+        color: #a8a29a;
+    }
+    @media (min-width: 992px) {
+        .hp-rail {
+            flex: 0 0 200px;
+            flex-direction: column;
+            overflow-x: hidden;
+            overflow-y: auto;
+            padding: .6rem 0;
+            border-bottom: 0;
+            border-right: 1px solid var(--hp-border);
+        }
+        .hp-rail-btn {
+            white-space: normal;
+            padding: .5rem 1rem;
+            border-bottom: 0;
+            border-left: 3px solid transparent;
+        }
+        .hp-rail-btn.active { border-left-color: #0d6efd; }
+        .hp-rail-btn.active .hp-dot { background: var(--hp-accent); }
+        .hp-rail-btn-essentials.active { border-left-color: var(--hp-accent); }
+    }
+
+    /* --- Parameter panel ------------------------------------------------- */
+    .hp-panel {
+        display: flex;
+        flex-direction: column;
+        background: var(--hp-surface);
+    }
+    @media (min-width: 992px) {
+        .hp-panel {
+            flex: 0 1 470px;
+            min-width: 380px;
+            border-right: 1px solid var(--hp-border);
+        }
+        .hp-panel-fields {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+        }
+    }
+    .hp-panel-header { padding: 1rem 1.25rem .5rem; }
+    .hp-panel-title {
+        margin: 0;
+        font-size: .95rem;
+        font-weight: 600;
+    }
+    .hp-panel-desc {
+        margin: .25rem 0 0;
+        font-size: .76rem;
+        line-height: 1.55;
+        color: var(--hp-muted);
+    }
+    .hp-panel-fields { padding: .5rem 1.25rem 1.25rem; }
+    .hp-badge-essentials {
+        font-size: .65rem;
+        font-weight: 500;
+        color: #8a6d00;
+        background: #fff5cc;
+        border-radius: 3px;
+        padding: 2px 6px;
+        white-space: nowrap;
+    }
+    .hp-subheading {
+        font-size: .8rem;
+        font-weight: 600;
+        margin: 1.25rem 0 .5rem;
+        padding-top: .75rem;
+        border-top: 1px solid var(--hp-border-soft);
+    }
+
+    /* Field grid: two columns of labelled inputs */
+    .hp-field-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .75rem .9rem;
+        align-content: start;
+    }
+    .hp-field-wide { grid-column: 1 / -1; }
+    @media (max-width: 575.98px) {
+        .hp-field-grid { grid-template-columns: 1fr; }
+    }
+    .hp-field {
+        display: flex;
+        flex-direction: column;
+        gap: .25rem;
+    }
+    .hp-field-label {
+        font-size: .74rem;
+        color: #6b665e;
+    }
+    .hp-field-label small { color: #a8a29a; }
+
+    /* Stepper input: [-] value unit [+] */
+    .hp-stepper {
+        display: flex;
+        align-items: center;
+        border: 1px solid #ccc7bf;
+        border-radius: .375rem;
+        background: var(--hp-surface);
+        overflow: hidden;
+    }
+    .hp-stepper.disabled { background: #f4f2ee; }
+    .hp-stepper button {
+        border: 0;
+        background: transparent;
+        color: #6b665e;
+        font-family: var(--bs-font-monospace);
+        padding: .25rem .6rem;
+        line-height: 1.5;
+    }
+    .hp-stepper button:hover:not(:disabled) { background: #f4f2ee; }
+    .hp-stepper button:first-child { border-right: 1px solid var(--hp-border-soft); }
+    .hp-stepper button:last-child { border-left: 1px solid var(--hp-border-soft); }
+    .hp-stepper input {
+        flex: 1;
+        min-width: 0;
+        border: 0;
+        outline: none;
+        background: transparent;
+        text-align: right;
+        font-family: var(--bs-font-monospace);
+        font-size: .82rem;
+        font-weight: 500;
+        padding: .3rem .3rem;
+    }
+    .hp-stepper .hp-unit {
+        font-size: .68rem;
+        font-family: var(--bs-font-monospace);
+        color: #a8a29a;
+        padding-right: .4rem;
+        white-space: nowrap;
+    }
+
+    /* Read-only stat rows */
+    .hp-stats { margin-top: .75rem; }
+    .hp-stat {
+        display: flex;
+        justify-content: space-between;
+        gap: .75rem;
+        font-size: .78rem;
+        color: #3d3a35;
+        padding: .3rem 0;
+        border-top: 1px dashed var(--hp-border-soft);
+    }
+    .hp-stat-value {
+        font-family: var(--bs-font-monospace);
+        color: var(--hp-ink);
+        white-space: nowrap;
+    }
+    .hp-switch { font-size: .78rem; }
+
+    /* Run bar at the bottom of the parameter panel */
+    .hp-runbar {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: .6rem;
+        padding: .7rem 1.25rem;
+        background: #fbfaf7;
+        border-top: 1px solid var(--hp-border-soft);
+    }
+    @media (max-width: 991.98px) {
+        .hp-runbar {
+            position: sticky;
+            bottom: 0;
+            z-index: 10;
+            box-shadow: 0 -3px 10px rgba(0, 0, 0, .05);
+        }
+    }
+    .hp-badge-unrun {
+        font-size: .72rem;
+        font-weight: 500;
+        color: #b8860b;
+        background: #fff8e1;
+        border: 1px solid #f0e2b0;
+        border-radius: 4px;
+        padding: 3px 9px;
+        white-space: nowrap;
+    }
+    .hp-run-hint {
+        font-size: .72rem;
+        color: var(--hp-muted);
+    }
+    .hp-run-progress { flex: 1; }
+
+    /* --- Results column -------------------------------------------------- */
+    .hp-results {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+    @media (min-width: 992px) {
+        .hp-results { flex: 1 1 560px; }
+        .hp-results-scroll {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+        }
+    }
+    .hp-results-toolbar {
+        flex: none;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: .6rem;
+        padding: .5rem 1.1rem;
+        background: var(--hp-surface);
+        border-bottom: 1px solid var(--hp-border);
+    }
+    .hp-results-scroll { padding: .9rem 1.1rem 1.5rem; }
+    .hp-tabs {
+        display: inline-flex;
+        background: #f2efea;
+        border-radius: .45rem;
+        padding: 2px;
+    }
+    .hp-tab {
+        border: 0;
+        background: transparent;
+        font-size: .8rem;
+        font-weight: 500;
+        color: var(--hp-muted);
+        padding: .25rem .9rem;
+        border-radius: .35rem;
+    }
+    .hp-tab.active {
+        background: var(--hp-surface);
+        color: var(--hp-ink);
+        font-weight: 600;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
+    }
+    .hp-mode-select { width: auto; }
+    .hp-run-indicator {
+        display: flex;
+        align-items: center;
+        gap: .45rem;
+        font-size: .74rem;
+        color: var(--hp-muted);
+    }
+    .hp-run-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--hp-good);
+        display: block;
+    }
+    .hp-run-dot.stale { background: #b8860b; }
+
+    /* KPI cards */
+    .hp-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: .75rem;
+        margin-bottom: .9rem;
+    }
+    .hp-kpi {
+        background: var(--hp-surface);
+        border: 1px solid var(--hp-border);
+        border-radius: .4rem;
+        padding: .6rem .75rem;
+    }
+    .hp-kpi-label {
+        font-size: .7rem;
+        color: var(--hp-muted);
+        margin-bottom: .15rem;
+        white-space: nowrap;
+    }
+    .hp-kpi-value {
+        font-family: var(--bs-font-monospace);
+        font-size: 1.15rem;
+        font-weight: 600;
+    }
+    .hp-kpi-delta {
+        font-size: .7rem;
+        font-family: var(--bs-font-monospace);
+    }
+    .hp-kpi-delta.good { color: var(--hp-good); }
+    .hp-kpi-delta.bad { color: var(--hp-bad); }
+    .hp-kpi-delta.neutral { color: var(--hp-muted); }
+
+    /* Result cards & tables */
+    .hp-card {
+        background: var(--hp-surface);
+        border: 1px solid var(--hp-border);
+        border-radius: .4rem;
+        padding: .7rem .9rem;
+        margin-bottom: .9rem;
+    }
+    .hp-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: .5rem;
+        font-size: .82rem;
+        font-weight: 600;
+        margin-bottom: .5rem;
+    }
+    .hp-card .table {
+        font-size: .78rem;
+        margin-bottom: 0;
+    }
+    .hp-card .table td, .hp-card .table th { padding: .3rem .5rem; }
+    .hp-note {
+        font-size: .74rem;
+        color: var(--hp-muted);
+        margin: .5rem 0 0;
+    }
+    .hp-table-panel { font-size: .78rem; }
+    .hp-table-panel td, .hp-table-panel th { padding: .25rem .3rem; vertical-align: middle; }
+
+    /* Chart */
+    .hp-graph-bound {
+        width: 100%;
+        height: 400px;
+        position: relative;
+    }
     #spinner-overlay {
         position: absolute;
         top: 0;
@@ -22,9 +460,7 @@
         align-items: center;
         z-index: 1000;
     }
-    #spinner-overlay.active {
-        display: flex;
-    }
+    #spinner-overlay.active { display: flex; }
     .spinner {
         border: 4px solid #f3f3f3;
         border-top: 4px solid #3498db;
@@ -38,1056 +474,844 @@
         100% { transform: rotate(360deg); }
     }
 </style>
-<div class="container" style="max-width:1200px" id="app">
-    <div class="row">
-        <div class="col">
-            <br>
-            <h3>Dynamic heat pump simulator</h3>
-            <p>Explore continuous vs intermittent heating, temperature set-backs and schedules.</p>
-            <div class="alert alert-warning"><i class="fa-solid fa-person-digging"></i> Please help improve this <b>open source</b> heat pump simulator, see source code below.</div>
 
-            
-            <div class="btn-group" role="group" style="width: 250px; float:right">
-                <button type="button" class="btn btn-outline-secondary" @click="zoom_in">+</button>
-                <button type="button" class="btn btn-outline-secondary" @click="zoom_out">-</button>
-                <button type="button" class="btn btn-outline-secondary" @click="pan_left"><</button>
-                <button type="button" class="btn btn-outline-secondary" @click="pan_right">></button>
-                <button type="button" class="btn btn-outline-secondary" @click="reset">RESET</button>
-            </div>
-            
+<div id="app" class="hp-app" v-cloak>
+
+    <!-- ================= Header bar ================= -->
+    <header class="hp-header">
+        <div class="d-flex align-items-baseline flex-wrap">
+            <span class="hp-title">Dynamic heat pump simulator</span>
+            <span class="hp-subtitle">{{ mode == 'day' ? 'single day' : 'full year' }} &middot; run {{ simulation_index }}<span v-if="baseline_enabled"> &middot; vs baseline</span></span>
         </div>
-    </div>
-
-
-    
-    <div class="row">
-        <div id="graph_bound" style="width:100%; height:400px; position:relative; ">
-            <div id="graph"></div>
-            <div id="spinner-overlay">
-                <div class="spinner"></div>
-            </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm hp-btn-dark" @click="import_config">Import</button>
+            <button type="button" class="btn btn-sm hp-btn-dark" @click="export_config">Export</button>
+            <button type="button" class="btn btn-sm hp-btn-dark" @click="save_baseline">Save as baseline</button>
         </div>
-    </div>
-    <br><br>
+    </header>
 
+    <div class="hp-body">
 
-    <div class="row">
-        <div class="col">
-            <div class="card">
-                <div class="card-body">
+        <!-- ================= Parameter group rail ================= -->
+        <nav class="hp-rail">
+            <button type="button" class="hp-rail-btn hp-rail-btn-essentials"
+                :class="{active: ui.group == 'essentials'}" @click="select_group('essentials')">
+                <span class="hp-dot"></span>Essentials
+            </button>
+            <div class="d-none d-lg-block">
+                <div class="hp-rail-divider"></div>
+                <div class="hp-rail-heading">ALL PARAMETERS</div>
+            </div>
+            <button type="button" v-for="g in group_list" :key="g.id" class="hp-rail-btn"
+                :class="{active: ui.group == g.id}" @click="select_group(g.id)">{{ g.label }}</button>
+            <div class="hp-rail-footer d-none d-lg-block">
+                Sim {{ results.sim_time_ms | toFixed(0) }} ms &middot; run {{ simulation_index }}<br>
+                Frost model {{ frost.enabled ? 'on' : 'off' }}<br>
+                <a href="https://github.com/openenergymonitor/tools/tree/main/www/tools/dynamic_heatpump" target="_blank" rel="noopener">Open source &mdash; help improve</a>
+            </div>
+        </nav>
 
-                    <table class="table">
-                        <tr>
-                            <th>Name</th>
-                            <th>Mean temp</th>
-                            <th>Max temp</th>
-                            <th>Electric</th>
-                            <th>Heat @ M2</th>
-                            <th>COP @ M2</th>
-                            <th>Cost</th>
-                            <th v-if="mode=='year' && building.pv_scale>0">Solar offset</th>
-                            <th v-if="mode=='year' && building.pv_scale>0">Solar saving</th>
-                            <th v-if="mode=='year'">Agile (2024)</th>
-                        </tr>
-                        <tr v-if="baseline_enabled" style="background-color:#f0f0f0">
-                            <td>Baseline</td>
-                            <td>{{ baseline.mean_room_temp | toFixed(2) }} °C</td>
-                            <td>{{ baseline.max_room_temp | toFixed(2) }} °C</td>
-                            <td>{{ baseline.elec_kwh | toFixed(3) }} kWh</td>
-                            <td>{{ baseline.heat_kwh_m2 | toFixed(3) }} kWh</td>
-                            <td>{{ (baseline.heat_kwh_m2/baseline.elec_kwh) | toFixed(2) }}</td>
-                            <td>£{{ baseline.total_cost | toFixed(2) }}</td>
-                            <td v-if="mode=='year' && building.pv_scale>0">{{ baseline.solar_elec_kwh | toFixed(3) }} kWh</td>
-                            <td v-if="mode=='year' && building.pv_scale>0">£{{ baseline.solar_cost | toFixed(2) }}</td>
-                            <td v-if="mode=='year'">£{{ baseline.agile_cost | toFixed(2) }}</td>
-                        </tr>
-                        <tr class="table-success">
-                            <td>Current</td>
-                            <td>{{ results.mean_room_temp | toFixed(2) }} °C</td>
-                            <td>{{ results.max_room_temp | toFixed(2) }} °C</td>
-                            <td>{{ results.elec_kwh | toFixed(3) }} kWh</td>
-                            <td>{{ results.heat_kwh_m2 | toFixed(3) }} kWh</td>
-                            <td>{{ (results.heat_kwh_m2/results.elec_kwh) | toFixed(2) }}</td>
-                            <td>£{{ results.total_cost | toFixed(2) }}</td>
-                            <td v-if="mode=='year' && building.pv_scale>0">{{ results.solar_elec_kwh | toFixed(3) }} kWh</td>
-                            <td v-if="mode=='year' && building.pv_scale>0">£{{ results.solar_cost | toFixed(2) }}</td>
-                            <td v-if="mode=='year'">£{{ results.agile_cost | toFixed(2) }}</td>
-                        </tr>
-                        <tr v-if="baseline_enabled" class="table-info">
-                            <td>Saving</td>
-                            <td>{{ (results.mean_room_temp-baseline.mean_room_temp) | toFixed(2) }} °C</td>
-                            <td>{{ (results.max_room_temp-baseline.max_room_temp) | toFixed(2) }} °C</td>
-                            <td>{{ (results.elec_kwh-baseline.elec_kwh)*-1 | toFixed(3) }} kWh ({{ ((results.elec_kwh-baseline.elec_kwh)/baseline.elec_kwh*-100) | toFixed(1) }}%)</td>
-                            <td>{{ (results.heat_kwh_m2-baseline.heat_kwh_m2)*-1 | toFixed(3) }} kWh ({{ ((results.heat_kwh_m2-baseline.heat_kwh_m2)/baseline.heat_kwh_m2*-100) | toFixed(1) }}%)</td>
-                            <td>{{ ((results.heat_kwh_m2/results.elec_kwh)-(baseline.heat_kwh_m2/baseline.elec_kwh)) | toFixed(2) }}</td>
-                            <td>£{{ (results.total_cost-baseline.total_cost)*-1 | toFixed(2) }}</td>
-                            <td v-if="mode=='year' && building.pv_scale>0">{{ (results.solar_elec_kwh-baseline.solar_elec_kwh) | toFixed(3) }} kWh</td>
-                            <td v-if="mode=='year' && building.pv_scale>0">£{{ (results.solar_cost-baseline.solar_cost) | toFixed(2) }}</td>
-                            <td v-if="mode=='year'">£{{ (results.agile_cost-baseline.agile_cost)*-1 | toFixed(2) }}</td>
-                        </tr>
-                    </table>
-
-                    <h5>Performance by metering point</h5>
-                    <table class="table" style="max-width:700px">
-                        <tr>
-                            <th>Metering point</th>
-                            <th>Heat</th>
-                            <th>SPF/COP</th>
-                            <th>vs source</th>
-                        </tr>
-                        <tr>
-                            <td>At source (condenser, pre unit volume)</td>
-                            <td>{{ results.heat_kwh | toFixed(3) }} kWh</td>
-                            <td>{{ (results.heat_kwh/results.elec_kwh) | toFixed(2) }}</td>
-                            <td>100 %</td>
-                        </tr>
-                        <tr>
-                            <td>Point 1 &middot; heat pump connections</td>
-                            <td>{{ results.heat_kwh_m1 | toFixed(3) }} kWh</td>
-                            <td>{{ (results.heat_kwh_m1/results.elec_kwh) | toFixed(2) }}</td>
-                            <td>{{ (100*results.heat_kwh_m1/results.heat_kwh) | toFixed(1) }} %</td>
-                        </tr>
-                        <tr class="table-success">
-                            <td>Point 2 &middot; building entry, after primaries (main)</td>
-                            <td>{{ results.heat_kwh_m2 | toFixed(3) }} kWh</td>
-                            <td>{{ (results.heat_kwh_m2/results.elec_kwh) | toFixed(2) }}</td>
-                            <td>{{ (100*results.heat_kwh_m2/results.heat_kwh) | toFixed(1) }} %</td>
-                        </tr>
-                    </table>
-                    <p class="text-muted">Primary pipework + heat pump volume standing loss:
-                        {{ results.primary_loss_kwh | toFixed(3) }} kWh.
-                        The source &rarr; point 1 gap is the unit's own standing loss; the
-                        point 1 &rarr; point 2 gap is heat lost from the primary pipework
-                        (while flowing, plus stranded loop charge that cools between cycles).</p>
-
-                    <button type="button" class="btn btn-warning" @click="simulate" style="float:right">Refine</button>
-                    <button type="button" class="btn btn-info" @click="export_config" style="float:right; margin-right:10px;">Export Config</button>
-                    <button type="button" class="btn btn-success" @click="import_config" style="float:right; margin-right:10px;">Import Config</button>
-                    <button type="button" class="btn btn-warning" @click="save_baseline">Save as baseline</button>
-                    <span class="text-muted ms-2" style="line-height:38px;">Sim time: {{ results.sim_time_ms | toFixed(0) }} ms (Run: {{ simulation_index }})</span>
+        <!-- ================= Parameter panel ================= -->
+        <section class="hp-panel">
+            <div class="hp-panel-header">
+                <div class="d-flex align-items-center gap-2">
+                    <h2 class="hp-panel-title">{{ group_info[ui.group].title }}</h2>
+                    <span v-if="ui.group == 'essentials'" class="hp-badge-essentials">most-changed</span>
                 </div>
+                <p class="hp-panel-desc">{{ group_info[ui.group].desc }}</p>
             </div>
-        </div>
-    </div>
 
-    <div class="row">
-        <div class="col">
-            <table class="table">
-                <tr>
-                    <th></th>
-                    <th>Weighted flow temperature</th>
-                    <th>Weighted outside temperature</th>
-                    <th>Weighted (flowT - outsideT)</th>
-                    <th>Weighted average % carnot</th>
-                </tr>
-                <tr>
-                    <td>Full simulation</td>
-                    <td>{{ stats.flowT_weighted | toFixed(2) }} °C</td>
-                    <td>{{ stats.outsideT_weighted | toFixed(2) }} °C</td>
-                    <td>{{ stats.flowT_minus_outsideT_weighted | toFixed(2) }} °C</td>
-                    <td>{{ stats.wa_prc_carnot*100 | toFixed(1) }} %</td>
-                </tr>
-                <tr>
-                    <td>Selected window only</td>
-                    <td>{{ stats.window_flowT_weighted | toFixed(2) }} °C</td>
-                    <td>{{ stats.window_outsideT_weighted| toFixed(2) }} °C</td>
-                    <td>{{ stats.window_flowT_minus_outsideT_weighted | toFixed(2) }} °C</td>
-                    <td></td>
-                </tr>
-            </table>
-        </div>
-    </div>
-    <br>
-    <div class="row">
-        <div class="col">
-            <div class="card">
-                <div class="card-body">
-                    <h4>Schedule</h4>
-                    <table class="table">
+            <div class="hp-panel-fields">
+
+                <!-- Essentials -->
+                <div v-show="ui.group == 'essentials'" class="hp-field-grid">
+                    <param-field label="Heat loss" unit="W" :step="100" :min="0"
+                        v-model="building.heat_loss" @change="simulate"></param-field>
+                    <param-field label="Heat pump capacity" unit="W" :step="500" :min="0"
+                        :disabled="heatpump.cop_model == 'vaillant5' || heatpump.cop_model == 'vaillant12'"
+                        v-model="heatpump.capacity" @change="simulate"></param-field>
+                    <param-field label="Heat emitter rated output" unit="W" :step="100" :min="0"
+                        v-model="heatpump.radiatorRatedOutput" @change="simulate"></param-field>
+                    <param-field label="Flow rate" unit="L/min" :step="1" :min="1" :max="40"
+                        v-model="heatpump.flow_rate" @change="simulate"></param-field>
+                    <param-field label="Cylinder volume" unit="L" :step="10" :min="0"
+                        v-model="dhw.cylinder_volume" @change="simulate"></param-field>
+                    <param-field label="Hot water use per day" unit="L" :step="10" :min="0"
+                        v-model="dhw.daily_volume" @change="simulate"></param-field>
+                    <div class="hp-field">
+                        <label class="hp-field-label">COP model</label>
+                        <select class="form-select form-select-sm" v-model="heatpump.cop_model" @change="simulate">
+                            <option value="carnot_fixed">Carnot (fixed offsets)</option>
+                            <option value="carnot_variable">Carnot (variable offsets)</option>
+                            <option value="ecodan">Ecodan datasheet</option>
+                            <option value="vaillant5">Vaillant datasheet 5kW</option>
+                            <option value="vaillant12">Vaillant datasheet 12kW</option>
+                        </select>
+                    </div>
+                    <div class="hp-field">
+                        <label class="hp-field-label">Control mode</label>
+                        <select class="form-select form-select-sm" v-model="control.mode" @change="simulate">
+                            <option :value="0">Single PI</option>
+                            <option :value="2">Cascade PI</option>
+                            <option :value="1">Weather compensation</option>
+                            <option :value="3">Fixed speed compressor</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Room thermostat schedule -->
+                <div v-show="ui.group == 'schedule'">
+                    <table class="table table-sm hp-table-panel">
                         <tr>
                             <th>Time</th>
                             <th>Set point</th>
                             <th>Price</th>
-
-                            <!--<th>Max FlowT</th>-->
-                            <th><button class="btn" @click="add_space"><i class="fas fa-plus"></i></button></th>
+                            <th class="text-end"><button type="button" class="btn btn-sm btn-outline-secondary" @click="add_space"><i class="fas fa-plus"></i></button></th>
                         </tr>
-                        <tr v-for="(item,index) in schedule">
-                            <td><input type="text" class="form-control" v-model="item.start" @change="simulate"
-                                    style="width:75px" /></td>
+                        <tr v-for="(item, index) in schedule">
+                            <td><input type="text" class="form-control form-control-sm" style="width:70px"
+                                v-model="item.start" @change="simulate"></td>
                             <td>
-                                <div class="input-group mb-3">
-                                    <input type="text" class="form-control" v-model.number="item.set_point"
-                                        @change="simulate" style="width:30px" />
-                                    <span class="input-group-text">°C</span>
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control" v-model.number="item.set_point" @change="simulate">
+                                    <span class="input-group-text">&deg;C</span>
                                 </div>
                             </td>
                             <td>
-                                <div class="input-group mb-3">
-                                    <input type="text" class="form-control" v-model.number="item.price"
-                                        @change="simulate" style="width:30px" />
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control" v-model.number="item.price" @change="simulate">
+                                    <span class="input-group-text">p</span>
                                 </div>
                             </td>
-                            <td><button class="btn" @click="delete_space(index)"><i
-                                        class="fas fa-trash"></i></button></td>
+                            <td class="text-end"><button type="button" class="btn btn-sm btn-outline-secondary" @click="delete_space(index)"><i class="fas fa-trash"></i></button></td>
                         </tr>
                     </table>
 
-                    <!-- input group with checkbox to show/hide target temperature on graph -->
-                    <div class="input-group mb-3">
-                        <span class="input-group-text">Show target temperature on graph</span>
-                        <span class="input-group-text"><input type="checkbox" v-model="show_targetT" @change="simulate" /></span>
+                    <div class="hp-stats">
+                        <div class="hp-stat">
+                            <span>Degree hours above set point (heat pump running)</span>
+                            <span class="hp-stat-value">{{ stats.degree_hours_above_setpoint.toFixed(1) }} Kh</span>
+                        </div>
+                        <div class="hp-stat">
+                            <span>Degree hours below set point</span>
+                            <span class="hp-stat-value">{{ stats.degree_hours_below_setpoint.toFixed(1) }} Kh</span>
+                        </div>
+                        <div class="hp-stat">
+                            <span>Max room temperature</span>
+                            <span class="hp-stat-value">{{ max_room_temp | toFixed(2) }} &deg;C</span>
+                        </div>
                     </div>
 
-                    <!-- show degree hours above set point when heat pump is running -->
-                    <div class="input-group mb-3">
-                        <span class="input-group-text">Degree hours above set point when heat pump is running</span>
-                        <span class="input-group-text">{{ stats.degree_hours_above_setpoint.toFixed(1) }}</span>
+                    <div class="d-flex flex-wrap gap-2 mt-3">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @click="load_octopus_cosy">Load Octopus Cosy example</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @click="set_schedule_max">Set all to {{ Math.max(...schedule.map(s => s.set_point)) }} &deg;C</button>
                     </div>
-                    <!-- show degree hours below set point when heat pump is running -->
-                    <div class="input-group mb-3">
-                        <span class="input-group-text">Degree hours below set point</span>
-                        <span class="input-group-text">{{ stats.degree_hours_below_setpoint.toFixed(1) }}</span>
-                    </div>
-
-                    <div class="alert alert-info"><b>Room temp reached maximum of: {{ max_room_temp | toFixed(2) }} °C.</b></div>
-
-                    <!-- button to load Octopus Cosy schedule example -->
-                    <button type="button" class="btn btn-warning" @click="load_octopus_cosy">Load Octopus Cosy schedule example</button>
-                    
-                    <!-- button to switch all set points to max in schedule -->
-                    <button type="button" class="btn btn-warning" @click="set_schedule_max">Set all to {{ Math.max(...schedule.map(s => s.set_point)) }}°C</button>
                 </div>
-            </div>
-            <br>
-            <div class="card">
-                <div class="card-body">
-                    <h4>DHW Schedule</h4>
-                    <p>Hot water reheat windows. During a window the heat pump reheats the cylinder to the set point
-                    (with hysteresis) if needed, taking priority over space heating via a diverter valve.
-                    Set duration to 0 to disable a window. The modulation limit caps heat pump output during
-                    the window &mdash; an eco mode: e.g. 40% of capacity reheats more slowly at a lower flow
-                    temperature and better COP. Values below the heat pump minimum modulation
-                    ({{ heatpump.minimum_modulation }}%) are raised to it.</p>
-                    <table class="table">
+
+                <!-- DHW schedule -->
+                <div v-show="ui.group == 'dhw_schedule'">
+                    <table class="table table-sm hp-table-panel">
                         <tr>
                             <th>Time</th>
                             <th>Set point</th>
                             <th>Duration</th>
-                            <th>Modulation limit</th>
+                            <th>Mod. limit</th>
                         </tr>
-                        <tr v-for="(item,index) in dhw_schedule">
-                            <td><input type="text" class="form-control" v-model="item.start" @change="simulate"
-                                    style="width:75px" /></td>
+                        <tr v-for="(item, index) in dhw_schedule">
+                            <td><input type="text" class="form-control form-control-sm" style="width:70px"
+                                v-model="item.start" @change="simulate"></td>
                             <td>
-                                <div class="input-group mb-3">
-                                    <input type="text" class="form-control" v-model.number="item.set_point"
-                                        @change="simulate" style="width:30px" />
-                                    <span class="input-group-text">°C</span>
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control" v-model.number="item.set_point" @change="simulate">
+                                    <span class="input-group-text">&deg;C</span>
                                 </div>
                             </td>
                             <td>
-                                <div class="input-group mb-3">
-                                    <input type="text" class="form-control" v-model.number="item.duration"
-                                        @change="simulate" style="width:30px" />
-                                    <!-- seconds -->
-                                    <span class="input-group-text">seconds</span>
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control" v-model.number="item.duration" @change="simulate">
+                                    <span class="input-group-text">s</span>
                                 </div>
                             </td>
                             <td>
-                                <div class="input-group mb-3">
-                                    <input type="text" class="form-control" v-model.number="item.modulation"
-                                        @change="simulate" style="width:30px" />
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control" v-model.number="item.modulation" @change="simulate">
                                     <span class="input-group-text">%</span>
                                 </div>
                             </td>
                         </tr>
                     </table>
+                    <p class="hp-note">Set duration to 0 to disable a window. Modulation limits below the
+                        heat pump minimum modulation ({{ heatpump.minimum_modulation }}%) are raised to it.</p>
                 </div>
-            </div>
-            <br>
-            <div class="card">
-                <div class="card-body">
-                    <h4>Hot water cylinder</h4>
-                    <p>Stratified multi-node cylinder heated by a heat pump coil in the bottom of the tank.
-                    Draws are mixed down to the delivery temperature at the tap, so only the hot fraction
-                    is drawn from the cylinder:
-                    showers 07:00 ({{ (dhw.daily_volume*0.4).toFixed(0) }} L),
-                    bath 19:00 ({{ (dhw.daily_volume*0.3).toFixed(0) }} L),
-                    3&times; washing up ({{ (dhw.daily_volume*0.1).toFixed(0) }} L each), mixed volumes.</p>
 
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Cylinder volume</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="dhw.cylinder_volume" @change="simulate" />
-                                <span class="input-group-text">L</span>
-                            </div>
+                <!-- Hot water cylinder -->
+                <div v-show="ui.group == 'cylinder'">
+                    <div class="hp-field-grid">
+                        <param-field label="Cylinder volume" unit="L" :step="10" :min="0"
+                            v-model="dhw.cylinder_volume" @change="simulate"></param-field>
+                        <param-field label="Cylinder height" unit="m" :step="0.1" :min="0.5"
+                            v-model="dhw.cylinder_height" @change="simulate"></param-field>
+                        <param-field label="Hot water use per day (mixed)" unit="L" :step="10" :min="0"
+                            v-model="dhw.daily_volume" @change="simulate"></param-field>
+                        <param-field label="Mixed delivery temperature" unit="&deg;C" :step="1"
+                            v-model="dhw.mixed_draw_temp" @change="simulate"></param-field>
+                        <param-field label="Coil UA" unit="W/K" :step="100" :min="0"
+                            v-model="dhw.coil_UA" @change="simulate"></param-field>
+                        <param-field label="Coil volume (bottom of tank)" unit="L" :step="5" :min="0"
+                            v-model="dhw.coil_volume" @change="simulate"></param-field>
+                        <param-field label="Cold feed temperature" unit="&deg;C" :step="1"
+                            v-model="dhw.cold_feed_temp" @change="simulate"></param-field>
+                        <param-field label="Reheat hysteresis" unit="K" :step="1" :min="0"
+                            v-model="dhw.reheat_hysteresis" @change="simulate"></param-field>
+                        <div class="hp-field">
+                            <label class="hp-field-label">Stratification nodes</label>
+                            <select class="form-select form-select-sm" v-model.number="dhw.node_count" @change="simulate">
+                                <option :value="4">4</option>
+                                <option :value="8">8</option>
+                                <option :value="12">12</option>
+                                <option :value="20">20</option>
+                                <option :value="40">40</option>
+                            </select>
                         </div>
-                        <div class="col">
-                            <label class="form-label">Cylinder height</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="dhw.cylinder_height" @change="simulate" />
-                                <span class="input-group-text">m</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Hot water use per day <small class="text-muted">(mixed)</small></label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="dhw.daily_volume" @change="simulate" />
-                                <span class="input-group-text">L</span>
-                            </div>
-                        </div>
-                        <div class="col">
-                            <label class="form-label">Mixed delivery temperature</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="dhw.mixed_draw_temp" @change="simulate" />
-                                <span class="input-group-text">&deg;C</span>
-                            </div>
-                        </div>
+                        <param-field label="Thermostat height (0 bottom - 1 top)" :step="0.05" :min="0" :max="1"
+                            v-model="dhw.stat_height" @change="simulate"></param-field>
+                        <param-field label="Insulation U value" unit="W/m&sup2;K" :step="0.1" :min="0"
+                            v-model="dhw.wall_U" @change="simulate"></param-field>
+                        <param-field label="Effective vertical conductivity" unit="W/mK" :step="0.1" :min="0"
+                            v-model="dhw.k_eff" @change="simulate"></param-field>
+                        <param-field label="Max primary flow temperature" unit="&deg;C" :step="1"
+                            v-model="dhw.flow_max" @change="simulate"></param-field>
                     </div>
 
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Coil UA</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="dhw.coil_UA" @change="simulate" />
-                                <span class="input-group-text">W/K</span>
-                            </div>
-                        </div>
-                        <div class="col">
-                            <label class="form-label">Coil volume <small class="text-muted">(bottom of tank)</small></label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="dhw.coil_volume" @change="simulate" />
-                                <span class="input-group-text">L</span>
-                            </div>
-                        </div>
-                    </div>
+                    <p class="hp-note">Draw profile: showers 07:00 ({{ (dhw.daily_volume*0.4).toFixed(0) }} L),
+                        bath 19:00 ({{ (dhw.daily_volume*0.3).toFixed(0) }} L),
+                        3&times; washing up ({{ (dhw.daily_volume*0.1).toFixed(0) }} L each), mixed volumes.</p>
 
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Cold feed temperature</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="dhw.cold_feed_temp" @change="simulate" />
-                                <span class="input-group-text">&deg;C</span>
-                            </div>
+                    <div class="hp-stats">
+                        <div class="hp-stat">
+                            <span>Hot water heat / electric / COP</span>
+                            <span class="hp-stat-value">{{ results.dhw_heat_kwh | toFixed(2) }} / {{ results.dhw_elec_kwh | toFixed(2) }} kWh &middot; {{ results.dhw_elec_kwh > 0 ? (results.dhw_heat_kwh / results.dhw_elec_kwh).toFixed(2) : '-' }}</span>
                         </div>
-                        <div class="col">
-                            <label class="form-label">Reheat hysteresis</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="dhw.reheat_hysteresis" @change="simulate" />
-                                <span class="input-group-text">K</span>
-                            </div>
+                        <div class="hp-stat">
+                            <span>Hot water delivered</span>
+                            <span class="hp-stat-value">{{ results.dhw_delivered_kwh | toFixed(2) }} kWh</span>
                         </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Stratification nodes</label>
-                            <div class="input-group mb-3">
-                                <select class="form-control" v-model.number="dhw.node_count" @change="simulate">
-                                    <option :value="4">4</option>
-                                    <option :value="8">8</option>
-                                    <option :value="12">12</option>
-                                    <option :value="20">20</option>
-                                    <option :value="40">40</option>
-                                </select>
-                            </div>
+                        <div class="hp-stat">
+                            <span>Cylinder standing loss</span>
+                            <span class="hp-stat-value">{{ results.cylinder_loss_kwh | toFixed(2) }} kWh</span>
                         </div>
-                        <div class="col">
-                            <label class="form-label">Thermostat height <small class="text-muted">(0 bottom &ndash; 1 top)</small></label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="dhw.stat_height" @change="simulate" />
-                            </div>
+                        <div class="hp-stat">
+                            <span>Minimum cylinder top temperature</span>
+                            <span class="hp-stat-value">{{ results.min_cylinder_top_temp | toFixed(1) }} &deg;C</span>
                         </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Insulation U value</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="dhw.wall_U" @change="simulate" />
-                                <span class="input-group-text">W/m&sup2;K</span>
-                            </div>
-                        </div>
-                        <div class="col">
-                            <label class="form-label">Effective vertical conductivity</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="dhw.k_eff" @change="simulate" />
-                                <span class="input-group-text">W/mK</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Max primary flow temperature</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="dhw.flow_max" @change="simulate" />
-                                <span class="input-group-text">&deg;C</span>
-                            </div>
-                        </div>
-                        <div class="col"></div>
-                    </div>
-
-                    <div class="input-group mb-3">
-                        <span class="input-group-text">Show cylinder top temperature on graph</span>
-                        <span class="input-group-text"><input type="checkbox" v-model="show_cyl_topT" @change="simulate" /></span>
-                    </div>
-                    <div class="input-group mb-3">
-                        <span class="input-group-text">Show cylinder bottom temperature on graph</span>
-                        <span class="input-group-text"><input type="checkbox" v-model="show_cyl_bottomT" @change="simulate" /></span>
-                    </div>
-
-                    <div class="input-group mb-3">
-                        <span class="input-group-text">Hot water heat</span>
-                        <span class="input-group-text">{{ results.dhw_heat_kwh | toFixed(2) }} kWh</span>
-                        <span class="input-group-text">Electric</span>
-                        <span class="input-group-text">{{ results.dhw_elec_kwh | toFixed(2) }} kWh</span>
-                        <span class="input-group-text">COP</span>
-                        <span class="input-group-text">{{ results.dhw_elec_kwh > 0 ? (results.dhw_heat_kwh / results.dhw_elec_kwh).toFixed(2) : '-' }}</span>
-                    </div>
-                    <div class="input-group mb-3">
-                        <span class="input-group-text">Hot water delivered</span>
-                        <span class="input-group-text">{{ results.dhw_delivered_kwh | toFixed(2) }} kWh</span>
-                        <span class="input-group-text">Standing loss</span>
-                        <span class="input-group-text">{{ results.cylinder_loss_kwh | toFixed(2) }} kWh</span>
-                    </div>
-                    <div class="input-group mb-3">
-                        <span class="input-group-text">Minimum cylinder top temperature</span>
-                        <span class="input-group-text">{{ results.min_cylinder_top_temp | toFixed(1) }} &deg;C</span>
                     </div>
                 </div>
-            </div>
-            <br>
 
-
-            <div class="card">
-                <div class="card-body">
-                    <h4>Building fabric</h4>
-
-                    <!-- add entry for heat loss -->
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Heat loss</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="building.heat_loss" @change="simulate" />
+                <!-- Heat pump & control -->
+                <div v-show="ui.group == 'heatpump'">
+                    <div class="hp-field-grid">
+                        <param-field label="Heat pump capacity" unit="W" :step="500" :min="0"
+                            :disabled="heatpump.cop_model == 'vaillant5' || heatpump.cop_model == 'vaillant12'"
+                            v-model="heatpump.capacity" @change="simulate"></param-field>
+                        <div class="hp-field">
+                            <label class="hp-field-label">COP model</label>
+                            <select class="form-select form-select-sm" v-model="heatpump.cop_model" @change="simulate">
+                                <option value="carnot_fixed">Carnot (fixed offsets flow+2, outside-6)</option>
+                                <option value="carnot_variable">Carnot (variable offsets &prop; heat)</option>
+                                <option value="ecodan">Ecodan datasheet</option>
+                                <option value="vaillant5">Vaillant datasheet 5kW</option>
+                                <option value="vaillant12">Vaillant datasheet 12kW</option>
+                            </select>
+                        </div>
+                        <param-field v-if="heatpump.cop_model != 'ecodan' && heatpump.cop_model != 'vaillant5' && heatpump.cop_model != 'vaillant12'"
+                            label="Practical COP factor" unit="%" :step="1" :min="0" :max="100"
+                            v-model="heatpump.prc_carnot" @change="simulate"></param-field>
+                        <param-field label="Minimum modulation" unit="%" :step="5" :min="0" :max="100"
+                            v-model="heatpump.minimum_modulation" @change="simulate"></param-field>
+                        <div class="hp-field">
+                            <label class="hp-field-label">Minimum output</label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" class="form-control" :value="heatpump.minimum_modulation * heatpump.capacity / 100 | toFixed(0)" disabled>
                                 <span class="input-group-text">W</span>
                             </div>
                         </div>
-                        <div class="col">
-                            <label class="form-label">Heat loss coefficient</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" :value="building.fabric_WK | toFixed(0)" disabled />
+                        <param-field label="Ramp rate (modulating modes)" unit="%/step" :step="0.5" :min="0"
+                            v-model="heatpump.ramp_rate" @change="simulate"></param-field>
+                        <div class="hp-field">
+                            <label class="hp-field-label">Ramp rate</label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" class="form-control" :value="heatpump.ramp_rate * heatpump.capacity / 100 | toFixed(0)" disabled>
+                                <span class="input-group-text">W/step</span>
+                            </div>
+                        </div>
+                        <param-field label="Heat emitter rated output" unit="W" :step="100" :min="0"
+                            v-model="heatpump.radiatorRatedOutput" @change="simulate"></param-field>
+                        <param-field label="System volume (after point 2)" unit="L" :step="10" :min="0"
+                            v-model="heatpump.system_water_volume" @change="simulate"></param-field>
+                        <param-field label="Standby / controls" unit="W" :step="1" :min="0"
+                            v-model="heatpump.standby" @change="simulate"></param-field>
+                        <param-field label="Pump power" unit="W" :step="1" :min="0"
+                            v-model="heatpump.pumps" @change="simulate"></param-field>
+                    </div>
+
+                    <div class="hp-subheading">Control</div>
+                    <div class="hp-field-grid">
+                        <div class="hp-field hp-field-wide">
+                            <label class="hp-field-label">Control mode</label>
+                            <select class="form-select form-select-sm" v-model="control.mode" @change="simulate">
+                                <option :value="0">Single PI (room temp &rarr; heat demand)</option>
+                                <option :value="2">Cascade PI (room temp &rarr; flow temp &rarr; heat demand)</option>
+                                <option :value="1">Weather compensation with parallel shift</option>
+                                <option :value="3">Fixed speed compressor (on/off thermostat)</option>
+                            </select>
+                        </div>
+
+                        <!-- Single PI -->
+                        <template v-if="control.mode == 0">
+                            <param-field label="Proportional (Kp)" :step="100"
+                                v-model="control.Kp" @change="simulate"></param-field>
+                            <param-field label="Integral (Ki)" :step="0.01"
+                                v-model="control.Ki" @change="simulate"></param-field>
+                        </template>
+
+                        <!-- Cascade PI -->
+                        <template v-if="control.mode == 2">
+                            <param-field label="Outer Kp (room &rarr; flow target)" :step="0.5"
+                                v-model="control.cascade_outer_Kp" @change="simulate"></param-field>
+                            <param-field label="Outer Ki" :step="0.001"
+                                v-model="control.cascade_outer_Ki" @change="simulate"></param-field>
+                            <param-field label="Max flow temperature" unit="&deg;C" :step="1"
+                                v-model="control.cascade_outer_max_flowT" @change="simulate"></param-field>
+                            <param-field label="Inner Kp (flow &rarr; heat demand)" :step="50"
+                                v-model="control.cascade_inner_Kp" @change="simulate"></param-field>
+                            <param-field label="Inner Ki" :step="0.01"
+                                v-model="control.cascade_inner_Ki" @change="simulate"></param-field>
+                        </template>
+
+                        <!-- Weather compensation -->
+                        <template v-if="control.mode == 1">
+                            <param-field label="Weather compensation curve" :step="0.02"
+                                v-model="control.curve" @change="simulate"></param-field>
+                            <div class="hp-field" v-if="days == 1">
+                                <label class="hp-field-label">Outside temperature response</label>
+                                <select class="form-select form-select-sm" v-model.number="control.wc_use_outside_mean" @change="simulate">
+                                    <option :value="0">Instantaneous</option>
+                                    <option :value="1">Average temperature for the day</option>
+                                </select>
+                            </div>
+                            <param-field label="Inner Kp (flow &rarr; heat demand)" :step="50"
+                                v-model="control.cascade_inner_Kp" @change="simulate"></param-field>
+                            <param-field label="Inner Ki" :step="0.01"
+                                v-model="control.cascade_inner_Ki" @change="simulate"></param-field>
+                        </template>
+
+                        <!-- Fixed speed -->
+                        <template v-if="control.mode == 3">
+                            <param-field label="Compressor speed" unit="%" :step="5" :min="0" :max="100"
+                                v-model="control.fixed_compressor_speed" @change="simulate"></param-field>
+                        </template>
+
+                        <!-- Room limit (weather comp & fixed speed) -->
+                        <template v-if="control.mode == 1 || control.mode == 3">
+                            <div class="hp-field">
+                                <label class="hp-field-label">Limit by room set point</label>
+                                <div class="form-check form-switch hp-switch pt-1">
+                                    <input class="form-check-input" type="checkbox" id="limit_by_roomT"
+                                        v-model="control.limit_by_roomT" @change="simulate">
+                                    <label class="form-check-label" for="limit_by_roomT">Enabled</label>
+                                </div>
+                            </div>
+                            <param-field label="Room temperature hysteresis" unit="&deg;C" :step="0.1" :min="0"
+                                v-model="control.roomT_hysteresis" @change="simulate"></param-field>
+                        </template>
+                    </div>
+                    <p class="hp-note" v-if="control.mode == 1">Curve automatically selected based on building
+                        heat loss, internal gains and heat emitter spec.</p>
+                </div>
+
+                <!-- Primary pipework -->
+                <div v-show="ui.group == 'pipework'">
+                    <div class="hp-field-grid">
+                        <div class="hp-field">
+                            <label class="hp-field-label">Pipework model</label>
+                            <select class="form-select form-select-sm" v-model="primary.mode" @change="simulate">
+                                <option value="simple">Simple &mdash; uniform pipe in outside air</option>
+                                <option value="segmented">Segmented &mdash; per-stage material &amp; environment</option>
+                            </select>
+                        </div>
+                        <param-field label="Flow rate" unit="L/min" :step="1" :min="1" :max="40"
+                            v-model="heatpump.flow_rate" @change="simulate"></param-field>
+                    </div>
+
+                    <div v-if="primary.mode != 'segmented'" class="hp-field-grid mt-2">
+                        <param-field label="Length (one way)" unit="m" :step="1" :min="0"
+                            v-model="primary.length" @change="simulate"></param-field>
+                        <div class="hp-field">
+                            <label class="hp-field-label">Pipe size</label>
+                            <select class="form-select form-select-sm" v-model="primary.pipe" @change="simulate">
+                                <option value="22">22 mm copper</option>
+                                <option value="28">28 mm copper</option>
+                                <option value="35">35 mm copper</option>
+                            </select>
+                        </div>
+                        <div class="hp-field hp-field-wide">
+                            <label class="hp-field-label">Insulation</label>
+                            <select class="form-select form-select-sm" v-model="primary.insulation" @change="simulate">
+                                <option value="bare">Bare pipe (~1.2 W/m&middot;K)</option>
+                                <option value="13">13 mm nitrile (~0.30 W/m&middot;K)</option>
+                                <option value="19">19 mm nitrile (~0.23 W/m&middot;K)</option>
+                                <option value="25">25 mm nitrile / Primary Pro (~0.19 W/m&middot;K)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p class="hp-note" v-if="primary.mode != 'segmented'">Simple mode pipework is exposed to
+                        the live outside air temperature.</p>
+
+                    <div v-if="primary.mode == 'segmented'" class="mt-2">
+                        <div class="table-responsive">
+                            <table class="table table-sm hp-table-panel">
+                                <tr>
+                                    <th>Stage</th>
+                                    <th>Length m</th>
+                                    <th>Construction</th>
+                                    <th>Ambient &deg;C</th>
+                                    <th class="text-end"><button type="button" class="btn btn-sm btn-outline-secondary" @click="add_segment"><i class="fas fa-plus"></i></button></th>
+                                </tr>
+                                <tr v-for="(sg, index) in primary.segments">
+                                    <td><input type="text" class="form-control form-control-sm" style="min-width:80px" v-model="sg.name" @change="simulate"></td>
+                                    <td><input type="text" class="form-control form-control-sm" style="width:60px" v-model.number="sg.len" @change="simulate"></td>
+                                    <td>
+                                        <select class="form-select form-select-sm" style="min-width:140px" v-model="sg.type" @change="simulate">
+                                            <option v-for="(t, k) in pw_segtypes" :value="k">{{ t.label }} &middot; {{ t.u }} W/m&middot;K</option>
+                                        </select>
+                                    </td>
+                                    <td><input type="text" class="form-control form-control-sm" style="width:60px" v-model.number="sg.amb" @change="simulate"></td>
+                                    <td class="text-end"><button type="button" class="btn btn-sm btn-outline-secondary" @click="delete_segment(index)"><i class="fas fa-trash"></i></button></td>
+                                </tr>
+                            </table>
+                        </div>
+                        <p class="hp-note">Stage order = heat pump &rarr; building. Stage ambients are fixed
+                            (e.g. ground temperature around buried MDPE); the heat pump itself sits in the
+                            first stage's environment.</p>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @click="load_buried_example">Load example: buried MDPE run</button>
+                    </div>
+
+                    <div class="hp-field-grid mt-3">
+                        <param-field label="Water volume inside the heat pump" unit="L" :step="0.5" :min="0"
+                            v-model="primary.unit_volume" @change="simulate"></param-field>
+                        <param-field label="Pump overrun after stop" unit="min" :step="1" :min="0"
+                            v-model="primary.pump_overrun" @change="simulate"></param-field>
+                    </div>
+
+                    <div class="hp-stats">
+                        <div class="hp-stat">
+                            <span>Primary pipework + unit volume standing loss</span>
+                            <span class="hp-stat-value">{{ results.primary_loss_kwh | toFixed(2) }} kWh</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Building fabric -->
+                <div v-show="ui.group == 'fabric'">
+                    <div class="hp-field-grid">
+                        <param-field label="Heat loss" unit="W" :step="100" :min="0"
+                            v-model="building.heat_loss" @change="simulate"></param-field>
+                        <div class="hp-field">
+                            <label class="hp-field-label">Heat loss coefficient</label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" class="form-control" :value="building.fabric_WK | toFixed(0)" disabled>
                                 <span class="input-group-text">W/K</span>
                             </div>
                         </div>
                     </div>
 
-                    <p class="text-muted"><b>Layer 1:</b> External, <b>Layer 3:</b> Internal</p>
+                    <p class="hp-note"><b>Layer 1:</b> external, <b>Layer 3:</b> internal.</p>
 
-                    <table class="table">
+                    <table class="table table-sm hp-table-panel">
                         <tr>
-                            <th>Index</th>
+                            <th>Layer</th>
                             <th>Proportion</th>
                             <th>W/K</th>
                             <th>kWh/K</th>
                         </tr>
-                        <tr v-for="(layer,index) in building.fabric">
-                            <td>{{ index+1 }}</td>
+                        <tr v-for="(layer, index) in building.fabric">
+                            <td>{{ index + 1 }}</td>
                             <td>
-                                <div class="input-group mb-3">
-                                    <input type="text" class="form-control" v-model="layer.proportion" @change="simulate" :disabled="index==0" />
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control" v-model.number="layer.proportion" @change="simulate" :disabled="index == 0">
                                     <span class="input-group-text">%</span>
                                 </div>
                             </td>
                             <td>
-                                <div class="input-group mb-3">
-                                    <input type="text" class="form-control" :value="layer.WK | toFixed(0)" disabled />
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control" :value="layer.WK | toFixed(0)" disabled>
                                     <span class="input-group-text">W/K</span>
                                 </div>
                             </td>
                             <td>
-                                <div class="input-group mb-3">
-                                    <input type="text" class="form-control" v-model.number="layer.kWhK" @change="simulate" />
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control" v-model.number="layer.kWhK" @change="simulate">
                                     <span class="input-group-text">kWh/K</span>
                                 </div>
                             </td>
                         </tr>
                     </table>
                 </div>
-            </div>
-        </div>
-        <div class="col">
-          
-            <div class="card" style="background-color: #f8f9fa;">
-                <div class="card-body">
-                    <label class="form-label">Simulate:</label>
-                    <select class="form-control" v-model="mode" @change="change_mode" :disabled="progress.running">
-                        <option value="day">Single day</option>
-                        <option value="year">Full year</option>
-                    </select>
 
-                    <div v-if="mode=='year'" class="mt-3">
-                        <button type="button" class="btn w-100"
-                            :class="needs_run ? 'btn-warning' : 'btn-primary'"
-                            :disabled="progress.running"
-                            @click="run_model">
-                            {{ progress.running ? 'Running…' : (needs_run ? 'Run model (inputs changed)' : 'Run model') }}
-                        </button>
-                        <div class="progress mt-2" v-if="progress.running" style="height: 24px;">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated"
-                                :style="{ width: (100 * progress.day / progress.total) + '%' }">
-                                day {{ progress.day }} of {{ progress.total }}
-                            </div>
+                <!-- Evaporator frosting & defrost -->
+                <div v-show="ui.group == 'frost'">
+                    <div class="d-flex flex-column gap-1 mb-3">
+                        <div class="form-check form-switch hp-switch">
+                            <input class="form-check-input" type="checkbox" id="frost_enabled"
+                                v-model="frost.enabled" @change="simulate">
+                            <label class="form-check-label" for="frost_enabled">Enable frosting &amp; defrost model</label>
+                        </div>
+                        <div class="form-check form-switch hp-switch">
+                            <input class="form-check-input" type="checkbox" id="frost_csv_humidity"
+                                v-model="frost.use_csv_humidity" @change="simulate">
+                            <label class="form-check-label" for="frost_csv_humidity">Use measured humidity from dataset (annual mode)</label>
+                        </div>
+                    </div>
+
+                    <div class="hp-field-grid">
+                        <param-field label="Relative humidity (day mode / no data)" unit="%RH" :step="5" :min="0" :max="100"
+                            v-model="frost.humidity" @change="simulate"></param-field>
+                        <param-field label="Evaporator airflow" unit="m&sup3;/h" :step="100" :min="0"
+                            v-model="frost.airflow" @change="simulate"></param-field>
+                        <param-field label="Capture efficiency (calibration)" :step="0.05" :min="0" :max="1"
+                            v-model="frost.capture_eff" @change="simulate"></param-field>
+                        <param-field label="Coil below outside air" unit="K" :step="0.5" :min="0"
+                            v-model="frost.coil_dt" @change="simulate"></param-field>
+                        <param-field label="Defrost trigger threshold" unit="kg" :step="0.5" :min="0"
+                            v-model="frost.threshold" @change="simulate"></param-field>
+                        <param-field label="Max derating at trigger" unit="%" :step="5" :min="0" :max="100"
+                            v-model="frost.derate_max" @change="simulate"></param-field>
+                        <param-field label="Defrost heat draw" unit="W" :step="500" :min="0"
+                            v-model="frost.defrost_power" @change="simulate"></param-field>
+                        <param-field label="Defrost electric draw" unit="W" :step="100" :min="0"
+                            v-model="frost.defrost_elec" @change="simulate"></param-field>
+                        <param-field label="Melt efficiency" :step="0.05" :min="0" :max="1"
+                            v-model="frost.melt_eff" @change="simulate"></param-field>
+                        <param-field label="Per-cycle overhead" unit="kJ" :step="50" :min="0"
+                            v-model="frost.overhead_kj" @change="simulate"></param-field>
+                    </div>
+
+                    <div class="hp-stats">
+                        <div class="hp-stat">
+                            <span>Defrost cycles</span>
+                            <span class="hp-stat-value">{{ results.defrost_cycles }}</span>
+                        </div>
+                        <div class="hp-stat">
+                            <span>Heat drawn / electric</span>
+                            <span class="hp-stat-value">{{ results.defrost_heat_kwh | toFixed(2) }} / {{ results.defrost_elec_kwh | toFixed(2) }} kWh</span>
+                        </div>
+                        <div class="hp-stat">
+                            <span>Defrost loss</span>
+                            <span class="hp-stat-value">{{ results.heat_kwh > 0 ? (100 * results.defrost_heat_kwh / results.heat_kwh).toFixed(2) : '0.00' }} % of heat delivered</span>
                         </div>
                     </div>
                 </div>
-            </div>
-            <br>
 
-            <div class="card">
-                <div class="card-body">
-
-                    <label class="form-label">Control mode:</label>
-                    
-                    <select class="form-control" v-model="control.mode" @change="simulate">
-                        <option value=0>Single PI (room temp → heat demand)</option>
-                        <option value=2>Cascade PI (room temp → flow temp → heat demand)</option>
-                        <option value=1>Weather compensation with parallel shift</option>
-                        <option value=3>Fixed speed compressor (on/off thermostat)</option>
-                    </select>
-
-                </div>
-            </div>
-            <br>          
-            <div class="card" v-if="control.mode==0">
-                <div class="card-body">
-
-                    <label class="form-label">Auto adapt 3 term PID controller:</label>
-
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Proportional</label>
-                            <div class="input-group mb-3">
-                                <span class="input-group-text">Kp</span>
-                                <input type="text" class="form-control" v-model.number="control.Kp"
-                                    @change="simulate" />
-                            </div>
-                        </div>
-                        <div class="col">
-                            <label class="form-label">Integral</label>
-                            <div class="input-group mb-3">
-                                <span class="input-group-text">Ki</span>
-                                <input type="text" class="form-control" v-model.number="control.Ki"
-                                    @change="simulate" />
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-            <div class="card" v-if="control.mode==2">
-                <div class="card-body">
-                    <label class="form-label">Cascade PI controller:</label>
-                    <p class="text-muted">Outer loop: room temperature error → flow temperature target. Inner loop: flow temperature error → heat demand.</p>
-
-                    <label class="form-label">Outer loop (room temp → flow temp target):</label>
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Proportional</label>
-                            <div class="input-group mb-3">
-                                <span class="input-group-text">Kp</span>
-                                <input type="text" class="form-control" v-model.number="control.cascade_outer_Kp" @change="simulate" />
-                            </div>
-                        </div>
-                        <div class="col">
-                            <label class="form-label">Integral</label>
-                            <div class="input-group mb-3">
-                                <span class="input-group-text">Ki</span>
-                                <input type="text" class="form-control" v-model.number="control.cascade_outer_Ki" @change="simulate" />
-                            </div>
-                        </div>
-                        <div class="col">
-                            <label class="form-label">Max flow temp</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="control.cascade_outer_max_flowT" @change="simulate" />
-                                <span class="input-group-text">°C</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <label class="form-label">Inner loop (flow temp → heat demand):</label>
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Proportional</label>
-                            <div class="input-group mb-3">
-                                <span class="input-group-text">Kp</span>
-                                <input type="text" class="form-control" v-model.number="control.cascade_inner_Kp" @change="simulate" />
-                            </div>
-                        </div>
-                        <div class="col">
-                            <label class="form-label">Integral</label>
-                            <div class="input-group mb-3">
-                                <span class="input-group-text">Ki</span>
-                                <input type="text" class="form-control" v-model.number="control.cascade_inner_Ki" @change="simulate" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="card" v-if="control.mode==1">
-                <div class="card-body">
-
-                    <label class="form-label">Weather compensation curve:</label>
-                    <div class="input-group mb-3">
-                        <input type="text" class="form-control" v-model.number="control.curve" @change="simulate" />
-                    </div>
-
-                   <label class="form-label">Inner loop (flow temp → heat demand):</label>
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Proportional</label>
-                            <div class="input-group mb-3">
-                                <span class="input-group-text">Kp</span>
-                                <input type="text" class="form-control" v-model.number="control.cascade_inner_Kp" @change="simulate" />
-                            </div>
-                        </div>
-                        <div class="col">
-                            <label class="form-label">Integral</label>
-                            <div class="input-group mb-3">
-                                <span class="input-group-text">Ki</span>
-                                <input type="text" class="form-control" v-model.number="control.cascade_inner_Ki" @change="simulate" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div v-if="days==1">
-                        <label class="form-label">Weather compensation outside temperature response:</label>
-                        
-                        <select class="form-control" v-model.number="control.wc_use_outside_mean" @change="simulate">
-                            <option value=0>Instantaneous</option>
-                            <option value=1>Average temperature for the day</option>
-                        </select>
-                    </div>
-                    <br>
-                    <p><i>Curve automatically selected based on building heat loss, internal gains and heat emitter spec.</i></p>
-
-
-                    <div class="row">
-                        <div class="col">
-                            <div class="input-group mb-3">
-                                <span class="input-group-text">Limit by room set point</span>
-                                <span class="input-group-text"><input type="checkbox" v-model="control.limit_by_roomT" @change="simulate" /></span>
-                                
-                            </div>
-                        </div>
-                        <!-- roomT_hysteresis -->
-                        <div class="col">
-                            <label class="form-label">Room temperature hysteresis</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="control.roomT_hysteresis"
-                                    @change="simulate" />
-                                <span class="input-group-text">°C</span>
-                            </div>
-                        </div>
-                    </div>
-
-
-                </div>
-            </div>
-            
-            <div class="card" v-if="control.mode==3">
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Compressor speed</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="control.fixed_compressor_speed" @change="simulate" />
-                                <span class="input-group-text">%</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Limit</label>
-                            <div class="input-group mb-3">
-                                <span class="input-group-text">Limit by room set point</span>
-                                <span class="input-group-text"><input type="checkbox" v-model="control.limit_by_roomT" @change="simulate" /></span>
-                                
-                            </div>
-                        </div>
-                        <!-- roomT_hysteresis -->
-                        <div class="col">
-                            <label class="form-label">Room temperature hysteresis</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="control.roomT_hysteresis"
-                                    @change="simulate" />
-                                <span class="input-group-text">°C</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div> 
-            
-
-            <br>
-
-            <div class="card">
-                <div class="card-body">
-
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Heat pump capacity</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="heatpump.capacity" :disabled="heatpump.cop_model=='vaillant5' || heatpump.cop_model == 'vaillant12'"
-                                    @change="simulate" />
-                                <span class="input-group-text">W</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Minimum modulation</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="heatpump.minimum_modulation"
-                                    @change="simulate" />
-                                <span class="input-group-text">%</span>
-                            </div>
-                        </div>
-                        <div class="col">
-                            <label class="form-label">Minimum output</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" :value="heatpump.minimum_modulation*heatpump.capacity/100 | toFixed(0)" disabled />
-                                <span class="input-group-text">W</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Ramp rate <small class="text-muted">(modulating modes only)</small></label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="heatpump.ramp_rate"
-                                    @change="simulate" />
-                                <span class="input-group-text">% capacity/step</span>
-                            </div>
-                        </div>
-                        <div class="col">
-                            <label class="form-label">Ramp rate</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" :value="heatpump.ramp_rate*heatpump.capacity/100 | toFixed(0)" disabled />
-                                <span class="input-group-text">W/step</span>
-                            </div>
-                        </div>
-                    </div>
-
-
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Heat emitter rated output</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control"
-                                    v-model.number="heatpump.radiatorRatedOutput" @change="simulate"
-                                    />
-                                <span class="input-group-text">W</span>
-                            </div>
-                        </div>
-
-                        <div class="col">
-                            <label class="form-label">System volume <small class="text-muted">(indoors, emitters &amp; pipework after point 2)</small></label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control"
-                                    v-model.number="heatpump.system_water_volume" @change="simulate"
-                                    />
-                                <span class="input-group-text">L</span>
-                            </div>
-                        </div>
-
-                    </div>
-
-                    <div class="row">
-                        <dic class="col">
-                            <label class="form-label">COP Model</label>
-                            <div class="input-group mb-3">
-                                <select class="form-control" v-model="heatpump.cop_model" @change="simulate">
-                                    <option value="carnot_fixed">Carnot (fixed offsets flow+2, outside-6)</option>
-                                    <option value="carnot_variable">Carnot (variable offsets proportional to heat)</option>
-                                    <option value="ecodan">Ecodan datasheet</option>
-                                    <option value="vaillant5">Vaillant datasheet 5kW</option>
-                                    <option value="vaillant12">Vaillant datasheet 12kW</option>
-                                </select>
-                            </div>
-                        </dic>
-
-                        <div class="col" v-if="heatpump.cop_model!='ecodan' && heatpump.cop_model!='vaillant5' && heatpump.cop_model!='vaillant12'">
-                            <label class="form-label">Practical COP factor</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="heatpump.prc_carnot"
-                                    @change="simulate" />
-                                <span class="input-group-text">%</span>
-                            </div>
-                        </div>
-
-                    </div>
-
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Standby/controls</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="heatpump.standby" @change="simulate" />
-                                <span class="input-group-text">W</span>
-                            </div>
-                        </div>
-                        <div class="col">
-                            <label class="form-label">Pump power</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="heatpump.pumps" @change="simulate" />
-                                <span class="input-group-text">W</span>
-                            </div>
-                        </div>
-                    </div>
-
-
-                </div>
-            </div>
-            <br>
-
-            <div class="card">
-                <div class="card-body">
-                    <h4>Primary pipework</h4>
-                    <p>Pipework between the heat pump and the building entry (metering point 2),
-                       modelled as 0.5&nbsp;m finite-volume cells with transport delay, warm-front
-                       propagation and stagnant cool-down between cycles. Heat is metered at
-                       point 1 (heat pump connections) and point 2 (building entry) &mdash; the
-                       gap is the primary pipework penalty.</p>
-
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Pipework model</label>
-                            <div class="input-group mb-3">
-                                <select class="form-control" v-model="primary.mode" @change="simulate">
-                                    <option value="simple">Simple &mdash; uniform pipe in outside air</option>
-                                    <option value="segmented">Segmented &mdash; per-stage material &amp; environment</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col">
-                            <label class="form-label">Flow rate</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="heatpump.flow_rate" @change="simulate" />
-                                <span class="input-group-text">L/min</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div v-if="primary.mode!='segmented'">
-                        <div class="row">
-                            <div class="col">
-                                <label class="form-label">Length (one way)</label>
-                                <div class="input-group mb-3">
-                                    <input type="text" class="form-control" v-model.number="primary.length" @change="simulate" />
-                                    <span class="input-group-text">m</span>
+                <!-- Internal gains, solar & PV -->
+                <div v-show="ui.group == 'gains'">
+                    <div class="hp-field-grid">
+                        <param-field label="Body heat (~60 W/person occupied)" unit="W" :step="10" :min="0"
+                            v-model="building.metabolic_gains" @change="simulate"></param-field>
+                        <param-field label="Lights, appliances &amp; cooking" unit="W" :step="10" :min="0"
+                            v-model="building.lac_gains" @change="simulate"></param-field>
+                        <template v-if="mode == 'year'">
+                            <param-field label="Solar gains scale (PV dataset)" unit="kW" :step="0.5" :min="0"
+                                v-model="building.solar_gains_scale" @change="simulate"></param-field>
+                            <param-field label="Solar PV electrical output" unit="kW" :step="0.5" :min="0"
+                                v-model="building.pv_scale" @change="simulate"></param-field>
+                            <param-field label="Battery storage capacity" unit="kWh" :step="1" :min="0"
+                                v-model="battery.capacity_kwh" @change="simulate"></param-field>
+                            <div class="hp-field">
+                                <label class="hp-field-label">Include lighting &amp; appliances in cost</label>
+                                <div class="form-check form-switch hp-switch pt-1">
+                                    <input class="form-check-input" type="checkbox" id="include_lac"
+                                        v-model="building.include_lac_gains_in_elec_demand" @change="simulate">
+                                    <label class="form-check-label" for="include_lac">Enabled</label>
                                 </div>
                             </div>
-                            <div class="col">
-                                <label class="form-label">Pipe size</label>
-                                <div class="input-group mb-3">
-                                    <select class="form-control" v-model="primary.pipe" @change="simulate">
-                                        <option value="22">22 mm copper</option>
-                                        <option value="28">28 mm copper</option>
-                                        <option value="35">35 mm copper</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col">
-                                <label class="form-label">Insulation</label>
-                                <div class="input-group mb-3">
-                                    <select class="form-control" v-model="primary.insulation" @change="simulate">
-                                        <option value="bare">Bare pipe (~1.2 W/m&middot;K)</option>
-                                        <option value="13">13 mm nitrile (~0.30 W/m&middot;K)</option>
-                                        <option value="19">19 mm nitrile (~0.23 W/m&middot;K)</option>
-                                        <option value="25">25 mm nitrile / Primary Pro (~0.19 W/m&middot;K)</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        <p class="text-muted">Simple mode pipework is exposed to the live outside
-                           air temperature.</p>
+                        </template>
                     </div>
 
-                    <div v-if="primary.mode=='segmented'">
-                        <table class="table">
-                            <tr>
-                                <th>Stage</th>
-                                <th>Length m (one way)</th>
-                                <th>Construction</th>
-                                <th>Ambient &deg;C</th>
-                                <th><button class="btn" @click="add_segment"><i class="fas fa-plus"></i></button></th>
-                            </tr>
-                            <tr v-for="(sg,index) in primary.segments">
-                                <td><input type="text" class="form-control" v-model="sg.name" @change="simulate" /></td>
-                                <td><input type="text" class="form-control" v-model.number="sg.len" @change="simulate" style="width:90px" /></td>
-                                <td><select class="form-control" v-model="sg.type" @change="simulate">
-                                    <option v-for="(t,k) in pw_segtypes" :value="k">{{ t.label }} &middot; {{ t.u }} W/m&middot;K</option>
-                                </select></td>
-                                <td><input type="text" class="form-control" v-model.number="sg.amb" @change="simulate" style="width:90px" /></td>
-                                <td><button class="btn" @click="delete_segment(index)"><i class="fas fa-trash"></i></button></td>
-                            </tr>
-                        </table>
-                        <p class="text-muted">Stage order = heat pump &rarr; building. Stage ambients
-                           are fixed (e.g. ground temperature around buried MDPE); the heat pump
-                           itself sits in the first stage's environment.</p>
-                        <button type="button" class="btn btn-secondary mb-3" @click="load_buried_example">Load example: buried MDPE run</button>
+                    <div class="hp-stats" v-if="mode == 'year'">
+                        <div class="hp-stat">
+                            <span>Solar gains utilisation (useful / total)</span>
+                            <span class="hp-stat-value">{{ results.utilised_solar_gains_kwh.toFixed(0) }} / {{ results.solar_gains_kwh.toFixed(0) }} kWh</span>
+                        </div>
+                    </div>
+                    <p class="hp-note" v-if="mode == 'day'">Solar gains, PV output and battery storage use the
+                        annual dataset &mdash; switch to full year mode to explore them.</p>
+                </div>
+
+                <!-- Outside temperature -->
+                <div v-show="ui.group == 'outside'">
+                    <div v-if="mode == 'day'" class="hp-field-grid">
+                        <param-field label="Outside temperature" unit="&deg;C" :step="1"
+                            v-model="external.mid" @change="simulate"></param-field>
+                        <param-field label="Outside temperature swing" unit="&deg;C" :step="0.5" :min="0"
+                            v-model="external.swing" @change="simulate"></param-field>
+                        <div class="hp-field">
+                            <label class="hp-field-label">Time of minimum</label>
+                            <input type="text" class="form-control form-control-sm" v-model="external.min_time" @change="simulate">
+                        </div>
+                        <div class="hp-field">
+                            <label class="hp-field-label">Time of maximum</label>
+                            <input type="text" class="form-control form-control-sm" v-model="external.max_time" @change="simulate">
+                        </div>
                     </div>
 
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Water volume inside the heat pump</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="primary.unit_volume" @change="simulate" />
-                                <span class="input-group-text">L</span>
+                    <div v-if="mode == 'year'">
+                        <p class="hp-note mt-0">Annual mode replays the Llanberis 2024 dataset (temperature,
+                            humidity, solar and Agile prices). Use the design temperatures below when choosing
+                            a design flow temperature for heat emitters.</p>
+                        <div class="hp-stats">
+                            <div class="hp-stat">
+                                <span>99.6th percentile outside temperature</span>
+                                <span class="hp-stat-value">{{ outsideT_996.toFixed(1) }} &deg;C</span>
                             </div>
-                        </div>
-                        <div class="col">
-                            <label class="form-label">Pump overrun after heat pump stops</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="primary.pump_overrun" @change="simulate" />
-                                <span class="input-group-text">min</span>
+                            <div class="hp-stat">
+                                <span>99.0th percentile outside temperature</span>
+                                <span class="hp-stat-value">{{ outsideT_990.toFixed(1) }} &deg;C</span>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-            <br>
 
-            <div class="card" v-if="mode=='day'">
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Outside temperature</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="external.mid"
-                                    @change="simulate" />
-                                <span class="input-group-text">°C</span>
-                            </div>
-                        </div>
-                        <div class="col">
-                            <label class="form-label">Outside temperature swing</label>
-                            <div class="input-group mb-3">
-                                <input type="text" class="form-control" v-model.number="external.swing"
-                                    @change="simulate" />
-                                <span class="input-group-text">°C</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col">
-                            <label class="form-label">Minimum</label>
-                            <input type="text" class="form-control" v-model="external.min_time" @change="simulate" />
-                        </div>
-                        <div class="col">
-                            <label class="form-label">Maximum</label>
-                            <input type="text" class="form-control" v-model="external.max_time" @change="simulate" />
+            </div>
+
+            <!-- Run bar -->
+            <div class="hp-runbar">
+                <div v-if="progress.running" class="hp-run-progress">
+                    <div class="progress" style="height:26px">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated"
+                            :style="{ width: (100 * progress.day / progress.total) + '%' }">
+                            day {{ progress.day }} of {{ progress.total }}
                         </div>
                     </div>
                 </div>
+                <template v-else>
+                    <span v-if="needs_run" class="hp-badge-unrun">{{ pending_changes }} unrun change{{ pending_changes == 1 ? '' : 's' }}</span>
+                    <span v-else class="hp-run-hint">{{ mode == 'day' ? 'runs automatically on change' : 'results up to date' }}</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto"
+                        :disabled="!needs_run || !last_run_config" @click="revert">Revert</button>
+                    <button type="button" class="btn btn-sm px-3"
+                        :class="needs_run ? 'btn-warning' : 'btn-primary'" @click="run_model">Run model</button>
+                </template>
             </div>
-            <br>
-            <!-- card to show 99.6% and 99.0% outside temperature -->
-            <div class="card" v-if="mode!='day'">
-                <div class="card-body">
-                    <h4>Outside temperature percentiles</h4>
-                    <p>Use the following design temperatures when choosing design flow temperature for heat emitters.</p>
-                    <table class="table">
-                        <tr>
-                            <th>Percentile</th>
-                            <th>Outside Temperature (°C)</th>
-                        </tr>
-                        <tr>
-                            <td>99.6%</td>
-                            <td>{{ outsideT_996.toFixed(1) }} °C</td>
-                        </tr>
-                        <tr>
-                            <td>99.0%</td>
-                            <td>{{ outsideT_990.toFixed(1) }} °C</td>
-                        </tr>
-                    </table>
+        </section>
+
+        <!-- ================= Results column ================= -->
+        <section class="hp-results">
+            <div class="hp-results-toolbar">
+                <div class="hp-tabs">
+                    <button type="button" class="hp-tab" :class="{active: ui.view == 'chart'}" @click="select_view('chart')">Chart</button>
+                    <button type="button" class="hp-tab" :class="{active: ui.view == 'tables'}" @click="select_view('tables')">Tables</button>
                 </div>
+                <select class="form-select form-select-sm hp-mode-select" v-model="mode" @change="change_mode" :disabled="progress.running">
+                    <option value="day">Single day</option>
+                    <option value="year">Full year</option>
+                </select>
+                <span class="hp-run-indicator ms-auto">
+                    <span class="hp-run-dot" :class="{stale: needs_run}"></span>
+                    {{ needs_run ? 'inputs changed — run to update' : 'results from run ' + simulation_index }}
+                </span>
             </div>
-            <br>
 
-            <div class="card">
-                <div class="card-body">
-                    <p><b>Internal gains:</b></p>
+            <div class="hp-results-scroll">
 
-                    <p>Body heat (approx 60W per person when occupied).</p>
-                    <div class="input-group mb-3">
-                        <input type="text" class="form-control" v-model.number="building.metabolic_gains" @change="simulate" />
-                        <span class="input-group-text">W</span>
-                    </div>
-
-                    <p>Electric consumption for lights, appliances and cooking ~210W (5 kWh/d).</p>
-                    <div class="input-group mb-3">
-                        <input type="text" class="form-control" v-model.number="building.lac_gains" @change="simulate" />
-                        <span class="input-group-text">W</span>
-                    </div>
-
-
-                    <div v-if="mode=='year'">
-                        <div class="row">
-                            <div class="col">
-                                <p><b>Solar gains:</b></p>
-                                <p>Scale PV dataset for solar gains</p>
-                                <div class="input-group mb-3">
-                                    <input type="text" class="form-control" v-model.number="building.solar_gains_scale" @change="simulate" />
-                                    <span class="input-group-text">kW</span>
-                                </div>
-                            </div>
-                            <div class="col">
-                                <p><b>Solar gains utilisation:</b></p>
-                                <p>Useful vs total gains</p>
-                                <div class="input-group mb-3">
-                                    <span class="input-group-text">{{ results.utilised_solar_gains_kwh.toFixed(0) }} / {{ results.solar_gains_kwh.toFixed(0) }} kWh</span>
-                                </div>
-                            </div>
+                <!-- KPI cards -->
+                <div class="hp-kpi-grid">
+                    <div class="hp-kpi" v-for="k in kpis">
+                        <div class="hp-kpi-label">{{ k.label }}</div>
+                        <div class="d-flex align-items-baseline gap-2">
+                            <span class="hp-kpi-value">{{ k.value }}</span>
+                            <span v-if="k.delta" class="hp-kpi-delta" :class="k.cls">{{ k.delta }}</span>
                         </div>
-
-                        <p><b>Solar PV electrical output:</b></p>
-                        <p>Scale PV dataset output to offset heat pump electricity consumption</p>
-                        <div class="input-group mb-3">
-                            <input type="text" class="form-control" v-model.number="building.pv_scale" @change="simulate" />
-                            <span class="input-group-text">kW</span>
-                        </div>
-
-                        <p><b>Battery storage capacity:</b></p>
-                        <p>Battery storage to maximise self consumption of PV electricity</p>
-                        <div class="input-group mb-3">
-                            <input type="text" class="form-control" v-model.number="battery.capacity_kwh" @change="simulate" />
-                            <span class="input-group-text">kWh</span>
-                        </div>
-
-                        <!-- checkbox to include lac gains in electricity demand for solar offset -->
-                        <div class="input-group mb-3">
-                            <span class="input-group-text">Include lighting, appliances and cooking electric in cost calculation</span>
-                            <span class="input-group-text"><input type="checkbox" v-model="building.include_lac_gains_in_elec_demand" @change="simulate" /></span>
-                        </div>
-
                     </div>
                 </div>
+
+                <!-- Chart view -->
+                <div v-show="ui.view == 'chart'">
+                    <div class="hp-card">
+                        <div class="hp-card-header">
+                            <span>Timeseries</span>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-secondary" @click="zoom_in">+</button>
+                                <button type="button" class="btn btn-outline-secondary" @click="zoom_out">&minus;</button>
+                                <button type="button" class="btn btn-outline-secondary" @click="pan_left">&lsaquo;</button>
+                                <button type="button" class="btn btn-outline-secondary" @click="pan_right">&rsaquo;</button>
+                                <button type="button" class="btn btn-outline-secondary" @click="reset">Reset</button>
+                            </div>
+                        </div>
+                        <div id="graph_bound" class="hp-graph-bound">
+                            <div id="graph"></div>
+                            <div id="spinner-overlay">
+                                <div class="spinner"></div>
+                            </div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-3 mt-2">
+                            <div class="form-check form-check-inline hp-switch m-0">
+                                <input class="form-check-input" type="checkbox" id="show_targetT" v-model="show_targetT" @change="replot">
+                                <label class="form-check-label" for="show_targetT">Target temperature</label>
+                            </div>
+                            <div class="form-check form-check-inline hp-switch m-0">
+                                <input class="form-check-input" type="checkbox" id="show_cyl_topT" v-model="show_cyl_topT" @change="replot">
+                                <label class="form-check-label" for="show_cyl_topT">Cylinder top</label>
+                            </div>
+                            <div class="form-check form-check-inline hp-switch m-0">
+                                <input class="form-check-input" type="checkbox" id="show_cyl_bottomT" v-model="show_cyl_bottomT" @change="replot">
+                                <label class="form-check-label" for="show_cyl_bottomT">Cylinder bottom</label>
+                            </div>
+                            <div class="form-check form-check-inline hp-switch m-0">
+                                <input class="form-check-input" type="checkbox" id="show_frost" v-model="show_frost" @change="replot">
+                                <label class="form-check-label" for="show_frost">Frost mass</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="hp-card">
+                        <div class="hp-card-header">Performance by metering point</div>
+                        <div class="table-responsive">
+                            <table class="table">
+                                <tr>
+                                    <th>Metering point</th>
+                                    <th>Heat</th>
+                                    <th>SPF/COP</th>
+                                    <th>vs source</th>
+                                </tr>
+                                <tr>
+                                    <td>At source (condenser, pre unit volume)</td>
+                                    <td>{{ results.heat_kwh | toFixed(3) }} kWh</td>
+                                    <td>{{ (results.heat_kwh / results.elec_kwh) | toFixed(2) }}</td>
+                                    <td>100 %</td>
+                                </tr>
+                                <tr>
+                                    <td>Point 1 &middot; heat pump connections</td>
+                                    <td>{{ results.heat_kwh_m1 | toFixed(3) }} kWh</td>
+                                    <td>{{ (results.heat_kwh_m1 / results.elec_kwh) | toFixed(2) }}</td>
+                                    <td>{{ (100 * results.heat_kwh_m1 / results.heat_kwh) | toFixed(1) }} %</td>
+                                </tr>
+                                <tr class="table-success">
+                                    <td>Point 2 &middot; building entry, after primaries (main)</td>
+                                    <td>{{ results.heat_kwh_m2 | toFixed(3) }} kWh</td>
+                                    <td>{{ (results.heat_kwh_m2 / results.elec_kwh) | toFixed(2) }}</td>
+                                    <td>{{ (100 * results.heat_kwh_m2 / results.heat_kwh) | toFixed(1) }} %</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <p class="hp-note">Primary pipework + heat pump volume standing loss:
+                            {{ results.primary_loss_kwh | toFixed(3) }} kWh.
+                            The source &rarr; point 1 gap is the unit's own standing loss; the
+                            point 1 &rarr; point 2 gap is heat lost from the primary pipework
+                            (while flowing, plus stranded loop charge that cools between cycles).</p>
+                    </div>
+                </div>
+
+                <!-- Tables view -->
+                <div v-show="ui.view == 'tables'">
+                    <div class="hp-card">
+                        <div class="hp-card-header">Results{{ baseline_enabled ? ' vs baseline' : '' }}</div>
+                        <div class="table-responsive">
+                            <table class="table">
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Mean temp</th>
+                                    <th>Max temp</th>
+                                    <th>Electric</th>
+                                    <th>Heat @ M2</th>
+                                    <th>COP @ M2</th>
+                                    <th>Cost</th>
+                                    <th v-if="mode == 'year' && building.pv_scale > 0">Solar offset</th>
+                                    <th v-if="mode == 'year' && building.pv_scale > 0">Solar saving</th>
+                                    <th v-if="mode == 'year'">Agile (2024)</th>
+                                </tr>
+                                <tr v-if="baseline_enabled" style="background-color:#f0f0f0">
+                                    <td>Baseline</td>
+                                    <td>{{ baseline.mean_room_temp | toFixed(2) }} &deg;C</td>
+                                    <td>{{ baseline.max_room_temp | toFixed(2) }} &deg;C</td>
+                                    <td>{{ baseline.elec_kwh | toFixed(3) }} kWh</td>
+                                    <td>{{ baseline.heat_kwh_m2 | toFixed(3) }} kWh</td>
+                                    <td>{{ (baseline.heat_kwh_m2 / baseline.elec_kwh) | toFixed(2) }}</td>
+                                    <td>&pound;{{ baseline.total_cost | toFixed(2) }}</td>
+                                    <td v-if="mode == 'year' && building.pv_scale > 0">{{ baseline.solar_elec_kwh | toFixed(3) }} kWh</td>
+                                    <td v-if="mode == 'year' && building.pv_scale > 0">&pound;{{ baseline.solar_cost | toFixed(2) }}</td>
+                                    <td v-if="mode == 'year'">&pound;{{ baseline.agile_cost | toFixed(2) }}</td>
+                                </tr>
+                                <tr class="table-success">
+                                    <td>Current</td>
+                                    <td>{{ results.mean_room_temp | toFixed(2) }} &deg;C</td>
+                                    <td>{{ results.max_room_temp | toFixed(2) }} &deg;C</td>
+                                    <td>{{ results.elec_kwh | toFixed(3) }} kWh</td>
+                                    <td>{{ results.heat_kwh_m2 | toFixed(3) }} kWh</td>
+                                    <td>{{ (results.heat_kwh_m2 / results.elec_kwh) | toFixed(2) }}</td>
+                                    <td>&pound;{{ results.total_cost | toFixed(2) }}</td>
+                                    <td v-if="mode == 'year' && building.pv_scale > 0">{{ results.solar_elec_kwh | toFixed(3) }} kWh</td>
+                                    <td v-if="mode == 'year' && building.pv_scale > 0">&pound;{{ results.solar_cost | toFixed(2) }}</td>
+                                    <td v-if="mode == 'year'">&pound;{{ results.agile_cost | toFixed(2) }}</td>
+                                </tr>
+                                <tr v-if="baseline_enabled" class="table-info">
+                                    <td>Saving</td>
+                                    <td>{{ (results.mean_room_temp - baseline.mean_room_temp) | toFixed(2) }} &deg;C</td>
+                                    <td>{{ (results.max_room_temp - baseline.max_room_temp) | toFixed(2) }} &deg;C</td>
+                                    <td>{{ (results.elec_kwh - baseline.elec_kwh) * -1 | toFixed(3) }} kWh ({{ ((results.elec_kwh - baseline.elec_kwh) / baseline.elec_kwh * -100) | toFixed(1) }}%)</td>
+                                    <td>{{ (results.heat_kwh_m2 - baseline.heat_kwh_m2) * -1 | toFixed(3) }} kWh ({{ ((results.heat_kwh_m2 - baseline.heat_kwh_m2) / baseline.heat_kwh_m2 * -100) | toFixed(1) }}%)</td>
+                                    <td>{{ ((results.heat_kwh_m2 / results.elec_kwh) - (baseline.heat_kwh_m2 / baseline.elec_kwh)) | toFixed(2) }}</td>
+                                    <td>&pound;{{ (results.total_cost - baseline.total_cost) * -1 | toFixed(2) }}</td>
+                                    <td v-if="mode == 'year' && building.pv_scale > 0">{{ (results.solar_elec_kwh - baseline.solar_elec_kwh) | toFixed(3) }} kWh</td>
+                                    <td v-if="mode == 'year' && building.pv_scale > 0">&pound;{{ (results.solar_cost - baseline.solar_cost) | toFixed(2) }}</td>
+                                    <td v-if="mode == 'year'">&pound;{{ (results.agile_cost - baseline.agile_cost) * -1 | toFixed(2) }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <p class="hp-note" v-if="!baseline_enabled">Use <b>Save as baseline</b> (top right) to
+                            keep the current results for comparison as you change parameters.</p>
+                    </div>
+
+                    <div class="hp-card">
+                        <div class="hp-card-header">Weighted averages (heat weighted)</div>
+                        <div class="table-responsive">
+                            <table class="table">
+                                <tr>
+                                    <th></th>
+                                    <th>Flow temperature</th>
+                                    <th>Outside temperature</th>
+                                    <th>FlowT &minus; outsideT</th>
+                                    <th>% Carnot</th>
+                                </tr>
+                                <tr>
+                                    <td>Full simulation</td>
+                                    <td>{{ stats.flowT_weighted | toFixed(2) }} &deg;C</td>
+                                    <td>{{ stats.outsideT_weighted | toFixed(2) }} &deg;C</td>
+                                    <td>{{ stats.flowT_minus_outsideT_weighted | toFixed(2) }} &deg;C</td>
+                                    <td>{{ stats.wa_prc_carnot * 100 | toFixed(1) }} %</td>
+                                </tr>
+                                <tr>
+                                    <td>Selected window only</td>
+                                    <td>{{ stats.window_flowT_weighted | toFixed(2) }} &deg;C</td>
+                                    <td>{{ stats.window_outsideT_weighted | toFixed(2) }} &deg;C</td>
+                                    <td>{{ stats.window_flowT_minus_outsideT_weighted | toFixed(2) }} &deg;C</td>
+                                    <td></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
             </div>
-        </div>
+        </section>
+
     </div>
 </div>
+
 <script src="<?php echo $path; ?>model/pipework.js?v=<?php echo time(); ?>"></script>
 <script src="<?php echo $path; ?>model/cylinder.js?v=<?php echo time(); ?>"></script>
 <script src="<?php echo $path; ?>model/controller.js?v=<?php echo time(); ?>"></script>
 <script src="<?php echo $path; ?>model/building.js?v=<?php echo time(); ?>"></script>
+<script src="<?php echo $path; ?>model/frost.js?v=<?php echo time(); ?>"></script>
 <script src="<?php echo $path; ?>model/simulator.js?v=<?php echo time(); ?>"></script>
 <script src="<?php echo $path; ?>plot.js?v=<?php echo time(); ?>"></script>
 <script src="<?php echo $path; ?>dynamic_heatpump.js?v=<?php echo time(); ?>"></script>

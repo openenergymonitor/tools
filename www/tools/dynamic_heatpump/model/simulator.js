@@ -50,7 +50,8 @@ var simulator = (function () {
             return {
                 temperature: dataset.outsideT[index],
                 solar: dataset.solar[index],
-                agile: dataset.agile[index]
+                agile: dataset.agile[index],
+                humidity: dataset.humidity ? dataset.humidity[index] : NaN
             };
         }
         return null;
@@ -189,6 +190,10 @@ var simulator = (function () {
         var cylinder_loss_kwh = 0;
         var min_cyl_top = 1000;
 
+        var defrost_heat_kwh = 0;
+        var defrost_elec_kwh = 0;
+        var defrost_cycles = 0;
+
         // Time series for plotting
         var roomT_data = [];
         var outsideT_data = [];
@@ -201,6 +206,7 @@ var simulator = (function () {
         var solar_pv_data = [];
         var cylTopT_data = [];
         var cylBottomT_data = [];
+        var frost_data = [];
 
         var outsideT_histogram = {};
 
@@ -248,6 +254,11 @@ var simulator = (function () {
             overheating_temp: overheating_temp,
             timestep: timestep
         });
+
+        // == Evaporator frosting & defrost setup (model/frost.js) ==
+        var frost_params = frost.setup(cfg.frost, { timestep: timestep });
+        if (!state.frost) state.frost = frost.init_state();
+        var frost_state = state.frost;
 
         // == Primary pipework setup (model/pipework.js) ==
         // The emitter node capacity is the indoor system volume downstream of
@@ -349,6 +360,15 @@ var simulator = (function () {
                     outside = ext_mid + Math.sin(radians) * ext_swing_half;
                 }
 
+                // Ambient relative humidity for the frost model: the measured
+                // CSV value when available and enabled, otherwise the fixed
+                // value from the frost config
+                var humidity = frost_params.rh;
+                if (frost_params.use_csv_humidity && ext_use_csv && dataset &&
+                    dataset.loaded && ds && isFinite(ds.humidity)) {
+                    humidity = ds.humidity;
+                }
+
                 // Load heating schedule - find the active schedule entry for
                 // the current hour, starting with the last entry (handles
                 // wraparound to the next day)
@@ -414,13 +434,42 @@ var simulator = (function () {
                 heatpump_heat = ctl.heat;
                 dhw_mode = ctl.dhw_mode;
 
+                // == Evaporator frosting & defrost (model/frost.js) ==
+                // Frost accumulates while the compressor runs with the coil
+                // below freezing; at the mass threshold a reverse-cycle
+                // defrost zeroes the heat output and draws defrost_power from
+                // the heating circuit (DHW diverter forced to the space
+                // circuit) until the frost has melted. While frost builds,
+                // available capacity and COP derate linearly with frost
+                // fraction (electric input held, so COP falls with capacity).
+                var defrost_draw = 0;
+                var frost_cf = 1;
+                if (frost_params.enabled) {
+                    var fr = frost.step(frost_params, frost_state, {
+                        running: heatpump_heat > 0,
+                        outside: outside,
+                        humidity: humidity
+                    });
+                    if (fr.started) defrost_cycles++;
+                    if (fr.defrosting) {
+                        heatpump_heat = 0;
+                        dhw_mode = false;
+                        defrost_draw = frost_params.defrost_power;
+                    } else {
+                        frost_cf = fr.capacity_factor;
+                        var derated_capacity = hp_capacity * frost_cf;
+                        if (heatpump_heat > derated_capacity) heatpump_heat = derated_capacity;
+                    }
+                }
+
                 // == Primary pipework, emitter & DHW coil (model/pipework.js) ==
 
-                var system_DT = heatpump_heat / flow_heat_capacity;
+                var system_DT = (heatpump_heat - defrost_draw) / flow_heat_capacity;
 
-                // Circulation pump runs while the heat pump runs, plus optional overrun
-                if (heatpump_heat > 0) last_heat_time = time;
-                var pump_on = heatpump_heat > 0 || (time - last_heat_time) <= pw_params.overrun_s;
+                // Circulation pump runs while the heat pump runs (including
+                // defrost), plus optional overrun
+                if (heatpump_heat > 0 || defrost_draw > 0) last_heat_time = time;
+                var pump_on = heatpump_heat > 0 || defrost_draw > 0 || (time - last_heat_time) <= pw_params.overrun_s;
 
                 // Flow temperature limiter: as the unit outlet approaches the
                 // cap the heat pump modulates down (and electricity use falls
@@ -438,7 +487,7 @@ var simulator = (function () {
 
                 var pw_out = pipework.step(pw_params, pw, {
                     pump_on: pump_on,
-                    heat_W: heatpump_heat,
+                    heat_W: heatpump_heat - defrost_draw,
                     dhw_mode: dhw_mode,
                     outside: outside,
                     room: fabric_state.room,
@@ -489,7 +538,14 @@ var simulator = (function () {
                     PracticalCOP = getCOP(vaillant_data['12kW'], flow_temperature, outside, 0.001 * heatpump_heat);
                 }
 
-                if (PracticalCOP > 0) {
+                // Pre-defrost derating: capacity falls with frost while the
+                // electric input holds, so COP falls by the same factor
+                if (frost_cf < 1) PracticalCOP *= frost_cf;
+
+                if (defrost_draw > 0) {
+                    // Reverse-cycle defrost: compressor electric draw
+                    heatpump_elec = frost_params.defrost_elec;
+                } else if (PracticalCOP > 0) {
                     heatpump_elec = heatpump_heat / PracticalCOP;
                 } else {
                     heatpump_elec = 0;
@@ -500,6 +556,11 @@ var simulator = (function () {
                     heatpump_elec += hp_pumps;
                 }
                 heatpump_elec += hp_standby;
+
+                if (defrost_draw > 0) {
+                    defrost_heat_kwh += defrost_draw * power_to_kwh;
+                    defrost_elec_kwh += heatpump_elec * power_to_kwh;
+                }
 
                 // == Building fabric (model/building.js) ==
                 // Radiator output, solar gains, internal gains and cylinder
@@ -531,7 +592,7 @@ var simulator = (function () {
                 // Abort cleanly (finishing with partial results) if the simulation has gone unstable
                 if (isNaN(fabric_state.room) || isNaN(outside) || isNaN(flow_temperature) ||
                     isNaN(return_temperature) || isNaN(heatpump_elec) || isNaN(heatpump_heat) ||
-                    isNaN(pw.Th) || isNaN(pw.Te)) {
+                    isNaN(pw.Th) || isNaN(pw.Te) || isNaN(frost_state.mass)) {
                     console.error("Simulation aborted, NaN at step " + i);
                     i = itterations;
                     break;
@@ -549,6 +610,7 @@ var simulator = (function () {
                 targetT_data[i] = setpoint;
                 cylTopT_data[i] = cyl_T[cyl_params.node_count - 1];
                 cylBottomT_data[i] = cyl_T[0];
+                frost_data[i] = frost_state.mass;
 
                 // == Stats ==
 
@@ -727,6 +789,9 @@ var simulator = (function () {
                 dhw_delivered_kwh: cyl_acct.delivered_kwh,
                 cylinder_loss_kwh: cylinder_loss_kwh,
                 min_cylinder_top_temp: min_cyl_top,
+                defrost_heat_kwh: defrost_heat_kwh,
+                defrost_elec_kwh: defrost_elec_kwh,
+                defrost_cycles: defrost_cycles,
                 outsideT_996: design.outsideT_996,
                 outsideT_990: design.outsideT_990,
                 series: {
@@ -740,7 +805,8 @@ var simulator = (function () {
                     targetT_data: targetT_data,
                     solar_pv_data: solar_pv_data,
                     cylTopT_data: cylTopT_data,
-                    cylBottomT_data: cylBottomT_data
+                    cylBottomT_data: cylBottomT_data,
+                    frost_data: frost_data
                 }
             });
         }

@@ -35,7 +35,146 @@ var sim_series = null;
 var annual_dataset_outsideT = [];
 var annual_dataset_solar = [];
 var annual_dataset_agile = [];
+var annual_dataset_humidity = [];
 var annual_dataset_loaded = false;
+
+// ============================================================================
+// UI metadata: parameter groups shown in the rail and parameter panel
+// ============================================================================
+var GROUP_INFO = {
+    essentials: {
+        label: "Essentials",
+        title: "Essentials",
+        desc: "The handful of numbers that change between most runs. Everything " +
+              "else keeps its current value — open a group below to go deeper."
+    },
+    schedule: {
+        label: "Room schedule",
+        title: "Room thermostat schedule",
+        desc: "Set point and unit price by time of day. Rows add and remove " +
+              "inline; the target temperature can be overlaid on the chart."
+    },
+    dhw_schedule: {
+        label: "DHW schedule",
+        title: "DHW schedule",
+        desc: "Hot water reheat windows. During a window the heat pump reheats " +
+              "the cylinder to the set point (with hysteresis) if needed, taking " +
+              "priority over space heating via a diverter valve. The modulation " +
+              "limit caps output during the window — an eco mode: e.g. 40% of " +
+              "capacity reheats more slowly at a lower flow temperature and " +
+              "better COP."
+    },
+    cylinder: {
+        label: "Hot water cylinder",
+        title: "Hot water cylinder",
+        desc: "Stratified multi-node cylinder heated by a heat pump coil in the " +
+              "bottom of the tank. Draws are mixed down to the delivery " +
+              "temperature at the tap, so only the hot fraction is drawn from " +
+              "the cylinder."
+    },
+    heatpump: {
+        label: "Heat pump & control",
+        title: "Heat pump & control",
+        desc: "Capacity, modulation limits, COP model and the control mode that " +
+              "drives the compressor. Ramp rate applies in modulating modes only."
+    },
+    pipework: {
+        label: "Primary pipework",
+        title: "Primary pipework",
+        desc: "Pipework between the heat pump and the building entry (metering " +
+              "point 2), modelled as 0.5 m finite-volume cells with transport " +
+              "delay, warm-front propagation and stagnant cool-down between " +
+              "cycles — the point 1 → point 2 gap is the primary pipework penalty."
+    },
+    fabric: {
+        label: "Building fabric",
+        title: "Building fabric",
+        desc: "Heat loss split across three thermal mass layers (layer 1 " +
+              "external, layer 3 internal). The heat loss coefficient is " +
+              "derived from the heat loss at design conditions."
+    },
+    frost: {
+        label: "Frost & defrost",
+        title: "Evaporator frosting & defrost",
+        desc: "Frost builds on the outdoor coil when it runs below 0°C in moist " +
+              "air — worst in the 0–5°C high-humidity band. Capacity and COP " +
+              "fall linearly as frost builds; at the trigger threshold the unit " +
+              "runs a reverse-cycle defrost, plus a fixed per-cycle overhead. " +
+              "See frost-literature.md for the published model basis."
+    },
+    gains: {
+        label: "Gains, solar & PV",
+        title: "Internal gains, solar & PV",
+        desc: "Body heat, appliance electricity and solar gains offset the heat " +
+              "demand; PV output and battery storage offset heat pump " +
+              "consumption in annual mode."
+    },
+    outside: {
+        label: "Outside temperature",
+        title: "Outside temperature",
+        desc: "The outside temperature driving the simulation: a sinusoidal day " +
+              "in single day mode, the Llanberis 2024 dataset in full year mode."
+    }
+};
+
+// Rail order below the Essentials entry
+var GROUP_ORDER = ["schedule", "dhw_schedule", "cylinder", "heatpump",
+    "pipework", "fabric", "frost", "gains", "outside"];
+
+// ============================================================================
+// param-field: labelled numeric input with -/+ stepper buttons and a unit,
+// used for most single-value parameters in the panel. Supports v-model and
+// emits 'change' after each committed edit (typed or stepped).
+// ============================================================================
+Vue.component('param-field', {
+    props: {
+        label: { type: String, required: true },
+        unit: { type: String, default: "" },
+        value: { type: [Number, String], default: 0 },
+        step: { type: Number, default: 1 },
+        min: { type: Number, default: null },
+        max: { type: Number, default: null },
+        disabled: { type: Boolean, default: false }
+    },
+    methods: {
+        clamp: function (v) {
+            if (this.min !== null && v < this.min) v = this.min;
+            if (this.max !== null && v > this.max) v = this.max;
+            return v;
+        },
+        nudge: function (direction) {
+            if (this.disabled) return;
+            var v = parseFloat(this.value);
+            if (isNaN(v)) v = 0;
+            // Round to the step's decimal places to avoid float noise
+            var dp = (String(this.step).split(".")[1] || "").length;
+            v = this.clamp(parseFloat((v + direction * this.step).toFixed(dp)));
+            this.$emit('input', v);
+            this.$emit('change');
+        },
+        on_change: function (event) {
+            var v = parseFloat(event.target.value);
+            if (isNaN(v)) {
+                event.target.value = this.value;
+                return;
+            }
+            v = this.clamp(v);
+            event.target.value = v;
+            this.$emit('input', v);
+            this.$emit('change');
+        }
+    },
+    template:
+        '<div class="hp-field">' +
+            '<label class="hp-field-label">{{ label }}</label>' +
+            '<div class="hp-stepper" :class="{disabled: disabled}">' +
+                '<button type="button" tabindex="-1" :disabled="disabled" @click="nudge(-1)">&minus;</button>' +
+                '<input type="text" :value="value" :disabled="disabled" @change="on_change">' +
+                '<span class="hp-unit" v-if="unit" v-html="unit"></span>' +
+                '<button type="button" tabindex="-1" :disabled="disabled" @click="nudge(1)">+</button>' +
+            '</div>' +
+        '</div>'
+});
 
 var app = new Vue({
     el: '#app',
@@ -46,6 +185,20 @@ var app = new Vue({
         days_pre_sim: 5,
         // These are days to simulate and include in results
         days: 1,
+        // UI state: selected parameter group and results view
+        ui: {
+            group: "essentials",
+            view: "chart"
+        },
+        group_info: GROUP_INFO,
+        group_list: GROUP_ORDER.map(function (id) {
+            return { id: id, label: GROUP_INFO[id].label };
+        }),
+        // Number of input changes made since the last run (annual mode only:
+        // single day runs happen automatically on change)
+        pending_changes: 0,
+        // JSON snapshot of the config used for the last run, for Revert
+        last_run_config: null,
         building: {
             heat_loss: 3400,
             metabolic_gains: 80,
@@ -107,7 +260,7 @@ var app = new Vue({
         control: {
             mode: AUTO_ADAPT,
             wc_use_outside_mean: 1,
-            
+
             Kp: 2000,
             Ki: 0.06,
 
@@ -137,6 +290,23 @@ var app = new Vue({
         show_targetT: false,
         show_cyl_topT: true,
         show_cyl_bottomT: true,
+        show_frost: false,
+        // Evaporator frosting & reverse-cycle defrost (model/frost.js);
+        // defaults anchored to the literature review in frost-literature.md
+        frost: {
+            enabled: true,
+            humidity: 80,          // %RH used when no CSV humidity
+            use_csv_humidity: true,
+            airflow: 3500,         // m3/h evaporator fan
+            capture_eff: 0.45,     // composite deposition effectiveness
+            coil_dt: 5,            // K below outside air (measured 4-5 K)
+            threshold: 2.0,        // kg frost triggering a defrost
+            defrost_power: 4000,   // W drawn from the heating circuit
+            defrost_elec: 1000,    // W compressor draw during defrost
+            melt_eff: 0.6,         // fraction of the draw that melts frost
+            overhead_kj: 300,      // kJ per-cycle overhead (reversal + coil metal)
+            derate_max: 20         // % capacity/COP loss at the trigger point
+        },
         dhw_schedule: [
             { start: "04:00", set_point: 45, duration: 10800, modulation: 50 },
             { start: "13:00", set_point: 45, duration: 7200, modulation: 50 },
@@ -175,6 +345,9 @@ var app = new Vue({
             dhw_delivered_kwh: 0,
             cylinder_loss_kwh: 0,
             min_cylinder_top_temp: 0,
+            defrost_heat_kwh: 0,
+            defrost_elec_kwh: 0,
+            defrost_cycles: 0,
             sim_time_ms: 0
         },
         baseline: {
@@ -201,7 +374,7 @@ var app = new Vue({
             window_flowT_minus_outsideT_weighted: 0,
             degree_hours_above_setpoint: 0,
             degree_hours_below_setpoint: 0
-            
+
         },
         baseline_enabled: false,
         max_room_temp: 0,
@@ -216,9 +389,89 @@ var app = new Vue({
             total: 0
         }
     },
+    computed: {
+        // Headline result cards, with deltas against the saved baseline
+        kpis: function () {
+            var r = this.results;
+            var b = this.baseline;
+            var has_baseline = this.baseline_enabled;
+            var dp = this.mode == "day" ? 1 : 0;
+
+            function signed(v, dpx, unit, prefix) {
+                var sign = v >= 0 ? "+" : "−";
+                return sign + (prefix || "") + Math.abs(v).toFixed(dpx) + (unit || "");
+            }
+            // direction: +1 higher is better, -1 lower is better, 0 neutral
+            function cls(v, direction) {
+                if (!direction || v == 0) return "neutral";
+                return (v * direction > 0) ? "good" : "bad";
+            }
+
+            var cop = r.elec_kwh > 0 ? r.heat_kwh_m2 / r.elec_kwh : 0;
+            var cop_b = b.elec_kwh > 0 ? b.heat_kwh_m2 / b.elec_kwh : 0;
+
+            var list = [
+                {
+                    label: "COP @ building entry",
+                    value: cop.toFixed(2),
+                    delta: has_baseline ? signed(cop - cop_b, 2) : "",
+                    cls: cls(cop - cop_b, 1)
+                },
+                {
+                    label: "Electric input",
+                    value: r.elec_kwh.toFixed(dp) + " kWh",
+                    delta: has_baseline && b.elec_kwh > 0
+                        ? signed(100 * (r.elec_kwh - b.elec_kwh) / b.elec_kwh, 1, "%") : "",
+                    cls: cls(r.elec_kwh - b.elec_kwh, -1)
+                },
+                {
+                    label: "Heat delivered @ M2",
+                    value: r.heat_kwh_m2.toFixed(dp) + " kWh",
+                    delta: has_baseline && b.heat_kwh_m2 > 0
+                        ? signed(100 * (r.heat_kwh_m2 - b.heat_kwh_m2) / b.heat_kwh_m2, 1, "%") : "",
+                    cls: "neutral"
+                },
+                {
+                    label: "Cost",
+                    value: "£" + r.total_cost.toFixed(2),
+                    delta: has_baseline ? signed(r.total_cost - b.total_cost, 2, "", "£") : "",
+                    cls: cls(r.total_cost - b.total_cost, -1)
+                }
+            ];
+            if (this.mode == "year") {
+                list.push({
+                    label: "Cost (Agile 2024)",
+                    value: "£" + r.agile_cost.toFixed(2),
+                    delta: has_baseline ? signed(r.agile_cost - b.agile_cost, 2, "", "£") : "",
+                    cls: cls(r.agile_cost - b.agile_cost, -1)
+                });
+            }
+            list.push({
+                label: "Mean room temp",
+                value: r.mean_room_temp.toFixed(2) + " °C",
+                delta: has_baseline ? signed(r.mean_room_temp - b.mean_room_temp, 2, " °C") : "",
+                cls: "neutral"
+            });
+            return list;
+        }
+    },
     methods: {
+        select_group: function (id) {
+            this.ui.group = id;
+        },
+        select_view: function (id) {
+            this.ui.view = id;
+            // The chart needs a redraw once its container is visible again
+            if (id == "chart") {
+                this.$nextTick(function () { plot(); });
+            }
+        },
+        // Redraw the chart without re-running the model (series display flags)
+        replot: function () {
+            plot();
+        },
         change_mode: function () {
-            
+
             if (this.mode == "day") {
                 this.days = 1;
             } else {
@@ -265,31 +518,32 @@ var app = new Vue({
             annual_dataset_outsideT = [];
             annual_dataset_solar = []; // used for solar gains
             annual_dataset_agile = []; // used for agile pricing
+            annual_dataset_humidity = []; // used for the frost model
 
             console.log(`Parsing CSV with ${lines.length} lines`);
-            
+
             // Skip header row
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i].trim();
                 if (line === '') continue;
-                
+
                 const columns = line.split(',');
                 if (columns.length >= 3) {
                     const temperature = parseFloat(columns[1]);
                     const humidity = parseFloat(columns[2]);
                     const solar = parseFloat(columns[3]);
                     const agile = parseFloat(columns[4]);
-                    
+
                     annual_dataset_outsideT.push(temperature*1);
                     annual_dataset_solar.push(solar*1);
                     annual_dataset_agile.push(agile*1);
+                    annual_dataset_humidity.push(humidity*1);
                 }
             }
-            
+
             if (annual_dataset_outsideT.length > 0) {
                 annual_dataset_loaded = true;
                 console.log(`Loaded ${annual_dataset_outsideT.length} half hourly temperature readings`);
-                // alert(`Successfully loaded ${annual_dataset_outsideT.length} hourly temperature readings from outside_temperature.csv`);
                 this.run_model();
             } else {
                 alert('No valid data found in CSV file');
@@ -305,6 +559,7 @@ var app = new Vue({
             // the model is run manually with the Run button.
             if (this.mode == "year") {
                 this.needs_run = true;
+                this.pending_changes++;
                 return;
             }
             this.run_model();
@@ -312,6 +567,7 @@ var app = new Vue({
         run_model: function () {
             if (this.progress.running) return;
             this.needs_run = false;
+            this.pending_changes = 0;
             console.log("== Call to simulate ==");
 
             // Long runs get a day-count progress bar, short runs the spinner
@@ -350,7 +606,7 @@ var app = new Vue({
                 remaining_proportion -= app.building.fabric[2].proportion;
                 remaining_proportion -= app.building.fabric[1].proportion;
                 app.building.fabric[0].proportion = remaining_proportion;
-                
+
                 var sum = 0;
                 for (var z in app.building.fabric) {
                     let WK_inv = 0.01 * app.building.fabric[z].proportion * fabric_WK_inv;
@@ -376,6 +632,9 @@ var app = new Vue({
                 if (node_count > 40) node_count = 40;
                 app.dhw.node_count = node_count;
 
+                // Snapshot the config actually used for this run, for Revert
+                app.last_run_config = JSON.stringify(app.get_config());
+
                 // Simulator config: the app's data objects by reference (the
                 // same shape export_config produces), plus the waveform times
                 var config = {
@@ -389,6 +648,7 @@ var app = new Vue({
                     dhw_schedule: app.dhw_schedule,
                     dhw_draw_profile: dhw_draw_profile,
                     battery: app.battery,
+                    frost: app.frost,
                     outside_min_time: outside_min_time,
                     outside_max_time: outside_max_time
                 };
@@ -396,7 +656,8 @@ var app = new Vue({
                     loaded: annual_dataset_loaded,
                     outsideT: annual_dataset_outsideT,
                     solar: annual_dataset_solar,
-                    agile: annual_dataset_agile
+                    agile: annual_dataset_agile,
+                    humidity: annual_dataset_humidity
                 };
 
                 // Main run, started after the pre-sim completes
@@ -455,6 +716,9 @@ var app = new Vue({
                 app.results.dhw_delivered_kwh = result.dhw_delivered_kwh;
                 app.results.cylinder_loss_kwh = result.cylinder_loss_kwh;
                 app.results.min_cylinder_top_temp = result.min_cylinder_top_temp;
+                app.results.defrost_heat_kwh = result.defrost_heat_kwh;
+                app.results.defrost_elec_kwh = result.defrost_elec_kwh;
+                app.results.defrost_cycles = result.defrost_cycles;
                 app.stats.flowT_weighted = result.flowT_weighted;
                 app.stats.outsideT_weighted = result.outsideT_weighted;
                 app.stats.flowT_minus_outsideT_weighted = result.flowT_minus_outsideT_weighted;
@@ -470,7 +734,7 @@ var app = new Vue({
                 // Set view if not already set
                 if (view.start == 0 && view.end == 0) {
                     view.start = 0;
-                                    
+
                     var timestep = 30;
                     var itterations = 3600 * 24 * app.days / timestep;
 
@@ -534,51 +798,51 @@ var app = new Vue({
         zoom_out: function () {
             var range = view.end - view.start;
             var center = (view.start + view.end) / 2;
-            
+
             // Zoom out by 2x
             var new_range = range * 2;
             view.start = center - new_range / 2;
             view.end = center + new_range / 2;
-            
+
             // Clamp to simulation bounds (0 to total simulation time)
             var max_time = app.days * 24 * 3600;
             if (view.start < 0) view.start = 0;
             if (view.end > max_time) view.end = max_time;
-            
+
             view_calc_interval();
             plot();
         },
         zoom_in: function () {
             var range = view.end - view.start;
             var center = (view.start + view.end) / 2;
-            
+
             // Zoom in by 2x
             var new_range = range / 2;
             view.start = center - new_range / 2;
             view.end = center + new_range / 2;
-            
+
             // Minimum range of 1 hour
             if (view.end - view.start < 3600) {
                 view.start = center - 1800;
                 view.end = center + 1800;
             }
-            
+
             view_calc_interval();
             plot();
         },
         pan_left: function () {
             var range = view.end - view.start;
             var shift = range * 0.25; // Pan by 25% of current view
-            
+
             view.start -= shift;
             view.end -= shift;
-            
+
             // Clamp to simulation bounds
             if (view.start < 0) {
                 view.end = view.end - view.start;
                 view.start = 0;
             }
-            
+
             view_calc_interval();
             plot();
         },
@@ -586,16 +850,16 @@ var app = new Vue({
             var range = view.end - view.start;
             var shift = range * 0.25; // Pan by 25% of current view
             var max_time = app.days * 24 * 3600;
-            
+
             view.start += shift;
             view.end += shift;
-            
+
             // Clamp to simulation bounds
             if (view.end > max_time) {
                 view.start = max_time - range;
                 view.end = max_time;
             }
-            
+
             view_calc_interval();
             plot();
         },
@@ -607,9 +871,10 @@ var app = new Vue({
             plot();
         },
 
-        export_config: function () {
-            // Create exportable config object with all user-settable parameters
-            var config = {
+        // Deep copy of every user-settable parameter, shared by export,
+        // the last-run snapshot (Revert) and import validation
+        get_config: function () {
+            return {
                 days: this.days,
                 building: JSON.parse(JSON.stringify(this.building)),
                 external: JSON.parse(JSON.stringify(this.external)),
@@ -618,12 +883,70 @@ var app = new Vue({
                 control: JSON.parse(JSON.stringify(this.control)),
                 schedule: JSON.parse(JSON.stringify(this.schedule)),
                 dhw: JSON.parse(JSON.stringify(this.dhw)),
-                dhw_schedule: JSON.parse(JSON.stringify(this.dhw_schedule))
+                dhw_schedule: JSON.parse(JSON.stringify(this.dhw_schedule)),
+                battery: JSON.parse(JSON.stringify(this.battery)),
+                frost: JSON.parse(JSON.stringify(this.frost))
             };
-            
+        },
+        // Apply a config object (imported or reverted) onto the app state
+        apply_config: function (config) {
+            if (config.days !== undefined) {
+                if (config.days == 4) {
+                    config.days = 1;
+                }
+                this.days = config.days;
+            }
+            if (config.building) {
+                Object.assign(this.building, config.building);
+            }
+            if (config.external) {
+                Object.assign(this.external, config.external);
+            }
+            if (config.heatpump) {
+                Object.assign(this.heatpump, config.heatpump);
+            }
+            if (config.primary) {
+                Object.assign(this.primary, JSON.parse(JSON.stringify(config.primary)));
+            }
+            if (config.control) {
+                Object.assign(this.control, config.control);
+                // Older exports carry select values as strings; the new UI
+                // binds numeric option values
+                this.control.mode = Number(this.control.mode);
+                this.control.wc_use_outside_mean = Number(this.control.wc_use_outside_mean);
+            }
+            if (config.schedule && Array.isArray(config.schedule)) {
+                this.schedule = JSON.parse(JSON.stringify(config.schedule));
+            }
+            if (config.dhw) {
+                Object.assign(this.dhw, config.dhw);
+            }
+            if (config.dhw_schedule && Array.isArray(config.dhw_schedule)) {
+                this.dhw_schedule = JSON.parse(JSON.stringify(config.dhw_schedule));
+            }
+            if (config.battery) {
+                Object.assign(this.battery, config.battery);
+            }
+            if (config.frost) {
+                // Old configs without a frost section keep the defaults
+                Object.assign(this.frost, config.frost);
+            }
+
+            // Update fabric starting temperatures
+            update_fabric_starting_temperatures();
+        },
+        // Restore the configuration used for the last completed run
+        revert: function () {
+            if (!this.last_run_config) return;
+            this.apply_config(JSON.parse(this.last_run_config));
+            this.needs_run = false;
+            this.pending_changes = 0;
+        },
+
+        export_config: function () {
             // Convert to JSON string with nice formatting
-            var jsonString = JSON.stringify(config, null, 2);
-            
+            var jsonString = JSON.stringify(this.get_config(), null, 2);
+
             // Copy to clipboard
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(jsonString).then(function() {
@@ -640,51 +963,18 @@ var app = new Vue({
         },
         import_config: function () {
             var jsonString = prompt('Paste your configuration JSON below:');
-            
+
             if (jsonString && jsonString.trim() !== '') {
                 try {
                     var config = JSON.parse(jsonString);
-                    
+
                     // Validate that the config has the expected structure
                     if (this.validate_config(config)) {
-                        // Apply the imported configuration
-                        if (config.days !== undefined) {
-                            if (config.days == 4) {
-                                config.days = 1;
-                            }
-                            this.days = config.days;
-                        }
-                        if (config.building) {
-                            Object.assign(this.building, config.building);
-                        }
-                        if (config.external) {
-                            Object.assign(this.external, config.external);
-                        }
-                        if (config.heatpump) {
-                            Object.assign(this.heatpump, config.heatpump);
-                        }
-                        if (config.primary) {
-                            Object.assign(this.primary, JSON.parse(JSON.stringify(config.primary)));
-                        }
-                        if (config.control) {
-                            Object.assign(this.control, config.control);
-                        }
-                        if (config.schedule && Array.isArray(config.schedule)) {
-                            this.schedule = JSON.parse(JSON.stringify(config.schedule));
-                        }
-                        if (config.dhw) {
-                            Object.assign(this.dhw, config.dhw);
-                        }
-                        if (config.dhw_schedule && Array.isArray(config.dhw_schedule)) {
-                            this.dhw_schedule = JSON.parse(JSON.stringify(config.dhw_schedule));
-                        }
+                        this.apply_config(config);
 
-                        // Update fabric starting temperatures
-                        update_fabric_starting_temperatures();
-                        
                         // Run simulation with new config
                         this.simulate();
-                        
+
                         alert('Configuration imported successfully!');
                     } else {
                         alert('Invalid configuration format. Please check your JSON structure.');
@@ -699,10 +989,10 @@ var app = new Vue({
             if (typeof config !== 'object' || config === null) {
                 return false;
             }
-            
+
             // Check for required main sections (at least one should exist)
             var hasValidSection = false;
-            
+
             if (config.building && typeof config.building === 'object') {
                 hasValidSection = true;
             }
@@ -718,7 +1008,7 @@ var app = new Vue({
             if (config.schedule && Array.isArray(config.schedule)) {
                 hasValidSection = true;
             }
-            
+
             return hasValidSection;
         },
         set_schedule_max: function () {
@@ -764,7 +1054,8 @@ function hour_to_time_str(hour_min) {
 //  - fabric:  building fabric temperatures {room, t1, t2}
 //  - pw:      primary pipework {sig, flow[], ret[], Th, Te}
 //  - cyl_T:   hot water cylinder node temperatures (0 = bottom)
-var sim_state = { control: null, fabric: null, pw: null, cyl_T: null };
+//  - frost:   evaporator frost mass & defrost state
+var sim_state = { control: null, fabric: null, pw: null, cyl_T: null, frost: null };
 app.state = sim_state;
 update_fabric_starting_temperatures();
 
@@ -776,5 +1067,3 @@ app.baseline_enabled = false;
 function update_fabric_starting_temperatures() {
     sim_state.fabric = building.init_state(app.building.fabric);
 }
-
-

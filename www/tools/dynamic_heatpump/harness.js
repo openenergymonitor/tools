@@ -51,6 +51,7 @@ global.Vue = function (opts) {
     return this;
 };
 Vue.filter = function () {};
+Vue.component = function () {};
 
 // Chainable jQuery stub: width()/height() return a number with no args,
 // chain when called with args (as setters); everything else chains
@@ -80,7 +81,7 @@ load(path.join(LIB, 'ecodan.js'));
 load(path.join(LIB, 'vaillant.js'));
 // Model modules and plot glue (order matters); older self-contained app
 // versions passed via --app may predate the split, so only load what exists
-const MODEL_FILES = ['pipework.js', 'cylinder.js', 'controller.js', 'building.js', 'simulator.js'];
+const MODEL_FILES = ['pipework.js', 'cylinder.js', 'controller.js', 'building.js', 'frost.js', 'simulator.js'];
 const model_dir = path.join(path.dirname(app_file), 'model');
 if (fs.existsSync(model_dir)) {
     for (const f of MODEL_FILES) {
@@ -133,6 +134,12 @@ function report() {
     console.log('dhw delivered kWh:   ', r.dhw_delivered_kwh.toFixed(3));
     console.log('cylinder loss kWh:   ', r.cylinder_loss_kwh.toFixed(3));
     console.log('min cyl top T:       ', r.min_cylinder_top_temp.toFixed(2));
+    if (r.defrost_cycles !== undefined) { // absent in pre-frost versions
+        console.log('defrost cycles:      ', r.defrost_cycles);
+        console.log('defrost heat kWh:    ', r.defrost_heat_kwh.toFixed(3),
+            '(' + (100 * r.defrost_heat_kwh / r.heat_kwh).toFixed(2) + '% of heat)');
+        console.log('defrost elec kWh:    ', r.defrost_elec_kwh.toFixed(3));
+    }
     // Post-refactor state/series live on app.state / sim_series; fall back to
     // the old globals when testing a pre-refactor version via --app
     const cyl = (app.state && app.state.cyl_T) ? app.state.cyl_T : (typeof cyl_T !== 'undefined' ? cyl_T : []);

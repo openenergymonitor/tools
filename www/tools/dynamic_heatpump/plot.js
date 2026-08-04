@@ -77,6 +77,12 @@ $('#graph').width($('#graph_bound').width()).height($('#graph_bound').height());
 function plot() {
     if (!sim_series) return;
 
+    // Skip when the chart container is hidden (Tables view active) and pick
+    // up any container size change since the last draw
+    var bound_width = $('#graph_bound').width();
+    if (!bound_width) return;
+    $('#graph').width(bound_width).height($('#graph_bound').height());
+
     var window = {};
     window.elec_data = timeseries(sim_series.elec_data);
     window.heat_data = timeseries(sim_series.heat_data);
@@ -89,6 +95,7 @@ function plot() {
     window.solar_pv_data = timeseries(sim_series.solar_pv_data);
     window.cylTopT_data = timeseries(sim_series.cylTopT_data);
     window.cylBottomT_data = timeseries(sim_series.cylBottomT_data);
+    window.frost_data = timeseries(sim_series.frost_data || []);
 
     let power_to_kwh = view.interval / 3600000;
 
@@ -133,7 +140,8 @@ function plot() {
         { label: "OutsideT", data: window.outsideT_data, color: "#0000cc", yaxis: 1, lines: { show: true, fill: false } },
         { label: "Agile Price", data: window.agile_data, color: "#a6196bff", yaxis: 4, lines: { show: true, fill: false } },
         { label: "CylTopT", data: window.cylTopT_data, color: "#cc0000", yaxis: 2, lines: { show: true, fill: false } },
-        { label: "CylBottomT", data: window.cylBottomT_data, color: "#e08080", yaxis: 2, lines: { show: true, fill: false } }
+        { label: "CylBottomT", data: window.cylBottomT_data, color: "#e08080", yaxis: 2, lines: { show: true, fill: false } },
+        { label: "Frost", data: window.frost_data, color: "#00aacc", yaxis: 5, lines: { show: true, fill: true } }
     ];
 
     if (app.mode != "year") {
@@ -150,6 +158,10 @@ function plot() {
 
     if (!app.show_cyl_bottomT) {
         series[10].lines.show = false;
+    }
+
+    if (!app.show_frost) {
+        series[11].lines.show = false;
     }
 
     if (app.mode != "year") {
@@ -204,6 +216,10 @@ $('#graph').bind("plothover", function (event, pos, item) {
             // Add cylinder top and bottom temperatures
             tooltipstr += "CylTopT: " + (series[9].data[z][1]).toFixed(1) + "°C<br>";
             tooltipstr += "CylBottomT: " + (series[10].data[z][1]).toFixed(1) + "°C<br>";
+            // Add evaporator frost mass
+            if (app.show_frost && series[11].data[z]) {
+                tooltipstr += "Frost: " + (series[11].data[z][1]).toFixed(2) + "kg<br>";
+            }
 
             tooltip(item.pageX, item.pageY, tooltipstr, "#fff", "#000");
 
