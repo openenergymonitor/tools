@@ -50,10 +50,8 @@
         flex-flow: row wrap;
     }
     @media (max-width: 991.98px) {
-        /* Non-zero basis so the panel wraps onto a fresh line (a zero-basis
-           item would "fit" on the full-width section label's line and
-           collapse to 0 width when the rail is hidden), but small enough to
-           share a line with the 145px rail on narrow phones. */
+        /* Non-zero basis so the panel keeps a usable width beside the
+           145px rail on narrow phones. */
         .hp-body > .hp-panel { flex: 1 1 160px; min-width: 0; }
         .hp-body > .hp-kpi-strip,
         .hp-body > .hp-results { flex: 0 0 100%; }
@@ -61,18 +59,6 @@
     @media (min-width: 992px) {
         .hp-app { height: calc(100vh - 58px); }
         .hp-body { flex: 1 1 auto; flex-wrap: nowrap; min-height: 0; }
-    }
-
-    /* Narrow-only section label above the rail + panel pair */
-    .hp-section-label {
-        flex: 0 0 100%;
-        padding: .55rem .9rem;
-        font-size: .65rem;
-        font-weight: 600;
-        letter-spacing: .08em;
-        color: #44403a;
-        background: var(--hp-rail-bg);
-        border-bottom: 1px solid var(--hp-border-soft);
     }
 
     /* --- Header bar ----------------------------------------------------- */
@@ -335,6 +321,10 @@
         display: flex;
         align-items: center;
         gap: .6rem;
+        /* Bottom of the panel's flex column — on narrow screens the panel
+           stretches to the open rail's height, and without this the bar
+           would sit mid-panel right after the fields */
+        margin-top: auto;
         padding: .7rem 1.25rem;
         background: #fbfaf7;
         border-top: 1px solid var(--hp-border-soft);
@@ -586,8 +576,6 @@
     </header>
 
     <div class="hp-body">
-
-        <div class="hp-section-label d-lg-none">PARAMETER GROUPS</div>
 
         <!-- ================= Parameter group rail ================= -->
         <!-- Narrow: sits beside the parameter fields; the panel header
