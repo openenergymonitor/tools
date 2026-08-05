@@ -158,12 +158,20 @@ var GROUP_INFO = {
         title: "Outside temperature",
         desc: "The outside temperature driving the simulation: a sinusoidal day " +
               "in single day mode, the Llanberis 2024 dataset in full year mode."
+    },
+    validator: {
+        label: "Validator",
+        title: "HeatpumpMonitor.org validator",
+        desc: "Compare the model's annual stats against real monitored systems " +
+              "on heatpumpmonitor.org: last-365-day totals, COPs and " +
+              "heat-weighted averages, calculated the same way as the site " +
+              "(heat metered at the heat pump connections, point 1)."
     }
 };
 
 // Rail order below the Essentials entry
 var GROUP_ORDER = ["schedule", "dhw_schedule", "cylinder", "heatpump",
-    "pipework", "fabric", "frost", "gains", "outside"];
+    "pipework", "fabric", "frost", "gains", "outside", "validator"];
 
 // ============================================================================
 // param-field: labelled numeric input with -/+ stepper buttons and a unit,
@@ -471,6 +479,20 @@ var app = new Vue({
             degree_hours_below_setpoint: 0
 
         },
+        // HeatpumpMonitor.org validator: public system list merged with the
+        // last-365-day stats by system id, plus the search/selection state
+        validator: {
+            loading: false,
+            loaded: false,
+            error: "",
+            query: "",
+            candidate: null,
+            systems: []
+        },
+        // HeatpumpMonitor.org-style stats from the last completed run and the
+        // day count it covered (comparable when it was a full year)
+        hpm_model: null,
+        hpm_model_days: 0,
         baseline_enabled: false,
         max_room_temp: 0,
         outsideT_996: 0,
@@ -610,11 +632,196 @@ var app = new Vue({
                 cls: "neutral"
             });
             return list;
+        },
+
+        // --- HeatpumpMonitor.org validator ------------------------------
+        // Systems matching all whitespace-separated search terms. A term of
+        // the form "<number>kw" (e.g. "5kw", "8.5kw") is an exact capacity
+        // (hp_output) filter; every other term is a substring match across
+        // system id, location, manufacturer, model and kW (same behaviour as
+        // heatpumpmonitor.org's emitter tool). Empty search = full list.
+        validator_filtered: function () {
+            var q = (this.validator.query || "").trim().toLowerCase();
+            var list = this.validator.systems;
+            if (!q) return list;
+            var terms = q.split(/\s+/);
+            return list.filter(function (s) {
+                var hay = (s.id + " " + s.location + " " + s.hp_manufacturer + " " +
+                    s.hp_model + " " + s.hp_output + " kw").toLowerCase();
+                var cap = parseFloat(s.hp_output);
+                return terms.every(function (t) {
+                    var m = t.match(/^(\d+(?:\.\d+)?)kw$/);
+                    if (m) return cap === parseFloat(m[1]);
+                    return hay.indexOf(t) !== -1;
+                });
+            });
+        },
+        validator_selected: function () {
+            var id = this.validator.candidate;
+            if (id === null) return null;
+            var list = this.validator.systems;
+            for (var i = 0; i < list.length; i++) {
+                if (list[i].id === id) return list[i];
+            }
+            return null;
+        },
+        // Days of data behind the selected system's stats; scaling to 365 is
+        // shown when the record is meaningfully short of a full year
+        validator_sys_days: function () {
+            var sys = this.validator_selected;
+            if (!sys) return 0;
+            return sys.stats.combined_data_length / 86400;
+        },
+        validator_scale: function () {
+            var days = this.validator_sys_days;
+            return (days > 0 && days < 364.5) ? 365 / days : null;
+        },
+        // True when the model column holds stats from a full-year run
+        validator_model_ready: function () {
+            return this.hpm_model !== null && this.hpm_model_days >= 365;
+        },
+        // Comparison table: one row per annual stat, system value alongside
+        // the optional linear ×365 scaling and the model's value. The delta
+        // is model − system, against the scaled value when shown (the model
+        // always covers a full year).
+        validator_rows: function () {
+            var sys = this.validator_selected;
+            if (!sys) return [];
+            var s = sys.stats;
+            var m = this.validator_model_ready ? this.hpm_model : null;
+            var mm = m || {};
+            var scale = this.validator_scale;
+
+            function valid(v) {
+                return v !== null && v !== undefined && !isNaN(v);
+            }
+            function num(v, dp) {
+                return valid(v) ? (+v).toFixed(dp) : "—";
+            }
+            // scaled_v === undefined -> stat is not scaled (blank cell)
+            function row(label, unit, dp, sys_v, model_v, scaled_v) {
+                var ref = valid(scaled_v) ? scaled_v : sys_v;
+                var delta = "";
+                if (m && valid(ref) && valid(model_v)) {
+                    var d = model_v - ref;
+                    delta = (d >= 0 ? "+" : "−") + Math.abs(d).toFixed(dp);
+                    if (unit == "kWh" && Math.abs(ref) > 1) {
+                        delta += " (" + (d >= 0 ? "+" : "−") +
+                            Math.abs(100 * d / ref).toFixed(1) + "%)";
+                    }
+                }
+                return {
+                    label: label, unit: unit,
+                    sys: num(sys_v, dp),
+                    scaled: scaled_v === undefined ? "" : num(scaled_v, dp),
+                    model: m ? num(model_v, dp) : "—",
+                    delta: delta
+                };
+            }
+            function head(label) {
+                return { head: label };
+            }
+
+            var sys_dhw_prc = (valid(s.water_heat_kwh) && s.combined_heat_kwh > 0)
+                ? 100 * s.water_heat_kwh / s.combined_heat_kwh : null;
+            var model_dhw_prc = (m && mm.combined_heat_kwh > 0)
+                ? 100 * mm.water_heat_kwh / mm.combined_heat_kwh : null;
+
+            return [
+                head("Annual totals"),
+                row("COP", "", 2, s.combined_cop, mm.combined_cop,
+                    scale ? s.combined_cop : undefined),
+                row("Electric", "kWh", 0, s.combined_elec_kwh, mm.combined_elec_kwh,
+                    scale ? s.combined_elec_kwh * scale : undefined),
+                row("Heat", "kWh", 0, s.combined_heat_kwh, mm.combined_heat_kwh,
+                    scale ? s.combined_heat_kwh * scale : undefined),
+                row("Cooling / defrost", "kWh", 0, s.combined_cooling_kwh, mm.combined_cooling_kwh,
+                    scale ? s.combined_cooling_kwh * scale : undefined),
+                row("Data length", "days", 1, this.validator_sys_days,
+                    m ? mm.combined_data_length / 86400 : null),
+                row("Mean room temp", "°C", 2, s.combined_roomT_mean, mm.combined_roomT_mean),
+                row("Mean outside temp", "°C", 2, s.combined_outsideT_mean, mm.combined_outsideT_mean),
+                head("Space heating"),
+                row("Electric", "kWh", 0, s.space_elec_kwh, mm.space_elec_kwh),
+                row("Heat", "kWh", 0, s.space_heat_kwh, mm.space_heat_kwh),
+                row("COP", "", 2, s.space_cop, mm.space_cop),
+                head("Hot water"),
+                row("Electric", "kWh", 0, s.water_elec_kwh, mm.water_elec_kwh),
+                row("Heat", "kWh", 0, s.water_heat_kwh, mm.water_heat_kwh),
+                row("COP", "", 2, s.water_cop, mm.water_cop),
+                row("DHW share of heat", "%", 1, sys_dhw_prc, model_dhw_prc),
+                head("Heat-weighted averages"),
+                row("Flow temp", "°C", 2, s.weighted_flowT, mm.weighted_flowT),
+                row("Outside temp", "°C", 2, s.weighted_outsideT, mm.weighted_outsideT),
+                row("Flow − outside", "K", 2, s.weighted_flowT_minus_outsideT, mm.weighted_flowT_minus_outsideT),
+                row("Flow − return", "K", 2, s.weighted_flowT_minus_returnT, mm.weighted_flowT_minus_returnT),
+                row("Electric power", "W", 0, s.weighted_elec, mm.weighted_elec),
+                row("Heat power", "W", 0, s.weighted_heat, mm.weighted_heat),
+                row("% of Carnot", "%", 1, s.weighted_prc_carnot, mm.weighted_prc_carnot)
+            ];
         }
     },
     methods: {
         select_group: function (id) {
             this.ui.group = id;
+            if (id == "validator" && !this.validator.loaded && !this.validator.loading) {
+                this.validator_load();
+            }
+        },
+
+        // --- HeatpumpMonitor.org validator ------------------------------
+        // Fetch the public system list and last-365-day stats (via the
+        // hpmon.php proxy, heatpumpmonitor.org sends no CORS headers) and
+        // merge them by system id; systems without stats are dropped
+        validator_load: function () {
+            var v = this.validator;
+            v.loading = true;
+            v.error = "";
+            Promise.all([
+                fetch('hpmon.php?action=list').then(function (r) { return r.json(); }),
+                fetch('hpmon.php?action=stats365').then(function (r) { return r.json(); })
+            ]).then(function (results) {
+                var list = results[0];
+                var stats = results[1];
+                var systems = [];
+                list.forEach(function (s) {
+                    var st = stats[s.id];
+                    if (st && st.combined_data_length > 0) {
+                        s.stats = st;
+                        systems.push(s);
+                    }
+                });
+                systems.sort(function (a, b) {
+                    if (a.location < b.location) return -1;
+                    if (a.location > b.location) return 1;
+                    return 0;
+                });
+                v.systems = systems;
+                v.loaded = true;
+                v.loading = false;
+                if (systems.length && v.candidate === null) {
+                    v.candidate = systems[0].id;
+                }
+            }).catch(function (e) {
+                v.loading = false;
+                v.error = "Failed to load systems from heatpumpmonitor.org: " + e.message;
+            });
+        },
+        validator_label: function (s) {
+            return s.location + ", " + s.hp_manufacturer + " " + s.hp_model + ", " + s.hp_output + " kW";
+        },
+        // Step through the systems matching the current search
+        validator_step: function (direction) {
+            var list = this.validator_filtered;
+            if (!list.length) return;
+            var idx = -1;
+            for (var i = 0; i < list.length; i++) {
+                if (list[i].id === this.validator.candidate) { idx = i; break; }
+            }
+            idx = (idx === -1) ? (direction > 0 ? 0 : list.length - 1) : idx + direction;
+            if (idx < 0) idx = 0;
+            if (idx >= list.length) idx = list.length - 1;
+            this.validator.candidate = list[idx].id;
         },
         select_view: function (id) {
             this.ui.view = id;
@@ -925,6 +1132,10 @@ var app = new Vue({
                 app.stats.degree_hours_below_setpoint = result.degree_hours_below_setpoint;
                 app.outsideT_996 = result.outsideT_996;
                 app.outsideT_990 = result.outsideT_990;
+                // HeatpumpMonitor.org-style stats for the validator; the day
+                // count marks whether they cover a comparable full year
+                app.hpm_model = result.hpm_stats || null;
+                app.hpm_model_days = app.days;
 
                 // Keep the plotting series from the main run
                 sim_series = result.series;

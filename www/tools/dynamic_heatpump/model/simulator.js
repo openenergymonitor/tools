@@ -181,6 +181,44 @@ var simulator = (function () {
         var outsideT_weighted_sum = 0;
         var flowT_minus_outsideT_weighted_sum = 0;
 
+        // HeatpumpMonitor.org-style stats, mirroring myheatpump_process.php
+        // (calculate_window_cops, category means) and myheatpump_waft.php
+        // (heat-weighted averages, % carnot) so the model's annual stats
+        // compare like-for-like with the site's published last-365-day
+        // system stats. Heat is the metered heat at point 1 (the heat meter
+        // at the heat pump connections); space/water only accumulate while
+        // the unit draws at least the starting-power threshold, matching
+        // the upstream categorisation.
+        var HPM_STARTING_POWER = 200; // W, heatpumpmonitor.org default
+        var hpm = {
+            combined_elec_kwh: 0,
+            combined_heat_kwh: 0,        // raw metered heat, negatives included
+            combined_cooling_kwh: 0,     // sum of negative metered heat
+            combined_data_length: 0,     // seconds
+            combined_roomT_sum: 0,
+            combined_outsideT_sum: 0,
+            combined_count: 0,
+            space_elec_kwh: 0,
+            space_heat_kwh: 0,
+            space_data_length: 0,
+            water_elec_kwh: 0,
+            water_heat_kwh: 0,
+            water_data_length: 0,
+            // Weighted averages: heat clamped to zero when negative, as in
+            // myheatpump_waft.php; kwh_heat is the clamped-heat divisor
+            kwh_heat: 0,
+            flowT_weighted_sum: 0,
+            outsideT_weighted_sum: 0,
+            flowT_minus_outsideT_weighted_sum: 0,
+            flowT_minus_returnT_weighted_sum: 0,
+            elec_weighted_sum: 0,
+            heat_weighted_sum: 0,
+            // % carnot over running data (flow-return DT > 1 K)
+            kwh_carnot_elec: 0,
+            kwh_elec_running: 0,
+            kwh_heat_running: 0
+        };
+
         var room_temp_sum = 0;
         var total_cost = 0;
         var agile_cost = 0;
@@ -653,6 +691,50 @@ var simulator = (function () {
 
                 stats_count++;
 
+                // == HeatpumpMonitor.org-style stats ==
+                // hpm_heat is what a heat meter at the heat pump connections
+                // reads: negative during a reverse-cycle defrost draw
+                var hpm_heat = pw_out.E1 / timestep;
+                hpm.combined_elec_kwh += heatpump_elec * power_to_kwh;
+                hpm.combined_heat_kwh += hpm_heat * power_to_kwh;
+                hpm.combined_data_length += timestep;
+                if (hpm_heat < 0) hpm.combined_cooling_kwh += -hpm_heat * power_to_kwh;
+                hpm.combined_roomT_sum += fabric_state.room;
+                hpm.combined_outsideT_sum += outside;
+                hpm.combined_count++;
+
+                if (heatpump_elec >= HPM_STARTING_POWER) {
+                    if (dhw_mode) {
+                        hpm.water_elec_kwh += heatpump_elec * power_to_kwh;
+                        hpm.water_heat_kwh += hpm_heat * power_to_kwh;
+                        hpm.water_data_length += timestep;
+                    } else {
+                        hpm.space_elec_kwh += heatpump_elec * power_to_kwh;
+                        hpm.space_heat_kwh += hpm_heat * power_to_kwh;
+                        hpm.space_data_length += timestep;
+                    }
+                }
+
+                // Weighted averages: negative metered heat clamped to zero
+                var hpm_heat_pos = hpm_heat > 0 ? hpm_heat : 0;
+                hpm.kwh_heat += hpm_heat_pos * power_to_kwh;
+                hpm.flowT_weighted_sum += hpm_heat_pos * flow_temperature * power_to_kwh;
+                hpm.outsideT_weighted_sum += hpm_heat_pos * outside * power_to_kwh;
+                hpm.flowT_minus_outsideT_weighted_sum += hpm_heat_pos * (flow_temperature - outside) * power_to_kwh;
+                hpm.flowT_minus_returnT_weighted_sum += hpm_heat_pos * (flow_temperature - return_temperature) * power_to_kwh;
+                hpm.elec_weighted_sum += heatpump_elec * heatpump_elec * power_to_kwh;
+                hpm.heat_weighted_sum += hpm_heat_pos * hpm_heat_pos * power_to_kwh;
+
+                // % carnot accumulates while the unit runs with a real
+                // flow-return DT, same condition as myheatpump_waft.php
+                // (ideal_carnot from the same flow+2 / outside-6 offsets above)
+                var hpm_dt = flow_temperature - return_temperature;
+                if (hpm_dt > 1 && hpm_heat_pos > 0 && ideal_carnot > 0) {
+                    hpm.kwh_carnot_elec += (hpm_heat_pos / ideal_carnot) * power_to_kwh;
+                    hpm.kwh_elec_running += heatpump_elec * power_to_kwh;
+                    hpm.kwh_heat_running += hpm_heat_pos * power_to_kwh;
+                }
+
                 // Outside temperature histogram, bucketed to the closest 0.1 degree
                 var outside_bucket = (Math.round(outside * 10) / 10).toFixed(1);
                 if (outsideT_histogram[outside_bucket] === undefined) {
@@ -759,6 +841,36 @@ var simulator = (function () {
                 wa_prc_carnot = (kwh_heat_running / kwh_elec_running) / (kwh_heat_running / kwh_carnot_elec);
             }
 
+            // HeatpumpMonitor.org-style stats, same field names as the
+            // system/stats/last365 API so the validator compares like for like
+            var hpm_prc_carnot = null;
+            if (hpm.kwh_elec_running > 0 && hpm.kwh_carnot_elec > 0) {
+                hpm_prc_carnot = 100 * (hpm.kwh_heat_running / hpm.kwh_elec_running) /
+                    (hpm.kwh_heat_running / hpm.kwh_carnot_elec);
+            }
+            var hpm_stats = {
+                combined_elec_kwh: hpm.combined_elec_kwh,
+                combined_heat_kwh: hpm.combined_heat_kwh,
+                combined_cop: hpm.combined_elec_kwh > 0 ? hpm.combined_heat_kwh / hpm.combined_elec_kwh : null,
+                combined_cooling_kwh: hpm.combined_cooling_kwh,
+                combined_data_length: hpm.combined_data_length,
+                combined_roomT_mean: hpm.combined_count > 0 ? hpm.combined_roomT_sum / hpm.combined_count : null,
+                combined_outsideT_mean: hpm.combined_count > 0 ? hpm.combined_outsideT_sum / hpm.combined_count : null,
+                space_elec_kwh: hpm.space_elec_kwh,
+                space_heat_kwh: hpm.space_heat_kwh,
+                space_cop: hpm.space_elec_kwh > 0 ? hpm.space_heat_kwh / hpm.space_elec_kwh : null,
+                water_elec_kwh: hpm.water_elec_kwh,
+                water_heat_kwh: hpm.water_heat_kwh,
+                water_cop: hpm.water_elec_kwh > 0 ? hpm.water_heat_kwh / hpm.water_elec_kwh : null,
+                weighted_flowT: hpm.kwh_heat > 0 ? hpm.flowT_weighted_sum / hpm.kwh_heat : null,
+                weighted_outsideT: hpm.kwh_heat > 0 ? hpm.outsideT_weighted_sum / hpm.kwh_heat : null,
+                weighted_flowT_minus_outsideT: hpm.kwh_heat > 0 ? hpm.flowT_minus_outsideT_weighted_sum / hpm.kwh_heat : null,
+                weighted_flowT_minus_returnT: hpm.kwh_heat > 0 ? hpm.flowT_minus_returnT_weighted_sum / hpm.kwh_heat : null,
+                weighted_elec: hpm.combined_elec_kwh > 0 ? hpm.elec_weighted_sum / hpm.combined_elec_kwh : null,
+                weighted_heat: hpm.kwh_heat > 0 ? hpm.heat_weighted_sum / hpm.kwh_heat : null,
+                weighted_prc_carnot: hpm_prc_carnot
+            };
+
             // Print solar kWh console
             console.log("Solar PV kWh: " + solar_pv_kwh.toFixed(2));
 
@@ -802,6 +914,7 @@ var simulator = (function () {
                 defrost_cycles: defrost_cycles,
                 outsideT_996: design.outsideT_996,
                 outsideT_990: design.outsideT_990,
+                hpm_stats: hpm_stats,
                 series: {
                     roomT_data: roomT_data,
                     outsideT_data: outsideT_data,
