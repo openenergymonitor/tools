@@ -299,14 +299,14 @@ var app = new Vue({
             mode: "simple",
             length: 2,          // m, one way
             pipe: "28",          // 22 | 28 | 35 mm copper
-            insulation: "25",    // bare | 13 | 19 | 25 mm nitrile
+            insulation: "pp",    // key from pipework.insul_options(pipe)
             unit_volume: 1.5,    // L of water inside the heat pump itself
             pump_overrun: 5,     // minutes of circulation after the heat pump stops
             segments: [
-                { name: "HP tails",   len: 0.8, type: "cu28_pp19", amb: 18 },
+                { name: "HP tails",   len: 0.8, type: "cu28_pp", amb: 18 },
                 { name: "Buried out", len: 5.0, type: "mdpe32_75", amb: 15 },
                 { name: "Buried in",  len: 3.5, type: "mdpe32_75", amb: 16 },
-                { name: "To meter",   len: 0.6, type: "cu28_pp19", amb: 20 }
+                { name: "To meter",   len: 0.6, type: "cu28_pp", amb: 20 }
             ]
         },
         pw_segtypes: pipework.SEGTYPES,
@@ -494,6 +494,21 @@ var app = new Vue({
         },
         emitter_rated_output: function () {
             return rated_output_from_design_flowT(this.heatpump, this.building);
+        },
+
+        // --- Primary pipework insulation --------------------------------
+        // U' depends on the pipe diameter as well as the lagging thickness,
+        // so the options are rebuilt whenever the pipe size changes. The unit
+        // is spelled out as "W/K per m of pipe" because U' and the foam's own
+        // conductivity both come out as W/m.K and are easily confused — see
+        // the derivation in model/pipework.js
+        insul_options: function () {
+            return pipework.insul_options(this.primary.pipe).map(function (o) {
+                return {
+                    value: o.key,
+                    label: o.label + " — " + o.u.toFixed(3) + " W/K per m of pipe"
+                };
+            });
         },
 
         // --- Chart navigation state -------------------------------------
@@ -976,7 +991,7 @@ var app = new Vue({
         add_segment: function () {
             this.primary.segments.push({
                 name: "stage " + (this.primary.segments.length + 1),
-                len: 2, type: "cu28_pp19", amb: 10
+                len: 2, type: "cu28_pp", amb: 10
             });
             this.simulate();
         },
@@ -989,10 +1004,10 @@ var app = new Vue({
         load_buried_example: function () {
             this.primary.mode = "segmented";
             this.primary.segments = [
-                { name: "HP tails",   len: 0.8, type: "cu28_pp19", amb: 18 },
+                { name: "HP tails",   len: 0.8, type: "cu28_pp", amb: 18 },
                 { name: "Buried out", len: 5.0, type: "mdpe32_75", amb: 15 },
                 { name: "Buried in",  len: 3.5, type: "mdpe32_75", amb: 16 },
-                { name: "To meter",   len: 0.6, type: "cu28_pp19", amb: 20 }
+                { name: "To meter",   len: 0.6, type: "cu28_pp", amb: 20 }
             ];
             this.simulate();
         },

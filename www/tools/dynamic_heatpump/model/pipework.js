@@ -24,22 +24,169 @@ var pipework = (function () {
     "use strict";
 
     var DX = 0.5; // finite volume cell length (m)
-    var PIPES = { // inner diameter m, copper wall heat capacity J/K per m
-        "22": { id: 0.0202, wallC: 205 },
-        "28": { id: 0.0262, wallC: 264 },
-        "35": { id: 0.0327, wallC: 385 }
+    var PIPES = { // outer/inner diameter m, wall heat capacity J/K per m
+        "22": { od: 0.022, id: 0.0202, wallC: 205 },
+        "28": { od: 0.028, id: 0.0262, wallC: 264 },
+        "35": { od: 0.035, id: 0.0327, wallC: 385 }
     };
-    var INSUL = { bare: 1.2, "13": 0.30, "19": 0.23, "25": 0.19 }; // U' W/m.K
-    // Segment types for the segmented path: inner diameter m, wall heat
-    // capacity J/K per m (MDPE walls carry over twice the heat capacity of
-    // copper), U' = 2*pi*lambda/ln(r2/r1) W/m.K
+
+    // ---- Insulation ---------------------------------------------------------
+    // Every pipe loses heat at U', the linear heat loss coefficient of the
+    // whole lagged assembly: W per metre of pipe RUN per K of pipe-to-ambient
+    // temperature difference. U' is derived here from base conductivities
+    // rather than tabulated, so it tracks pipe diameter correctly.
+    //
+    // For one concentric layer, U' = 2*pi*lambda/ln(r2/r1); layers in series
+    // add as resistances, R = ln(r2/r1)/(2*pi*lambda), U' = 1/sum(R).
+    //
+    // U' and lambda share the unit W/m.K but are NOT the same quantity —
+    // ln(r2/r1) is dimensionless, so lambda's unit passes through unchanged.
+    // lambda is per metre of insulation THICKNESS (a material property); U' is
+    // per metre of pipe LENGTH (a property of this pipe + this lagging).
+    //
+    // Worked example — Armaflex Class O 25 mm on 22 mm copper:
+    //   r1 = 22mm OD / 2        = 0.011 m   (insulation bore = pipe OD)
+    //   r2 = r1 + 25 mm         = 0.036 m
+    //   ln(r2/r1) = ln(3.2727)  = 1.1856
+    //   U' = 2*pi*0.038/1.1856  = 0.2014 W/m.K
+    // i.e. the assembly loses 2*pi/ln(r2/r1) = 5.30x the foam's lambda figure
+    // per metre of run; 10 m at dT 30 K is 0.2014*10*30 = 60 W. The same 25 mm
+    // lagging on 28 mm copper gives 0.2330 — hence deriving rather than
+    // tabulating.
+    //
+    // Both products' lambda is taken at 40 C mean insulation temperature.
+    // That is the only basis Primary Pro publish, so Armaflex is quoted on the
+    // same basis for a like-for-like comparison. It is the conservative end:
+    // 45 C water in 0-5 C air gives a mean nearer 20-25 C, where both are lower.
+    var LAMBDA = { // W/m.K
+        // Armaflex Class O — elastomeric nitrile rubber.
+        // 0.034 @ 0 C, 0.036 @ 20 C, 0.038 @ 40 C
+        armaflex: 0.038,
+        // Primary Pro — closed cell polyethylene, coated for external UV/water
+        // exposure. 0.035 @ 40 C (BS EN 12667:2001, BS 5422:2023), datasheet
+        // REV JULY 2025. Note this beats Armaflex at the same thickness.
+        primarypro: 0.035,
+        pe_foam: 0.035, // PE foam jacket of pre-insulated buried pipe
+        mdpe:    0.40   // MDPE pipe wall (copper's is negligible, so omitted)
+    };
+    // Bare pipe loses through the surface film, not by conduction:
+    // U' = h*pi*D. h ~ 13.6 W/m2K covers natural convection plus radiation on
+    // a warm pipe in still indoor air, at the pessimistic end of the range.
+    var H_BARE = 13.6; // W/m2.K
+
+    // U' of a stack of concentric layers, W/m.K.
+    // layers: [{r1, r2, lambda}, ...] radii in m, innermost first.
+    function u_layers(layers) {
+        var R = 0;
+        for (var i = 0; i < layers.length; i++) {
+            R += Math.log(layers[i].r2 / layers[i].r1) / (2 * Math.PI * layers[i].lambda);
+        }
+        return 1 / R;
+    }
+
+    // U' for a pipe spec {od, id, wall_lambda, insul}. insul is null for a bare
+    // pipe, otherwise [{t thickness m, lambda}, ...] working outwards from the
+    // pipe OD. wall_lambda adds the pipe wall as a series resistance (MDPE);
+    // omit it for copper, whose wall resistance is ~0.01% of the total.
+    function pipe_u(spec) {
+        if (!spec.insul) return H_BARE * Math.PI * spec.od;
+        var layers = [], r = spec.od / 2;
+        if (spec.wall_lambda) layers.push({ r1: spec.id / 2, r2: r, lambda: spec.wall_lambda });
+        for (var i = 0; i < spec.insul.length; i++) {
+            layers.push({ r1: r, r2: r + spec.insul[i].t, lambda: spec.insul[i].lambda });
+            r += spec.insul[i].t;
+        }
+        return u_layers(layers);
+    }
+
+    // ---- Product ranges -----------------------------------------------------
+    // What is actually purchasable, so the insulation choice can be constrained
+    // by pipe size rather than offering thicknesses that do not exist.
+    //
+    // Armaflex Class O is stocked in every wall thickness below for all three
+    // copper sizes we model, with the tube bore matching the pipe OD.
+    var ARMAFLEX_WALLS = [9, 13, 19, 25, 32]; // mm
+    //
+    // Primary Pro comes in ONE thickness per pipe size, and its tubes are
+    // deliberately oversized — both bore and wall run over nominal, so the
+    // measured dimensions from the datasheet are used rather than the nominal
+    // ones. "28mm x 19mm" is really a 29 mm bore with a 21 mm wall. Taking the
+    // foam bore as r1 (not the pipe OD) leaves the small annular gap outside
+    // the insulation, which is the conservative reading.
+    var PRIMARY_PRO = { // bore/t m, as measured; nominal for the label
+        "22": { nominal: 25, bore: 0.023, t: 0.025 },
+        "28": { nominal: 19, bore: 0.029, t: 0.021 },
+        "35": { nominal: 19, bore: 0.036, t: 0.021 }
+        // 42 mm x 19 mm also exists but is outside the PIPES range
+    };
+    // Superseded option keys from before the range was product-specific, kept
+    // so previously saved configs still load
+    var INSUL_LEGACY = { "13": "af13", "19": "af19", "25": "af25" };
+
+    // The insulation options available for a given pipe size, in dropdown
+    // order: [{key, label, product, u}]
+    function insul_options(pipe) {
+        var pd = PIPES[pipe];
+        var opts = [{
+            key: "bare", label: "Bare pipe", product: "bare",
+            u: pipe_u({ od: pd.od, insul: null })
+        }];
+        for (var i = 0; i < ARMAFLEX_WALLS.length; i++) {
+            var w = ARMAFLEX_WALLS[i];
+            opts.push({
+                key: "af" + w,
+                label: "Armaflex Class O " + w + " mm",
+                product: "armaflex",
+                u: pipe_u({ od: pd.od, insul: [{ t: w / 1000, lambda: LAMBDA.armaflex }] })
+            });
+        }
+        var pp = PRIMARY_PRO[pipe];
+        if (pp) opts.push({
+            key: "pp",
+            label: "Primary Pro " + pipe + " mm x " + pp.nominal + " mm",
+            product: "primarypro",
+            u: pipe_u({ od: pp.bore, insul: [{ t: pp.t, lambda: LAMBDA.primarypro }] })
+        });
+        return opts;
+    }
+
+    // U' for simple mode, from a pipe size and an option key from insul_options
+    function insul_u(pipe, insulation) {
+        var key = INSUL_LEGACY[insulation] || insulation;
+        var opts = insul_options(pipe);
+        for (var i = 0; i < opts.length; i++) if (opts[i].key == key) return opts[i].u;
+        return opts[0].u; // unknown key: fall back to bare rather than NaN
+    }
+
+    // Segment types for the segmented path. Geometry only — u is derived below.
+    // wallC is the pipe wall heat capacity J/K per m (MDPE walls carry over
+    // twice the heat capacity of copper).
+    // Primary Pro entries use the oversized bore as od, per PRIMARY_PRO above.
     var SEGTYPES = {
-        cu28_pp19: { label: "28mm Cu + 19mm Primary Pro", id: 0.0262, wallC: 264, u: 0.2565 },
-        cu28_25:   { label: "28mm Cu + 25mm nitrile",     id: 0.0262, wallC: 264, u: 0.19 },
-        cu28_bare: { label: "28mm Cu bare",               id: 0.0262, wallC: 264, u: 1.2 },
-        mdpe32_75: { label: "32mm MDPE in 75mm jacket",   id: 0.026,  wallC: 591, u: 0.2582 },
-        cu22_pp19: { label: "22mm Cu + 19mm Primary Pro", id: 0.0202, wallC: 205, u: 0.30 }
+        cu28_pp:   { label: "28mm Cu + Primary Pro 19mm", od: 0.029, id: 0.0262, wallC: 264,
+                     insul: [{ t: 0.021, lambda: LAMBDA.primarypro }] },
+        cu28_af25: { label: "28mm Cu + Armaflex 25mm",    od: 0.028, id: 0.0262, wallC: 264,
+                     insul: [{ t: 0.025, lambda: LAMBDA.armaflex }] },
+        cu28_af19: { label: "28mm Cu + Armaflex 19mm",    od: 0.028, id: 0.0262, wallC: 264,
+                     insul: [{ t: 0.019, lambda: LAMBDA.armaflex }] },
+        cu28_bare: { label: "28mm Cu bare",               od: 0.028, id: 0.0262, wallC: 264,
+                     insul: null },
+        // 32mm MDPE (3mm wall) in a 75mm OD foam jacket: wall 13->16mm radius,
+        // then 21.5mm of foam out to 37.5mm
+        mdpe32_75: { label: "32mm MDPE in 75mm jacket",   od: 0.032, id: 0.026,  wallC: 591,
+                     wall_lambda: LAMBDA.mdpe,
+                     insul: [{ t: 0.0215, lambda: LAMBDA.pe_foam }] },
+        // Primary Pro for 22mm copper is only made in 25mm wall — there is no
+        // 22mm x 19mm product
+        cu22_pp:   { label: "22mm Cu + Primary Pro 25mm", od: 0.023, id: 0.0202, wallC: 205,
+                     insul: [{ t: 0.025, lambda: LAMBDA.primarypro }] },
+        cu35_pp:   { label: "35mm Cu + Primary Pro 19mm", od: 0.036, id: 0.0327, wallC: 385,
+                     insul: [{ t: 0.021, lambda: LAMBDA.primarypro }] }
     };
+    for (var st in SEGTYPES) SEGTYPES[st].u = pipe_u(SEGTYPES[st]);
+    // Superseded segment keys, kept so previously saved configs still load.
+    // cu22_pp19 never existed as a product; it maps to the real 25mm version.
+    var SEGTYPE_LEGACY = { cu28_pp19: "cu28_pp", cu28_25: "cu28_af25", cu22_pp19: "cu22_pp" };
 
     // Build per-cell property arrays for the one-way path (heat pump ->
     // building). amb: null means every cell tracks the live outside air
@@ -53,7 +200,7 @@ var pipework = (function () {
             var n = Math.max(2, Math.round(primary.length / DX));
             for (var j = 0; j < n; j++) {
                 cap.push((area * 1000 * 4187 + pd.wallC) * DX);
-                u.push(INSUL[primary.insulation]);
+                u.push(insul_u(primary.pipe, primary.insulation));
                 areas.push(area);
             }
             return {
@@ -66,7 +213,7 @@ var pipework = (function () {
         }
         for (var s = 0; s < primary.segments.length; s++) {
             var sg = primary.segments[s];
-            var t = SEGTYPES[sg.type];
+            var t = SEGTYPES[SEGTYPE_LEGACY[sg.type] || sg.type] || SEGTYPES.cu28_pp;
             var nseg = Math.max(1, Math.round(sg.len / DX));
             var a = Math.PI * t.id * t.id / 4;
             for (var k = 0; k < nseg; k++) {
@@ -259,8 +406,16 @@ var pipework = (function () {
     return {
         DX: DX,
         PIPES: PIPES,
-        INSUL: INSUL,
+        LAMBDA: LAMBDA,
+        H_BARE: H_BARE,
+        ARMAFLEX_WALLS: ARMAFLEX_WALLS,
+        PRIMARY_PRO: PRIMARY_PRO,
+        u_layers: u_layers,
+        pipe_u: pipe_u,
+        insul_options: insul_options,
+        insul_u: insul_u,
         SEGTYPES: SEGTYPES,
+        SEGTYPE_LEGACY: SEGTYPE_LEGACY,
         build_path: build_path,
         setup: setup,
         init_state: init_state,

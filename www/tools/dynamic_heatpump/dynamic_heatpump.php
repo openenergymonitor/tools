@@ -699,9 +699,15 @@
             <span class="hp-title">Dynamic heat pump simulator</span>
             <span class="hp-subtitle">{{ mode == 'day' ? 'single day' : 'full year' }} &middot; run {{ simulation_index }}<span v-if="baseline_enabled"> &middot; vs baseline</span></span>
         </div>
-        <div class="d-none d-lg-flex gap-2">
-            <button type="button" class="btn btn-sm hp-btn-dark" @click="import_config">Import</button>
-            <button type="button" class="btn btn-sm hp-btn-dark" @click="export_config">Export</button>
+        <div class="d-flex gap-2">
+            <div class="dropdown">
+                <button type="button" class="btn btn-sm hp-btn-dark dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Docs</button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="<?php echo $path; ?>docs/frost.html">How the frost &amp; defrost model works</a></li>
+                </ul>
+            </div>
+            <button type="button" class="btn btn-sm hp-btn-dark d-none d-lg-inline-block" @click="import_config">Import</button>
+            <button type="button" class="btn btn-sm hp-btn-dark d-none d-lg-inline-block" @click="export_config">Export</button>
         </div>
     </header>
 
@@ -1116,10 +1122,7 @@
                         <div class="hp-field hp-field-wide">
                             <label class="hp-field-label">Insulation</label>
                             <select class="form-select form-select-sm" v-model="primary.insulation" @change="simulate">
-                                <option value="bare">Bare pipe (~1.2 W/m&middot;K)</option>
-                                <option value="13">13 mm nitrile (~0.30 W/m&middot;K)</option>
-                                <option value="19">19 mm nitrile (~0.23 W/m&middot;K)</option>
-                                <option value="25">25 mm nitrile / Primary Pro (~0.19 W/m&middot;K)</option>
+                                <option v-for="o in insul_options" :value="o.value">{{ o.label }}</option>
                             </select>
                         </div>
                     </div>
@@ -1141,7 +1144,7 @@
                                     <td><input type="text" class="form-control form-control-sm" style="width:60px" v-model.number="sg.len" @change="simulate"></td>
                                     <td>
                                         <select class="form-select form-select-sm" style="min-width:140px" v-model="sg.type" @change="simulate">
-                                            <option v-for="(t, k) in pw_segtypes" :value="k">{{ t.label }} &middot; {{ t.u }} W/m&middot;K</option>
+                                            <option v-for="(t, k) in pw_segtypes" :value="k">{{ t.label }} &middot; {{ t.u.toFixed(3) }} W/K per m</option>
                                         </select>
                                     </td>
                                     <td><input type="text" class="form-control form-control-sm" style="width:60px" v-model.number="sg.amb" @change="simulate"></td>
