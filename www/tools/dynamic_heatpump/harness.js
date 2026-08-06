@@ -155,6 +155,31 @@ function report() {
     for (let i = 0; i < flowT.length; i++) if (flowT[i] > max_flow) max_flow = flowT[i];
     console.log('max flow T:          ', max_flow.toFixed(2));
 
+    // HeatpumpMonitor.org-style stats (validator): same field names and
+    // calculation as the site's system/stats/last365 API
+    if (app.hpm_model) {
+        const h = app.hpm_model;
+        const f = (v, dp) => (v === null || v === undefined) ? '-' : (+v).toFixed(dp);
+        console.log('--- heatpumpmonitor.org-style stats ---');
+        console.log('combined elec/heat/COP:', f(h.combined_elec_kwh, 3), '/', f(h.combined_heat_kwh, 3),
+            'kWh /', f(h.combined_cop, 3));
+        console.log('combined cooling kWh:  ', f(h.combined_cooling_kwh, 3));
+        console.log('combined data length:  ', f(h.combined_data_length / 86400, 1), 'days');
+        console.log('combined roomT/outsideT mean:', f(h.combined_roomT_mean, 2), '/', f(h.combined_outsideT_mean, 2));
+        console.log('space elec/heat/COP:   ', f(h.space_elec_kwh, 3), '/', f(h.space_heat_kwh, 3),
+            'kWh /', f(h.space_cop, 3));
+        console.log('water elec/heat/COP:   ', f(h.water_elec_kwh, 3), '/', f(h.water_heat_kwh, 3),
+            'kWh /', f(h.water_cop, 3));
+        console.log('DHW share of heat:     ', h.combined_heat_kwh > 0
+            ? (100 * h.water_heat_kwh / h.combined_heat_kwh).toFixed(1) + '%' : '-');
+        console.log('weighted flowT:        ', f(h.weighted_flowT, 2));
+        console.log('weighted outsideT:     ', f(h.weighted_outsideT, 2));
+        console.log('weighted flow-outside: ', f(h.weighted_flowT_minus_outsideT, 2));
+        console.log('weighted flow-return:  ', f(h.weighted_flowT_minus_returnT, 2));
+        console.log('weighted elec/heat W:  ', f(h.weighted_elec, 0), '/', f(h.weighted_heat, 0));
+        console.log('weighted % of carnot:  ', f(h.weighted_prc_carnot, 1));
+    }
+
     // Daily bar chart aggregates (bargraph.js): the per-day totals must add
     // back up to the run totals, so this doubles as a conservation check
     if (typeof daily !== 'undefined' && daily.length) {

@@ -1345,6 +1345,99 @@
                     </div>
                 </div>
 
+                <!-- HeatpumpMonitor.org validator -->
+                <div v-show="ui.group == 'validator'">
+                    <div v-if="validator.loading" class="hp-note mt-0">
+                        Loading systems from heatpumpmonitor.org&hellip;
+                    </div>
+                    <div v-else-if="validator.error">
+                        <p class="hp-note mt-0 text-danger">{{ validator.error }}</p>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @click="validator_load">Retry</button>
+                    </div>
+                    <template v-else-if="validator.loaded">
+                        <div class="hp-field-grid">
+                            <div class="hp-field hp-field-wide">
+                                <label class="hp-field-label">Search &middot; location, make &amp; model, capacity e.g. "5kw"</label>
+                                <input type="text" class="form-control form-control-sm" v-model="validator.query"
+                                    placeholder="e.g. vaillant 5kw">
+                            </div>
+                            <div class="hp-field hp-field-wide">
+                                <label class="hp-field-label">System ({{ validator_filtered.length }} matching)</label>
+                                <select class="form-select form-select-sm" v-model="validator.candidate">
+                                    <option v-for="s in validator_filtered" :key="s.id" :value="s.id">{{ validator_label(s) }}</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @click="validator_step(-1)">&lsaquo; Prev</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @click="validator_step(1)">Next &rsaquo;</button>
+                            <a v-if="validator_selected" class="btn btn-sm btn-outline-secondary ms-auto" target="_blank" rel="noopener"
+                                :href="'https://heatpumpmonitor.org/system/view?id=' + validator_selected.id">View system</a>
+                        </div>
+
+                        <template v-if="validator_selected">
+                            <div class="hp-stats">
+                                <div class="hp-stat" v-if="validator_selected.heat_loss > 0">
+                                    <span>Declared heat loss</span>
+                                    <span class="hp-stat-value">{{ validator_selected.heat_loss }} kW</span>
+                                </div>
+                                <div class="hp-stat" v-if="validator_selected.heat_demand > 0">
+                                    <span>Declared heat demand</span>
+                                    <span class="hp-stat-value">{{ validator_selected.heat_demand }} kWh</span>
+                                </div>
+                                <div class="hp-stat" v-if="validator_selected.floor_area > 0">
+                                    <span>Floor area</span>
+                                    <span class="hp-stat-value">{{ validator_selected.floor_area }} m&sup2;</span>
+                                </div>
+                                <div class="hp-stat" v-if="validator_selected.flow_temp > 0">
+                                    <span>Design flow temperature</span>
+                                    <span class="hp-stat-value">{{ validator_selected.flow_temp }} &deg;C</span>
+                                </div>
+                            </div>
+
+                            <p class="hp-note" v-if="!validator_model_ready">Run the model in <b>full year</b>
+                                mode to fill in the model column.</p>
+                            <p class="hp-note" v-if="validator_scale">This system has
+                                {{ validator_sys_days.toFixed(1) }} days of data; the &times;365 column scales
+                                its electricity and heat linearly to a full year.</p>
+
+                            <div class="table-responsive">
+                                <table class="table table-sm hp-table-panel">
+                                    <tr>
+                                        <th>Stat</th>
+                                        <th class="text-end">System</th>
+                                        <th class="text-end" v-if="validator_scale">&times;365</th>
+                                        <th class="text-end">Model</th>
+                                        <th class="text-end">&Delta; model &minus; system</th>
+                                        <th>Unit</th>
+                                    </tr>
+                                    <template v-for="r in validator_rows">
+                                        <tr v-if="r.head">
+                                            <th :colspan="validator_scale ? 6 : 5">{{ r.head }}</th>
+                                        </tr>
+                                        <tr v-else>
+                                            <td>{{ r.label }}</td>
+                                            <td class="text-end">{{ r.sys }}</td>
+                                            <td class="text-end" v-if="validator_scale">{{ r.scaled }}</td>
+                                            <td class="text-end">{{ r.model }}</td>
+                                            <td class="text-end">{{ r.delta }}</td>
+                                            <td>{{ r.unit }}</td>
+                                        </tr>
+                                    </template>
+                                </table>
+                            </div>
+                            <p class="hp-note">Stats are calculated as on heatpumpmonitor.org: space and hot
+                                water only count while the unit draws at least 200 W; weighted averages are
+                                heat-energy weighted; % of Carnot uses flow +2 / outside &minus;6 offsets over
+                                running data. The model meters heat at the heat pump connections (point 1).</p>
+                        </template>
+                    </template>
+                    <div v-else>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @click="validator_load">
+                            Load systems from heatpumpmonitor.org</button>
+                    </div>
+                </div>
+
             </div>
 
             <!-- Run bar -->
