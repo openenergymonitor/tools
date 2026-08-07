@@ -407,6 +407,9 @@ var app = new Vue({
             airflow: 3500,         // m3/h evaporator fan
             capture_eff: 0.45,     // composite deposition effectiveness
             coil_dt: 5,            // K below outside air (measured 4-5 K)
+            use_cop_evaporator: false, // take the coil temp from the COP model's
+                                   // evaporating temperature instead of coil_dt
+                                   // (carnot & fitted models only)
             threshold: 2.0,        // kg frost triggering a defrost
             defrost_power: 4000,   // W drawn from the heating circuit
             defrost_elec: 1000,    // W compressor draw during defrost
@@ -524,6 +527,17 @@ var app = new Vue({
         },
         emitter_rated_output: function () {
             return rated_output_from_design_flowT(this.heatpump, this.building);
+        },
+
+        // --- Frost model coil temperature -------------------------------
+        // The carnot and fitted COP models build the COP from a lift between
+        // an evaporating and a condensing temperature, so the frost model can
+        // borrow the evaporating temperature as its coil temperature. The
+        // lookup-table models have no such internal state, and stay on the
+        // fixed coil_dt drop below outside air
+        cop_model_has_evaporator: function () {
+            return ["carnot_fixed", "carnot_variable", "generic", "generic_v2"]
+                .indexOf(this.heatpump.cop_model) !== -1;
         },
 
         // --- Primary pipework insulation --------------------------------

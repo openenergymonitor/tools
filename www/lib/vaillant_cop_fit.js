@@ -35,6 +35,11 @@
  *
  * Same argument order as getCOP(modelData, flow, ambient, output), but takes
  * the model name string instead of the data object.
+ *
+ * The COP functions below return { cop, evaporator, condenser }, the two
+ * temperatures in degC, so a caller can reuse the model's own refrigerant-side
+ * operating point (e.g. a frost model needing the evaporator temperature)
+ * rather than assuming a fixed offset from the air/flow temperatures.
  */
 
 var vaillant_cop_fit_params = {
@@ -62,7 +67,8 @@ var vaillant_cop_fit_params = {
  *                 model, otherwise the penalty is double counted.
  *                 (The 12 kW tables show no embedded defrost signature, so
  *                 for that unit the two variants are near-identical.)
- * @returns {number} COP
+ * @returns {{cop: number, evaporator: number, condenser: number}}
+ *          COP plus the evaporating and condensing temperatures, degC
  */
 function copFit(model, flowTemp, ambientTemp, outputKW, includeFrost = true) {
     const p = vaillant_cop_fit_params[model];
@@ -88,7 +94,11 @@ function copFit(model, flowTemp, ambientTemp, outputKW, includeFrost = true) {
         ? 1.0 - fA * Math.exp(-0.5 * Math.pow((ambientTemp - fMu) / fSig, 2))
         : 1.0;
 
-    return eta * frost * Tc / L;
+    return {
+        cop: eta * frost * Tc / L,
+        evaporator: Te - 273.15,
+        condenser: Tc - 273.15
+    };
 }
 
 // Convenience: Carnot COP and implied second-law efficiency, if useful elsewhere
@@ -134,7 +144,8 @@ var vaillant_generic_params =
  * @param {number} ambientTemp outside air temperature, degC
  * @param {number} outputKW    heat output, kW
  * @param {object} [opts]      { etaScale = 1.0, includeFrost = false }
- * @returns {number} COP
+ * @returns {{cop: number, evaporator: number, condenser: number}}
+ *          COP plus the evaporating and condensing temperatures, degC
  */
 function copFitGeneric(qnomKW, flowTemp, ambientTemp, outputKW, opts = {}) {
     const { etaScale = 1.0, includeFrost = false } = opts;
@@ -156,7 +167,11 @@ function copFitGeneric(qnomKW, flowTemp, ambientTemp, outputKW, opts = {}) {
         ? 1.0 - fA * Math.exp(-0.5 * Math.pow((ambientTemp - fMu) / fSig, 2))
         : 1.0;
 
-    return eta * frost * Tc / L;
+    return {
+        cop: eta * frost * Tc / L,
+        evaporator: Te - 273.15,
+        condenser: Tc - 273.15
+    };
 }
 
 /**
@@ -173,7 +188,7 @@ function copFitGeneric(qnomKW, flowTemp, ambientTemp, outputKW, opts = {}) {
 function calibrateEtaScale(qnomKW, points) {
     let s = 0;
     for (const pt of points) {
-        const base = copFitGeneric(qnomKW, pt.flow, pt.ambient, pt.outputKW, { etaScale: 1.0 });
+        const base = copFitGeneric(qnomKW, pt.flow, pt.ambient, pt.outputKW, { etaScale: 1.0 }).cop;
         s += Math.log(pt.cop / base);
     }
     return Math.exp(s / points.length);
@@ -251,6 +266,8 @@ function outputRange(qnomKW, flowTemp, ambientTemp, maxRps = VAILLANT_MAX_RPS) {
 /**
  * Generic v2: speed-based efficiency curve, pre-defrost by construction.
  * Same interface as copFitGeneric; speed is inferred and clamped internally.
+ * @returns {{cop: number, evaporator: number, condenser: number}}
+ *          COP plus the evaporating and condensing temperatures, degC
  */
 function copFitGenericV2(qnomKW, flowTemp, ambientTemp, outputKW, opts = {}) {
     const { etaScale = 1.0 } = opts;
@@ -270,16 +287,21 @@ function copFitGenericV2(qnomKW, flowTemp, ambientTemp, outputKW, opts = {}) {
               * (1.0 + a1 * z + a2 * z * z + a3 * z * z * z)
               * (1.0 + b1 * w);
 
-    return eta * Tc / L;
+    return {
+        cop: eta * Tc / L,
+        evaporator: Te - 273.15,
+        condenser: Tc - 273.15
+    };
 }
 
 // Example:
-// console.log(copFit("5kW", 45, 2, 4.0).toFixed(2));   // ~2.9
-// console.log(copFit("12kW", 35, 7, 9.6).toFixed(2));  // ~5.0
+// console.log(copFit("5kW", 45, 2, 4.0).cop.toFixed(2));   // ~2.9
+// console.log(copFit("12kW", 35, 7, 9.6).cop.toFixed(2));  // ~5.0
+// console.log(copFit("5kW", 45, 2, 4.0).evaporator.toFixed(1)); // ~-3.6 C
 // const s = calibrateEtaScale(7.0, [{flow:35, ambient:7, outputKW:7.0, cop:4.8}]);
-// console.log(copFitGeneric(7.0, 45, 2, 5.0, { etaScale: s }).toFixed(2));
+// console.log(copFitGeneric(7.0, 45, 2, 5.0, { etaScale: s }).cop.toFixed(2));
 // console.log(estimateSpeed(5, 35, -7, 5.1).toFixed(0), 'rps (table: 97)');
-// console.log(copFitGenericV2(5, 35, -7, 5.1).toFixed(2));
+// console.log(copFitGenericV2(5, 35, -7, 5.1).cop.toFixed(2));
 // console.log(outputRange(5, 45, -7));   // {minKW, maxKW} at this condition
 
 // module.exports = { copFit, carnotCOP, copFitGeneric, copFitGenericV2,

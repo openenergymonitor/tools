@@ -777,18 +777,18 @@
                                         practical_cop = this.carnot_variable_offset_output(T_flow, T_ambient, output);
                                     } else if (this.cop_model === 'carnot-fitted') {
                                         let output = flow_temp_data.output[i][j];
-                                        practical_cop = copFit(this.selected_model, T_flow, T_ambient, output, this.fit_include_frost);
+                                        practical_cop = copFit(this.selected_model, T_flow, T_ambient, output, this.fit_include_frost).cop;
                                     } else if (this.cop_model === 'carnot-fitted-generic') {
                                         let output = flow_temp_data.output[i][j];
                                         practical_cop = copFitGeneric(this.fit_qnom, T_flow, T_ambient, output, {
                                             etaScale: this.fit_eta_scale,
                                             includeFrost: this.fit_include_frost
-                                        });
+                                        }).cop;
                                     } else if (this.cop_model === 'carnot-fitted-generic-v2') {
                                         let output = flow_temp_data.output[i][j];
                                         practical_cop = copFitGenericV2(this.fit_qnom, T_flow, T_ambient, output, {
                                             etaScale: this.fit_eta_scale
-                                        });
+                                        }).cop;
                                     } else if (this.cop_model === 'vaillant-datasheet') {
                                         let output = flow_temp_data.output[i][j];
                                         practical_cop = getCOP(vaillant_data[this.selected_model], T_flow, T_ambient, output);

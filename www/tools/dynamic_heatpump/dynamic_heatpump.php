@@ -1268,6 +1268,17 @@
                                 v-model="frost.use_csv_humidity" @change="simulate">
                             <label class="form-check-label" for="frost_csv_humidity">Use measured humidity from dataset (annual mode)</label>
                         </div>
+                        <div class="form-check form-switch hp-switch">
+                            <input class="form-check-input" type="checkbox" id="frost_cop_evaporator"
+                                :disabled="!cop_model_has_evaporator"
+                                v-model="frost.use_cop_evaporator" @change="simulate">
+                            <label class="form-check-label" for="frost_cop_evaporator">
+                                Use the COP model's evaporating temperature as the coil temperature
+                                <span v-if="!cop_model_has_evaporator" class="text-muted">
+                                    &mdash; not available with the {{ heatpump.cop_model }} lookup tables
+                                </span>
+                            </label>
+                        </div>
                     </div>
 
                     <div class="hp-field-grid">
@@ -1278,6 +1289,7 @@
                         <param-field label="Capture efficiency (calibration)" :step="0.05" :min="0" :max="1"
                             v-model="frost.capture_eff" @change="simulate"></param-field>
                         <param-field label="Coil below outside air" unit="K" :step="0.5" :min="0"
+                            :disabled="frost.use_cop_evaporator && cop_model_has_evaporator"
                             v-model="frost.coil_dt" @change="simulate"></param-field>
                         <param-field label="Defrost trigger threshold" unit="kg" :step="0.5" :min="0"
                             v-model="frost.threshold" @change="simulate"></param-field>

@@ -9,6 +9,15 @@
 // Frosting (compressor running, coil below 0C):
 //   coil temperature = outside - coil_dt (measured 4-5 K on test units)
 //   deposition = air_kg_s * (w_ambient - w_sat(coil)) * capture_eff
+// Optionally (use_cop_evaporator) the coil temperature is taken from the COP
+// model's own evaporating temperature instead of the fixed drop, where the
+// selected model resolves one (the carnot and fitted models; the lookup-table
+// models do not, and fall back to coil_dt). That makes the coil-air difference
+// scale with compressor load rather than being held constant: near-zero at
+// minimum modulation, 7-8 K at full output. Note the models report the
+// refrigerant saturation temperature, which sits a little below the air-side
+// fin surface the frost actually forms on, so capture_eff is the knob to
+// re-calibrate on if you switch this on.
 // using the Magnus saturation curve for both; capture_eff is the single
 // calibrated composite knob (Lewis-analogy air-side effectiveness x over-ice
 // correction x surface-temperature correction). The same law run backwards
@@ -63,6 +72,7 @@ var frost = (function () {
             air_kg_s: (cfg.airflow / 3600) * 1.25,
             capture_eff: cfg.capture_eff * 1,
             coil_dt: cfg.coil_dt * 1,
+            use_cop_evaporator: !!cfg.use_cop_evaporator,
             threshold: Math.max(0.1, cfg.threshold * 1),
             defrost_power: cfg.defrost_power * 1,
             defrost_elec: cfg.defrost_elec * 1,
@@ -84,9 +94,11 @@ var frost = (function () {
     }
 
     // One timestep. inp: {running — compressor delivering heat, outside C,
-    // humidity %RH}. Returns {defrosting, capacity_factor, started}; while
-    // defrosting is true the caller zeroes the heat output and draws
-    // defrost_power from the heating circuit.
+    // humidity %RH, evaporator C — optional modelled evaporating temperature,
+    // used as the coil temperature when use_cop_evaporator is on}. Returns
+    // {defrosting, capacity_factor, started}; while defrosting is true the
+    // caller zeroes the heat output and draws defrost_power from the heating
+    // circuit.
     function step(P, S, inp) {
         var started = false;
 
@@ -110,7 +122,12 @@ var frost = (function () {
                 S.defrosting = 0;
             }
         } else if (inp.running) {
-            var T_coil = inp.outside - P.coil_dt;
+            // Coil temperature driving deposition: the modelled evaporating
+            // temperature where enabled and available, otherwise the fixed
+            // drop below outside air
+            var T_coil = (P.use_cop_evaporator && typeof inp.evaporator === "number")
+                ? inp.evaporator
+                : inp.outside - P.coil_dt;
             if (T_coil < 0) {
                 var w_amb = humidity_ratio(sat_vp(inp.outside) * inp.humidity * 0.01);
                 var w_coil = humidity_ratio(sat_vp(T_coil));

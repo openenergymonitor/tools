@@ -288,30 +288,39 @@ var simulator = (function () {
         var schedule_last_index = processed_schedule.length - 1;
         var dhw_schedule_length = processed_dhw_schedule.length;
 
-        // Practical COP at an operating point: flow temperature at the unit,
-        // outside air temperature and condenser heat output (W). Used both by
-        // the max electrical power limiter and by the electricity calculation
-        // at the end of each step. Frost derating is applied by the callers.
-        function practical_cop(flowT, outsideT, heat) {
+        // Operating point of the unit: flow temperature at the unit, outside
+        // air temperature and condenser heat output (W) in; practical COP out,
+        // plus the refrigerant-side evaporating and condensing temperatures
+        // (degC) where the model resolves them. The carnot models and the
+        // fitted models (lib/vaillant_cop_fit.js) all build the COP from a
+        // lift between those two temperatures, so they can report them; the
+        // lookup-table models (ecodan, vaillant datasheet) cannot and return
+        // null, which the frost model falls back from.
+        //
+        // Used by the max electrical power limiter, by the electricity
+        // calculation at the end of each step, and — for the evaporator
+        // temperature only — by the frost model. Frost derating is applied by
+        // the callers.
+        function operating_point(flowT, outsideT, heat) {
             if (hp_cop_model == "carnot_fixed") {
                 // Simple carnot equation based heat pump model with fixed offsets
                 var condenser_f = flowT + 2;
                 var evaporator_f = outsideT - 6;
                 var IdealCOP_f = (condenser_f + 273) / ((condenser_f + 273) - (evaporator_f + 273));
-                return IdealCOP_f * (hp_prc_carnot / 100);
+                return { cop: IdealCOP_f * (hp_prc_carnot / 100), evaporator: evaporator_f, condenser: condenser_f };
             } else if (hp_cop_model == "carnot_variable") {
                 // Simple carnot equation based heat pump model with variable offsets
                 var output_ratio = heat / hp_capacity;
                 var condenser_v = flowT + (3 * output_ratio);
                 var evaporator_v = outsideT - (8 * output_ratio);
                 var IdealCOP_v = (condenser_v + 273) / ((condenser_v + 273) - (evaporator_v + 273));
-                return IdealCOP_v * (hp_prc_carnot / 100);
+                return { cop: IdealCOP_v * (hp_prc_carnot / 100), evaporator: evaporator_v, condenser: condenser_v };
             } else if (hp_cop_model == "ecodan") {
-                return get_ecodan_cop(flowT, outsideT, heat / hp_capacity);
+                return { cop: get_ecodan_cop(flowT, outsideT, heat / hp_capacity), evaporator: null, condenser: null };
             } else if (hp_cop_model == "vaillant5") {
-                return getCOP(vaillant_data['5kW'], flowT, outsideT, 0.001 * heat);
+                return { cop: getCOP(vaillant_data['5kW'], flowT, outsideT, 0.001 * heat), evaporator: null, condenser: null };
             } else if (hp_cop_model == "vaillant12") {
-                return getCOP(vaillant_data['12kW'], flowT, outsideT, 0.001 * heat);
+                return { cop: getCOP(vaillant_data['12kW'], flowT, outsideT, 0.001 * heat), evaporator: null, condenser: null };
             } else if (hp_cop_model == "generic") {
                 // Capacity-normalised fit (lib/vaillant_cop_fit.js): one
                 // pooled parameter set, scaled by the unit's nominal
@@ -331,7 +340,7 @@ var simulator = (function () {
                     etaScale: hp_eta_scale
                 });
             }
-            return 0;
+            return { cop: 0, evaporator: null, condenser: null };
         }
 
         // == Warm-start state ==
@@ -542,10 +551,21 @@ var simulator = (function () {
                 var defrost_draw = 0;
                 var frost_cf = 1;
                 if (frost_params.enabled) {
+                    // Optionally drive the deposition from the COP model's own
+                    // evaporating temperature (carnot / fitted models) rather
+                    // than the fixed coil_dt below air, so the coil-air
+                    // difference scales with load as the compressor modulates.
+                    // Evaluated at the flow temperature and requested output
+                    // the step starts on, as the electrical limiter below is.
+                    var frost_evaporator = null;
+                    if (frost_params.use_cop_evaporator && heatpump_heat > 0) {
+                        frost_evaporator = operating_point(flow_temperature, outside, heatpump_heat).evaporator;
+                    }
                     var fr = frost.step(frost_params, frost_state, {
                         running: heatpump_heat > 0,
                         outside: outside,
-                        humidity: humidity
+                        humidity: humidity,
+                        evaporator: frost_evaporator
                     });
                     if (fr.started) defrost_cycles++;
                     if (fr.defrosting) {
@@ -598,7 +618,7 @@ var simulator = (function () {
                     if (compressor_budget > 0) {
                         elec_limited_heat = heatpump_heat;
                         for (var eit = 0; eit < 4; eit++) {
-                            var cop_trial = practical_cop(flow_temperature, outside, elec_limited_heat) * frost_cf;
+                            var cop_trial = operating_point(flow_temperature, outside, elec_limited_heat).cop * frost_cf;
                             var allowed = cop_trial > 0 ? compressor_budget * cop_trial : 0;
                             if (allowed >= heatpump_heat) {
                                 elec_limited_heat = heatpump_heat;
@@ -647,7 +667,7 @@ var simulator = (function () {
                 if (cyl_T[cyl_params.node_count - 1] < min_cyl_top) min_cyl_top = cyl_T[cyl_params.node_count - 1];
 
                 // == Heat pump COP model & electricity ==
-                var PracticalCOP = practical_cop(flow_temperature, outside, heatpump_heat);
+                var PracticalCOP = operating_point(flow_temperature, outside, heatpump_heat).cop;
 
                 // Pre-defrost derating: capacity falls with frost while the
                 // electric input holds, so COP falls by the same factor
