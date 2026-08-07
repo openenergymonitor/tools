@@ -2,6 +2,9 @@
 <html lang="en">
 
 <head>
+<!-- Served by the front controller from a url that is deeper than this file's
+     own location, so anchor the relative paths below to $path -->
+<base href="<?php echo htmlspecialchars($path ?? '', ENT_QUOTES); ?>">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>How the frost &amp; defrost model works - Dynamic heat pump simulator</title>
@@ -286,7 +289,7 @@
 
 <div class="notice">
     <span class="notice-tag">Draft</span>
-    <span>This document has been generated with the help of Claude Code. It is work in progress and is still being reviewed.</span>
+    <span>This document has been generated with the help of Claude Code. It is work in progress and is still being reviewed. Work on the defrost model itself is also ongoing, e.g the fixed 5K offset should be a load dependent variable.</span>
 </div>
 
 <p class="lede">

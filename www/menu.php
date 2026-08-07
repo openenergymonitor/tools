@@ -131,3 +131,15 @@ $menu = array(
         "description" => "Levelised Cost of Energy Calculator"
     )
 );
+
+// Additional pages, keyed by the url path they are reached at
+// e.g. /dynamic_heatpump/docs/frost
+// Each is a complete standalone html file served as is by the front
+// controller, paths inside the file stay relative to the file's own location.
+$pages = array(
+    "dynamic_heatpump/docs/frost" => array(
+        "file" => "tools/dynamic_heatpump/docs/frost.php",
+        "title" => "How the frost & defrost model works",
+        "description" => "An illustrated tutorial on the evaporator frosting and reverse-cycle defrost model used by the dynamic heat pump simulator."
+    )
+);

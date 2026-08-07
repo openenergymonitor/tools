@@ -50,6 +50,21 @@ if (isset($menu[$q])) {
         'description' => $description,
         'github' => $github
     ));
+} else if (isset($pages[$q]) && file_exists($pages[$q]['file'])) {
+    // Additional standalone pages listed in menu.php e.g. /dynamic_heatpump/docs/frost
+    // The url is deeper than the file's own location, so unlike the tools above
+    // $path is an absolute url path rather than a relative one
+    $title = $pages[$q]['title'];
+    $description = $pages[$q]['description'];
+    $github .= "/tree/main/www/" . dirname($pages[$q]['file']);
+    $standalone = true;
+    $path = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), '/') . '/' . dirname($pages[$q]['file']) . '/';
+    $content = view($pages[$q]['file'], array(
+        'menu' => $menu,
+        'title' => $title,
+        'description' => $description,
+        'github' => $github
+    ));
 } else if ($q == 'home') {
     $title = 'Tools';
     $content = view('home_view.php', array(
