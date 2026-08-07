@@ -261,21 +261,22 @@
 
 <h1>How the frost &amp; defrost model works</h1>
 <p class="lede">
-    Air source heat pumps build up frost on the outdoor coil in cold and damp weather.
-    To remove it, the unit periodically runs the refrigeration cycle in reverse, melting
-    the frost by taking heat back from the heating circuit for a few minutes. This page
-    explains the physics behind the frost and defrost model used in the simulator, one
-    step at a time. Every chart below is computed live by
-    <a href="https://github.com/openenergymonitor/tools/blob/main/www/tools/dynamic_heatpump/model/frost.js"><code>model/frost.js</code></a>,
-    the same code that the simulator runs, so the figures always show what the model
-    actually does.
+    Air source heat pumps build up frost on the evaporator in cold and damp weather. The
+    evaporator is the outdoor heat exchanger, also known as the outdoor coil, it is
+    where the heat pump absorbs heat from the outside air. To remove the frost, the unit
+    periodically runs the refrigeration cycle in reverse, melting it by taking heat back
+    from the heating circuit for a few minutes. This page explains the physics behind the
+    frost and defrost model used in the simulator. The charts below
+    are calculated using the same
+    <a href="https://github.com/openenergymonitor/tools/blob/main/www/tools/dynamic_heatpump/model/frost.js"><code>model/frost.js</code></a> code
+    that the simulator runs.
 </p>
 
 <div class="tiles" id="hero_tiles">
     <div class="tile">
         <div class="label">Frosting weather</div>
         <div class="value">&minus;7 to +5<span class="unit">&deg;C</span></div>
-        <div class="note">humid air, coil below 0&nbsp;&deg;C</div>
+        <div class="note">humid air, evaporator below 0&nbsp;&deg;C</div>
     </div>
     <div class="tile">
         <div class="label">Defrost interval at 2&nbsp;&deg;C, 85% RH</div>
@@ -299,18 +300,19 @@
 <h2><span class="sec-no">1</span>Why frost forms: cold air holds less water</h2>
 
 <p>
-    The amount of water vapour that air can carry falls steeply with temperature,
-    roughly halving for every 10&nbsp;&deg;C drop. The evaporator coil of a heat pump
-    runs <em>colder than the air</em> passing over it, as it must in order to absorb
-    heat. The model uses a fixed approach temperature:
+    The amount of water vapour that air can carry falls with temperature,
+    roughly halving for every 10&nbsp;&deg;C drop. The evaporator of a heat pump runs
+    <em>colder than the air</em> passing over it, as it must in order to absorb heat.
+    The model uses a fixed approach temperature:
 </p>
 
 <div class="eq">T_coil = T_outside &minus; coil_dt        <span class="c">// coil_dt = 5 K, measured 4-5 K on test units</span></div>
 
 <p>
-    This means that whenever the outside air is below about +5&nbsp;&deg;C, the coil
-    surface is below freezing. If the air arriving at the coil carries more water than
-    saturated air at the coil temperature can hold, the excess has nowhere to go and is
+    This means that whenever the outside air is below about +5&nbsp;&deg;C, the
+    evaporator surface is below freezing. If the air arriving at the evaporator carries
+    more water than saturated air at the evaporator temperature can hold, the excess
+    has nowhere to go and is
     deposited on the fins as frost. The saturation curve makes this easier to see:
 </p>
 
@@ -320,13 +322,20 @@
     <div id="fig_magnus" class="chart-wrap"></div>
     <figcaption>
         Air at 2&nbsp;&deg;C and 80% RH carries <span id="cap_wamb">&hellip;</span> of water per kg of air.
-        The coil runs at &minus;3&nbsp;&deg;C, where saturated air holds only <span id="cap_wcoil">&hellip;</span>.
+        The evaporator runs at &minus;3&nbsp;&deg;C, where saturated air holds only <span id="cap_wcoil">&hellip;</span>.
         The difference, &Delta;w &asymp; <span id="cap_dw">&hellip;</span>, condenses and freezes onto the
         fins as the fan drives air across them.
     </figcaption>
 </figure>
 
-<p>The deposition law is the standard Lewis-analogy form used by every published model of this class:</p>
+<p>
+    The deposition law is the standard Lewis-analogy form used by comparable
+    reduced-order models. It appears as Equation&nbsp;(4) on page&nbsp;3 of
+    <a href="https://publications.ibpsa.org/proceedings/bs/2025/papers/bs2025_1497.pdf">Zanetti et&nbsp;al. (2025)</a>,
+    written there as m&#775;_w = m&#775;_a &middot; &epsilon; &middot; (x_ext &minus; x_sat), where
+    &epsilon; is the heat exchanger effectiveness. The same quantities appear here under
+    different names:
+</p>
 
 <div class="eq">frost_mass += m&#775;_air &middot; (w_ambient &minus; w_sat(T_coil)) &middot; capture_eff &middot; dt
 
@@ -336,8 +345,11 @@
 
 <p>
     The same law run in reverse also gives <strong>sublimation</strong>: in very cold
-    and dry air the coil can be <em>wetter</em> than the air (&Delta;w&nbsp;&lt;&nbsp;0), and
-    any frost already present slowly evaporates away without ever melting.
+    and dry air the evaporator can be <em>wetter</em> than the air (&Delta;w&nbsp;&lt;&nbsp;0), and
+    any frost already present slowly evaporates away without ever melting. Equation&nbsp;(4)
+    of Zanetti et&nbsp;al. sets out the same three cases: deposition when the air is moister
+    than the surface, sublimation when it is drier and ice is already present, and no mass
+    transfer otherwise.
 </p>
 </section>
 
@@ -346,11 +358,11 @@
 <h2><span class="sec-no">2</span>The frosting band: worst just above freezing</h2>
 
 <p>
-    Putting the two ingredients together, a coil 5&nbsp;K below the air temperature and
+    Putting the two ingredients together, an evaporator 5&nbsp;K below the air temperature and
     air whose water content falls steeply as it gets colder, produces a well known
     result: frosting is <strong>worst between 0 and +5&nbsp;&deg;C in humid weather</strong>,
     and not in the coldest weather. Below about &minus;7&nbsp;&deg;C the air is too dry to
-    feed the frost. Above +5&nbsp;&deg;C the coil climbs above freezing and the frost
+    feed the frost. Above +5&nbsp;&deg;C the evaporator climbs above freezing and the frost
     melts off.
 </p>
 
@@ -361,9 +373,9 @@
     <div id="fig_band" class="chart-wrap"></div>
     <figcaption>
         Each curve is one relative humidity. The cliff at +5&nbsp;&deg;C is the point where
-        the coil surface reaches 0&nbsp;&deg;C. Below the zero line the model runs the same
-        law in reverse and frost sublimates into dry air. Note that with a 5&nbsp;K coil
-        approach, meaningful frosting needs a relative humidity of roughly 70% or more,
+        the evaporator surface reaches 0&nbsp;&deg;C. Below the zero line the model runs the
+        same law in reverse and frost sublimates into dry air. Note that with a 5&nbsp;K
+        evaporator approach, meaningful frosting needs a relative humidity of roughly 70% or more,
         which is why mild and wet maritime climates see so many defrost cycles.
     </figcaption>
     <details class="table-view"><summary>Data table</summary><div id="table_band"></div></details>
@@ -375,11 +387,11 @@
 <h2><span class="sec-no">3</span>The state machine: build up, trigger, melt, repeat</h2>
 
 <p>
-    The model tracks a single quantity, the mass of frost on the coil in kg, and moves
+    The model tracks a single quantity, the mass of frost on the evaporator in kg, and moves
     between three behaviours around it. When the accumulated mass reaches a threshold
     (2&nbsp;kg by default) the unit runs a <strong>reverse-cycle defrost</strong>: the
     refrigeration circuit changes direction, the outdoor fan stops, and heat is pulled
-    <em>out of the heating circuit</em> and into the coil until the frost has melted.
+    <em>out of the heating circuit</em> and into the evaporator until the frost has melted.
 </p>
 
 <figure>
@@ -395,7 +407,7 @@
 <p>Two details matter for realism:</p>
 <p>
     <strong>The per-cycle overhead.</strong> Before any frost melts, the defrost must
-    reverse the cycle and reheat the cold coil metal itself. The model charges a fixed
+    reverse the cycle and reheat the cold evaporator metal itself. The model charges a fixed
     300&nbsp;kJ per cycle for this before melting begins. Measured defrost efficiencies
     of 30% with light frost against 56% with heavy frost (Ma et&nbsp;al.&nbsp;2023) show
     that this fixed cost is real and significant: <em>many small defrosts cost more than
@@ -424,7 +436,7 @@
 <figure>
     <div class="fig-title">Frost mass and available capacity, 8 hours at 2&nbsp;&deg;C / 85% RH</div>
     <div class="legend">
-        <span class="key"><span class="swatch-line" style="border-color:var(--s-blue)"></span>Frost on coil (kg)</span>
+        <span class="key"><span class="swatch-line" style="border-color:var(--s-blue)"></span>Frost on evaporator (kg)</span>
         <span class="key"><span class="swatch-fill" style="background:rgba(235,104,52,.18)"></span>Reverse-cycle defrost</span>
     </div>
     <div id="fig_day" class="chart-wrap"></div>
@@ -434,15 +446,20 @@
 
 <p>
     The lower panel shows the other cost of frost: <strong>pre-defrost derating</strong>.
-    As frost blankets the fins it insulates the coil and restricts the airflow, so the
+    As frost blankets the fins it insulates the evaporator and restricts the airflow, so the
     available capacity falls. In the model this fall is linear, reaching &minus;20% at the
     trigger point, with the electrical input unchanged, so the COP falls by the same
     factor. During the defrost itself the output is not just derated but negative,
-    because the unit is taking heat back.
+    because the unit is taking heat back. The linear form follows Equation&nbsp;(2) on
+    page&nbsp;4 of
+    <a href="https://www.e3s-conferences.org/articles/e3sconf/pdf/2019/37/e3sconf_clima2019_01063.pdf">Dongellini et&nbsp;al. (2019)</a>,
+    where the capacity reduction is a coefficient &alpha; times the steady state capacity.
+    They fit &alpha; as a function of air temperature and humidity, ranging from 0.10 to
+    0.28 (Table&nbsp;3, page&nbsp;6), so the 20% used here sits inside their range.
 </p>
 
 <div class="eq">capacity_factor = 1 &minus; derate_max &middot; (frost_mass / threshold)
-<span class="c">// derate_max = 20% (Dongellini et al. 2019)</span></div>
+<span class="c">// derate_max = 20% (Dongellini et al. 2019, Eq. 2)</span></div>
 </section>
 
 <!-- ================================================================== -->
@@ -455,7 +472,7 @@
     the heat drawn from the circuit actually reaches the frost, and every cycle pays the
     300&nbsp;kJ reversal and reheat overhead before melting starts. Dividing the useful
     melt energy by the total energy drawn gives the <strong>defrost efficiency</strong>,
-    which explains why defrosting a lightly frosted coil is poor value:
+    which explains why defrosting a lightly frosted evaporator is poor value:
 </p>
 
 <figure>
@@ -475,8 +492,10 @@
 
 <p>
     Over a year in a mild and wet climate this all adds up to roughly
-    <strong>1-2% of the heat delivered</strong>, plus the derating loss. This matches
-    seasonal studies that report penalties of 2-4% in colder continental climates.
+    <strong>1-2% of the heat delivered</strong>, plus the derating loss. For comparison,
+    Dongellini et&nbsp;al. (2019) report seasonal COP penalties of 4.1%, 4.4% and 2.2%
+    for the same system modelled in Milan, Bologna and Udine (page&nbsp;7), which is the
+    range to expect in a colder continental climate.
     The slow dynamics, in other words how often the unit defrosts, dominate the annual
     figure, while the fine detail of each individual defrost matters much less. That
     insight, validated by Zanetti et&nbsp;al. against climate chamber measurements, is
@@ -509,42 +528,42 @@
     <tr>
         <td><code>capture_eff</code></td><td class="num">0.45</td>
         <td>Fraction of the available moisture excess that actually sticks, the single calibrated value</td>
-        <td>Lewis-analogy effectiveness 0.4-0.8 (NREL 2024); Zanetti back-calculates 0.6-0.7</td>
+        <td>Lewis-analogy effectiveness is typically 0.4 to 0.8 for residential coils (NREL 2024). Zanetti uses the same &epsilon; but does not publish its calibrated value</td>
     </tr>
     <tr>
         <td><code>coil_dt</code></td><td class="num">5 K</td>
-        <td>How far the coil surface runs below the outside air</td>
-        <td>Zanetti measured 4.1-5.3 K on a residential unit</td>
+        <td>How far the evaporator surface runs below the outside air</td>
+        <td>Zanetti Table&nbsp;2 (page&nbsp;4): evaporator at &minus;2.1&nbsp;&deg;C in 2&nbsp;&deg;C air and &minus;0.3&nbsp;&deg;C in 5&nbsp;&deg;C air, so 4.1 and 5.3&nbsp;K</td>
     </tr>
     <tr>
         <td><code>threshold</code></td><td class="num">2.0 kg</td>
         <td>Frost mass that triggers a defrost</td>
-        <td>Zanetti weighed 2.8-3.0 kg melted per cycle</td>
+        <td>Zanetti Table&nbsp;2 (page&nbsp;4): 2.8 and 3.0&nbsp;kg of ice weighed off per cycle</td>
     </tr>
     <tr>
         <td><code>defrost_power</code></td><td class="num">4000 W</td>
         <td>Heat drawn from the heating circuit during defrost</td>
-        <td>CLIMA 2019: pulse peaking at 0.66 &times; rated capacity</td>
+        <td>Dongellini Table&nbsp;3 (page&nbsp;6): defrost pulse peaking at 0.66 &times; rated capacity</td>
     </tr>
     <tr>
         <td><code>defrost_elec</code></td><td class="num">1000 W</td>
         <td>Compressor electrical draw during defrost</td>
-        <td>CLIMA 2019: mean &asymp; 0.45 &times; nominal input</td>
+        <td>Dongellini Table&nbsp;3 (page&nbsp;6): electric pulse peaking at 0.90 to 1.10 &times; nominal input</td>
     </tr>
     <tr>
         <td><code>melt_eff</code></td><td class="num">0.6</td>
         <td>Fraction of the drawn heat that reaches the frost</td>
-        <td>Measured reverse-cycle defrost efficiency 56-61% (Klingebiel 2023)</td>
+        <td>Measured reverse-cycle defrost efficiency 56-61%, from Klingebiel 2023 as reported in the NREL 2024 review</td>
     </tr>
     <tr>
         <td><code>overhead_kj</code></td><td class="num">300 kJ</td>
-        <td>Fixed per-cycle cost: cycle reversal + reheating the coil metal</td>
+        <td>Fixed per-cycle cost: cycle reversal + reheating the evaporator metal</td>
         <td>Implied by the Ma 2023 measurements of 30% (light) and 56% (heavy)</td>
     </tr>
     <tr>
         <td><code>derate_max</code></td><td class="num">20 %</td>
         <td>Capacity/COP loss when frost reaches the trigger point</td>
-        <td>Dongellini 2019 calibrates a 10-28% loss at the trigger point</td>
+        <td>Dongellini Equation&nbsp;(2), page&nbsp;4: &alpha; ranges 0.10 to 0.28 (Table&nbsp;3, page&nbsp;6)</td>
     </tr>
 </table>
 
@@ -569,24 +588,24 @@
 
 <ul class="reading">
     <li>
-        <a href="https://publications.ibpsa.org/proceedings/bs/2025/papers/bs2025_1497.pdf">A gray-box model for frosting and defrosting of an air-to-water heat pump</a>
-        <span class="who">Zanetti, Scoccia and Aprile, IBPSA Building Simulation 2025. The validated twin of this model.</span>
+        <a href="https://publications.ibpsa.org/proceedings/bs/2025/papers/bs2025_1497.pdf">Fast model for air source heat pump frosting and defrosting behavior</a>
+        <span class="who">Zanetti, Scoccia and Aprile, Proceedings of the 19th IBPSA Building Simulation Conference, Brisbane, 2025. The validated twin of this model. The deposition law is Equation&nbsp;(4) on page&nbsp;3 and the validation measurements are in Table&nbsp;2 on page&nbsp;4.</span>
     </li>
     <li>
-        <a href="https://www.nrel.gov/docs/fy24osti/89649.pdf">Review of frosting and defrosting models for heat pumps</a>
-        <span class="who">Lu, Huang and Woods, NREL, 2024. A map of the whole field.</span>
+        <a href="https://www.osti.gov/biblio/2448280">A Review of Modeling Approaches for Predicting Frost Growth and Defrosting on Tube-Fin Heat Exchangers</a>
+        <span class="who">Lu, Huang and Woods, NREL/CP-5500-89649, 20th International Refrigeration and Air Conditioning Conference, 2024. A map of the whole field.</span>
     </li>
     <li>
-        <a href="https://doi.org/10.1016/j.energy.2023.127030">Dynamic modeling of frosting and defrosting in heat pumps</a>
-        <span class="who">Ma, Kim, Braun and Horton, Energy 272, 2023. The high fidelity reference and the source of the defrost efficiency measurements.</span>
+        <a href="https://doi.org/10.1016/j.energy.2023.127030">Development and validation of a dynamic modeling framework for air-source heat pumps under cycling of frosting and reverse-cycle defrosting</a>
+        <span class="who">Ma, Kim, Braun and Horton, Energy 272, 127030, 2023. The high fidelity reference and the source of the defrost efficiency measurements. Paywalled; the open companion paper is <a href="https://ecp.ep.liu.se/index.php/modelica/article/download/621/559/577">Transient Simulation of an Air-source Heat Pump under Cycling of Frosting and Reverse-cycle Defrosting</a>.</span>
     </li>
     <li>
-        <a href="https://ecp.ep.liu.se/index.php/modelica/article/download/1319/1133">An enthalpy-method frost model with retained water</a>
-        <span class="who">Ma and Thorade, Modelica Conference 2025. Refreeze and retained water behaviour.</span>
+        <a href="https://ecp.ep.liu.se/index.php/modelica/article/download/1319/1133">Frost/Defrost Models for Air-Source Heat Pumps with Retained Water Refreezing Considered</a>
+        <span class="who">Ma and Thorade, Proceedings of the 16th International Modelica Conference, 2025. Refreeze and retained water behaviour.</span>
     </li>
     <li>
-        <a href="https://www.e3s-conferences.org/articles/e3sconf/pdf/2019/37/e3sconf_clima2019_01063.pdf">Seasonal impact of defrost cycles on air-source heat pumps</a>
-        <span class="who">Dongellini et&nbsp;al., CLIMA 2019. Seasonal penalties and the pre-defrost derating shape.</span>
+        <a href="https://www.e3s-conferences.org/articles/e3sconf/pdf/2019/37/e3sconf_clima2019_01063.pdf">The modelling of reverse defrosting cycles of air-to-water heat pumps with TRNSYS</a>
+        <span class="who">Dongellini, Piazzi, De Biagi and Morini, E3S Web of Conferences 111, 01063, CLIMA 2019. Seasonal penalties and the pre-defrost derating shape. The derating equation is Equation&nbsp;(2) on page&nbsp;4 and the seasonal results are on page&nbsp;7.</span>
     </li>
 </ul>
 </section>
@@ -751,9 +770,9 @@
         s += '<circle cx="' + x(T_amb).toFixed(1) + '" cy="' + y(wa).toFixed(1) + '" r="5" fill="' + NS.blue + '" stroke="#fff" stroke-width="2"/>';
         s += txt(x(T_amb) + 10, y(wa) + 4, "ambient air · 2°C, 80% RH", "anno-strong", "start");
 
-        // Coil point on the saturation curve
+        // Evaporator point on the saturation curve
         s += '<circle cx="' + x(T_coil).toFixed(1) + '" cy="' + y(wc).toFixed(1) + '" r="5" fill="' + NS.blue + '" stroke="#fff" stroke-width="2"/>';
-        s += txt(x(T_coil) + 12, y(wc) + 24, "coil surface · −3°C, saturated", "anno-strong", "start");
+        s += txt(x(T_coil) + 12, y(wc) + 24, "evaporator surface · −3°C, saturated", "anno-strong", "start");
 
         // Delta-w label inside the band
         s += txt(x(-12.6), (y(wa) + y(wc)) / 2 + 4, "Δw → frost", "anno-strong", "start");
@@ -765,7 +784,7 @@
         s += txt((x(T_coil) + x(T_amb)) / 2, yb - 5, "coil_dt = 5 K", "anno", "middle");
 
         document.getElementById("fig_magnus").innerHTML =
-            '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Saturation moisture content of air against temperature, showing the moisture excess between ambient air at 2 degrees and the coil at minus 3 degrees">' + s + '</svg>';
+            '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Saturation moisture content of air against temperature, showing the moisture excess between ambient air at 2 degrees and the evaporator at minus 3 degrees">' + s + '</svg>';
 
         function f2(v) { return v.toFixed(2) + " g/kg"; }
         document.getElementById("cap_wamb").textContent = f2(wa);
@@ -779,7 +798,7 @@
     (function () {
         var W = 800, H = 392, m = { l: 52, r: 74, t: 28, b: 40 };
         var RHS = [60, 70, 80, 90, 100];
-        var XMIN = -16, XMAX = CFG.coil_dt; // deposition ends where the coil hits 0C
+        var XMIN = -16, XMAX = CFG.coil_dt; // deposition ends where the evaporator hits 0C
 
         var series = RHS.map(function (rh) {
             var pts = [];
@@ -813,7 +832,7 @@
              '" height="' + (H - m.b - m.t) + '" fill="#f6f4f0"/>';
         s += line(x(XMAX).toFixed(1), m.t, x(XMAX).toFixed(1), H - m.b, AXIS);
         s += '<text x="' + (x(XMAX) + 11) + '" y="' + (m.t + 14) + '" class="anno" transform="rotate(90 ' +
-             (x(XMAX) + 11) + ' ' + (m.t + 14) + ')">coil above 0°C: frost melts off</text>';
+             (x(XMAX) + 11) + ' ' + (m.t + 14) + ')">evaporator above 0°C: frost melts off</text>';
 
         // Sublimation annotation
         s += txt(x(-15.6), y(ymin) - 8, "↓ sublimation: frost evaporates into dry air", "anno", "start");
@@ -895,7 +914,7 @@
 
         // Frosting box (left), Defrost box (right), Melt box (bottom left)
         s += box(30, 40, 300, 110, NS.blue, "FROSTING", [
-            "compressor on · coil below 0°C",
+            "compressor on · evaporator below 0°C",
             "mass += ṁ_air · Δw · capture_eff · dt",
             "capacity derates as frost builds"
         ]);
@@ -905,7 +924,7 @@
             "at defrost_power · melt_eff ÷ 334 kJ/kg"
         ]);
         s += box(30, 230, 300, 70, "#898781", "NATURAL MELT", [
-            "coil above 0°C: fan-driven melt",
+            "evaporator above 0°C: fan-driven melt",
             "unit off in warm air: slow melt (×0.1)"
         ]);
 
@@ -917,10 +936,11 @@
         // Frosting <-> natural melt, left of the safety-cap route
         s += arrow(100, 150, 100, 230, "", 0, false);
         s += arrow(160, 230, 160, 150, "", 0, false);
-        s += '<text x="92" y="194" class="anno" text-anchor="end" style="font-size:11px">coil crosses 0°C</text>';
+        s += '<text x="92" y="188" class="anno" text-anchor="end" style="font-size:11px">evaporator</text>';
+        s += '<text x="92" y="202" class="anno" text-anchor="end" style="font-size:11px">crosses 0°C</text>';
 
         document.getElementById("fig_states").innerHTML =
-            '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="State machine: frosting leads to defrost at 2 kilograms, defrost returns to frosting when melted or at the 20 minute cap, and natural melt removes frost when the coil is above freezing">' + s + '</svg>';
+            '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="State machine: frosting leads to defrost at 2 kilograms, defrost returns to frosting when melted or at the 20 minute cap, and natural melt removes frost when the evaporator is above freezing">' + s + '</svg>';
     })();
 
     // ==================================================================
