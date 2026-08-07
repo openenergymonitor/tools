@@ -700,12 +700,14 @@
             <span class="hp-subtitle">{{ mode == 'day' ? 'single day' : 'full year' }} &middot; run {{ simulation_index }}<span v-if="baseline_enabled"> &middot; vs baseline</span></span>
         </div>
         <div class="d-flex gap-2">
+            <!--
             <div class="dropdown">
                 <button type="button" class="btn btn-sm hp-btn-dark dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Docs</button>
                 <ul class="dropdown-menu dropdown-menu-end">
                     <li><a class="dropdown-item" href="<?php echo $path; ?>docs/frost.html">How the frost &amp; defrost model works</a></li>
                 </ul>
             </div>
+            -->
             <button type="button" class="btn btn-sm hp-btn-dark d-none d-lg-inline-block" @click="import_config">Import</button>
             <button type="button" class="btn btn-sm hp-btn-dark d-none d-lg-inline-block" @click="export_config">Export</button>
         </div>
