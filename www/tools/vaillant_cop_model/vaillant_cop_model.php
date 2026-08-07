@@ -1,6 +1,6 @@
 <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
 <script src="<?php echo $path_lib;?>vaillant.js?v=10"></script>
-<script src="<?php echo $path_lib;?>vaillant_cop_fit.js?v=1"></script>
+<script src="<?php echo $path_lib;?>vaillant_cop_fit.js?v=2"></script>
 
 
 <?php $title = "Vaillant COP model"; ?>
@@ -9,7 +9,7 @@
     <div class="row">
         <div class="col">
             <h3>Vaillant Arotherm+ datasheet vs model</h3>
-            <p>This tool compares Vaillant Arotherm+ datasheet performance tables with a range of COP models to see how well each one fits real-world data. The models start with the Carnot equation using fixed temperature offsets, then offsets that scale with compressor speed or heat output, then full vapour compression cycle calculations using CoolProp refrigerant properties. The last two replace the fixed practical COP factor with an efficiency curve fitted to the datasheet tables, either fitted to each unit or as a single generic set that works from the nominal capacity.</p>
+            <p>This tool compares Vaillant Arotherm+ datasheet performance tables with a range of COP models to see how well each one fits real-world data. The models start with the Carnot equation using fixed temperature offsets, then offsets that scale with compressor speed or heat output, then full vapour compression cycle calculations using CoolProp refrigerant properties. The last three replace the fixed practical COP factor with an efficiency curve fitted to the datasheet tables: fitted to each unit, as a single generic set that works from the nominal capacity, or a generic set written in inferred compressor speed rather than load fraction.</p>
         </div>
     </div>
 
@@ -30,6 +30,7 @@
                             <option value="coolprop-vapour-compression-v2">CoolProp vapour compression model v2</option>
                             <option value="carnot-fitted">Carnot with fitted efficiency curve (unit specific)</option>
                             <option value="carnot-fitted-generic">Carnot with fitted efficiency curve (generic, capacity normalised)</option>
+                            <option value="carnot-fitted-generic-v2">Carnot with fitted efficiency curve (generic v2, speed based)</option>
                             <option value="vaillant-datasheet">Vaillant datasheet interpolation (validation only)</option>
                         </select>
                     </div>
@@ -119,7 +120,7 @@
                         </div>
                     </div>
 
-                    <div class="col" v-if="cop_model === 'carnot-fitted-generic'">
+                    <div class="col" v-if="cop_model === 'carnot-fitted-generic' || cop_model === 'carnot-fitted-generic-v2'">
                         <label class="form-label">Nominal capacity Q<sub>nom</sub></label>
                         <div class="input-group mb-3">
                             <input type="text" class="form-control" v-model.number="fit_qnom" @change="update()">
@@ -127,7 +128,7 @@
                         </div>
                     </div>
 
-                    <div class="col" v-if="cop_model === 'carnot-fitted-generic'">
+                    <div class="col" v-if="cop_model === 'carnot-fitted-generic' || cop_model === 'carnot-fitted-generic-v2'">
                         <label class="form-label">Efficiency scale</label>
                         <div class="input-group mb-3">
                             <input type="text" class="form-control" v-model.number="fit_eta_scale" @change="update()">
@@ -323,6 +324,15 @@
                     <p>η = scale × (e<sub>0</sub> + e<sub>1</sub>q&#770; + e<sub>2</sub>q&#770;² + e<sub>xz</sub>q&#770;z) × (1 + a<sub>1</sub>z + a<sub>2</sub>z² + a<sub>3</sub>z³) × (1 + b<sub>1</sub>w)</p>
                     <p>COP = η × frost × (T<sub>condensing</sub> + 273.15) / L</p>
                     <p>For a different unit, set Q<sub>nom</sub> to its nominal capacity and leave the scale at 1.0 for other Arotherm+ sizes; for other inverter-driven air-source monoblocs, derive the scale from a few datasheet rating points using <code>calibrateEtaScale()</code>.</p>
+                </div>
+                <div v-if="cop_model === 'carnot-fitted-generic-v2'">
+                    <p>Same pooled approach as the generic fit, but the efficiency polynomial is written in <b>inferred compressor speed</b> rather than load fraction. Normalised volumetric capacity c = Q/(rps·Q<sub>nom</sub>) collapses onto one curve for both units, so speed can be back-calculated from the operating point and nominal capacity alone. This fixes most of the cold high-speed corner error of the load-fraction version. Fitted with the frost amplitude free, the pooled fit chose f<sub>A</sub> = 0, so v2 is a pre-defrost surface by construction and has no defrost option here; the remaining error against these tables is therefore partly the datasheet's embedded defrost penalty. Its other known weakness is underprediction at mild ambient (+10 to +20°C) for the 5 kW unit, the flip side of fitting across the EN 14511 wet/dry coil boundary at about +7°C.</p>
+                    <p>c = (c<sub>0</sub> + c<sub>1</sub>T<sub>ambient</sub> + c<sub>2</sub>T<sub>ambient</sub>²) × (1 + c<sub>3</sub>(T<sub>flow</sub> − 50)) &nbsp;&nbsp; rps = output / (Q<sub>nom</sub> c), clamped to 30–120</p>
+                    <p>q&#770; = output / Q<sub>nom</sub> &nbsp;&nbsp; s = rps / 100</p>
+                    <p>T<sub>condensing</sub> = T<sub>flow</sub> + 4 q&#770; &nbsp;&nbsp; T<sub>evaporating</sub> = T<sub>ambient</sub> − 7 q&#770; &nbsp;&nbsp; L = T<sub>c</sub> − T<sub>e</sub></p>
+                    <p>η = scale × (e<sub>0</sub> + e<sub>1</sub>s + e<sub>2</sub>s² + e<sub>xz</sub>sz) × (1 + a<sub>1</sub>z + a<sub>2</sub>z² + a<sub>3</sub>z³) × (1 + b<sub>1</sub>w), &nbsp; z = (L−45)/45, &nbsp; w = (T<sub>flow</sub>−50)/15</p>
+                    <p>COP = η × (T<sub>condensing</sub> + 273.15) / L</p>
+                    <p>The same capacity model gives the modulation envelope at a condition via <code>outputRange()</code>, and raw (unclamped) speed via <code>estimateSpeed()</code> to detect demand below the minimum modulation, i.e. on/off cycling.</p>
                 </div>
             </div>
         </div>
@@ -773,6 +783,11 @@
                                         practical_cop = copFitGeneric(this.fit_qnom, T_flow, T_ambient, output, {
                                             etaScale: this.fit_eta_scale,
                                             includeFrost: this.fit_include_frost
+                                        });
+                                    } else if (this.cop_model === 'carnot-fitted-generic-v2') {
+                                        let output = flow_temp_data.output[i][j];
+                                        practical_cop = copFitGenericV2(this.fit_qnom, T_flow, T_ambient, output, {
+                                            etaScale: this.fit_eta_scale
                                         });
                                     } else if (this.cop_model === 'vaillant-datasheet') {
                                         let output = flow_temp_data.output[i][j];

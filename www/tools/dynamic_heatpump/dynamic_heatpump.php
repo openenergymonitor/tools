@@ -22,7 +22,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/solid.min.css">
 <script src="<?php echo $path_lib;?>ecodan.js?v=1"></script>
 <script src="<?php echo $path_lib;?>vaillant.js?v=11"></script>
-<script src="<?php echo $path_lib;?>vaillant_cop_fit.js?v=1"></script>
+<script src="<?php echo $path_lib;?>vaillant_cop_fit.js?v=2"></script>
 
 <style>
     /* Hide the raw template until Vue has mounted */
@@ -784,6 +784,7 @@
                             <option value="vaillant5">Vaillant datasheet 5kW</option>
                             <option value="vaillant12">Vaillant datasheet 12kW</option>
                             <option value="generic">Vaillant generic fitted (capacity normalised)</option>
+                            <option value="generic_v2">Vaillant generic fitted v2 (speed based)</option>
                         </select>
                     </div>
                     <div class="hp-field">
@@ -959,6 +960,7 @@
                             <label class="hp-field-label">COP model</label>
                             <select class="form-select form-select-sm" v-model="heatpump.cop_model" @change="simulate">
                                 <option value="generic">Generic fitted (capacity normalised)</option>
+                                <option value="generic_v2">Generic fitted v2 (speed based)</option>
                                 <option value="carnot_fixed">Carnot (fixed offsets flow+2, outside-6)</option>
                                 <option value="carnot_variable">Carnot (variable offsets &prop; heat)</option>
                                 <option value="ecodan">Ecodan datasheet</option>
@@ -969,10 +971,10 @@
                         <param-field v-if="heatpump.cop_model == 'carnot_fixed' || heatpump.cop_model == 'carnot_variable'"
                             label="Practical COP factor" unit="%" :step="1" :min="0" :max="100"
                             v-model="heatpump.prc_carnot" @change="simulate"></param-field>
-                        <param-field v-if="heatpump.cop_model == 'generic'"
+                        <param-field v-if="heatpump.cop_model == 'generic' || heatpump.cop_model == 'generic_v2'"
                             label="Nominal capacity (A7/W35)" unit="W" :step="500" :min="500"
                             v-model="heatpump.nominal_capacity" @change="simulate"></param-field>
-                        <param-field v-if="heatpump.cop_model == 'generic'"
+                        <param-field v-if="heatpump.cop_model == 'generic' || heatpump.cop_model == 'generic_v2'"
                             label="Efficiency scale" unit="&times; &eta;" :step="0.01" :min="0.1" :max="2"
                             v-model="heatpump.eta_scale" @change="simulate"></param-field>
                         <param-field label="Minimum modulation" unit="%" :step="5" :min="0" :max="100"
@@ -999,7 +1001,27 @@
                             v-model="heatpump.standby" @change="simulate"></param-field>
                         <param-field label="Pump power" unit="W" :step="1" :min="0"
                             v-model="heatpump.pumps" @change="simulate"></param-field>
+                        <div class="hp-field">
+                            <label class="hp-field-label">Max electrical power limit</label>
+                            <div class="form-check form-switch hp-switch pt-1">
+                                <input class="form-check-input" type="checkbox" id="max_elec_enabled"
+                                    v-model="heatpump.max_elec_enabled" @change="simulate">
+                                <label class="form-check-label" for="max_elec_enabled">Enabled</label>
+                            </div>
+                        </div>
+                        <param-field v-if="heatpump.max_elec_enabled" label="Max electrical power" unit="W"
+                            :step="100" :min="0" v-model="heatpump.max_elec" @change="simulate"></param-field>
                     </div>
+                    <p class="hp-note" v-if="heatpump.max_elec_enabled">The max electrical power limit caps the
+                        whole unit's electrical input (compressor + pump {{ heatpump.pumps }} W + standby
+                        {{ heatpump.standby }} W), the electrical-side equivalent of a maximum modulation limit.
+                        The heat output the cap allows is solved from the COP at the operating point, so the
+                        heat it permits rises and falls with the COP: mild weather and low flow temperatures
+                        buy more heat per watt than cold weather does. Like the flow temperature limiter it
+                        modulates the unit down rather than switching it off, so it can hold the compressor
+                        below the minimum modulation output
+                        ({{ heatpump.minimum_modulation * heatpump.capacity / 100 | toFixed(0) }} W) that the
+                        cycling control would otherwise enforce.</p>
 
                     <div class="hp-subheading">Heat emitters</div>
                     <div class="hp-field-grid">

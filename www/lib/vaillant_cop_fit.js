@@ -179,11 +179,111 @@ function calibrateEtaScale(qnomKW, points) {
     return Math.exp(s / points.length);
 }
 
+/* ------------------------------------------------------------------------
+ * SPEED BACK-CALCULATION + SPEED-BASED GENERIC MODEL (v2)
+ *
+ * Normalised volumetric capacity c = Q/(rps * Qnom) collapses onto a single
+ * curve for both units (suction density is refrigerant physics, displacement
+ * scales with capacity), so compressor speed can be inferred from
+ * (Q, ambient, flow, Qnom) at ~7% accuracy for any unit in the family:
+ *
+ *   rps = Q / (Qnom * c(Ta,Tf)),  c = (c0+c1*Ta+c2*Ta^2)*(1+c3*(Tf-50))
+ *
+ * The v2 efficiency curve is a polynomial in inferred speed rather than load
+ * fraction, which fixes most of the cold high-speed corner error (5 kW
+ * 35C tab: +14% -> +1.5%). Fitted with the frost amplitude free, the pooled
+ * fit chose fA = 0, i.e. v2 is natively a pre-defrost surface.
+ * Remaining known weakness: underprediction at mild ambient (+10..+20 C)
+ * for the 5 kW (~ -10..-16%), the flip side of fitting across the
+ * EN 14511 wet/dry-coil boundary at ~+7 C.
+ * ---------------------------------------------------------------------- */
+
+var vaillant_capacity_params = [1.070e-2, 2.889e-4, 6.495e-7, -9.330e-3];
+
+// Compressor modulation range for the Arotherm+ family (both tabulated units
+// span 30-120 rps; override maxRps per unit if a datasheet says otherwise).
+var VAILLANT_MIN_RPS = 30;
+var VAILLANT_MAX_RPS = 120;
+
+var vaillant_generic_v2_params =
+    // [e0, e1, e2, exz, a1, a2, a3, b1]  (eta polynomial in s = rps/100)
+    [0.24930, 0.74153, -0.48742, 0.66656,
+     -1.05159, 0.32990, -0.03477, -0.00303];
+
+/** Normalised volumetric capacity c(Ta,Tf) = Q/(rps*Qnom). Internal. */
+function volumetricCapacity(flowTemp, ambientTemp) {
+    const [c0, c1, c2, c3] = vaillant_capacity_params;
+    return Math.max(
+        (c0 + c1 * ambientTemp + c2 * ambientTemp * ambientTemp)
+            * (1 + c3 * (flowTemp - 50.0)),
+        1e-4);
+}
+
+/**
+ * Estimate compressor speed from operating point.
+ * @param {boolean} [clamp=false] clamp to [VAILLANT_MIN_RPS, VAILLANT_MAX_RPS].
+ *        Leave false to detect out-of-envelope demand (rps < 30 implies
+ *        on/off cycling; rps > max implies the output is not deliverable);
+ *        use true (or copFitGenericV2, which clamps internally) for COP.
+ *        Note: unclamped inference overshoots at the coldest extreme for
+ *        larger units (their capacity curve sags less at -20 C than the
+ *        shared fit), so treat raw rps near the limits as approximate.
+ * @returns {number} rps
+ */
+function estimateSpeed(qnomKW, flowTemp, ambientTemp, outputKW, clamp = false) {
+    const rps = outputKW / (qnomKW * volumetricCapacity(flowTemp, ambientTemp));
+    return clamp ? Math.min(Math.max(rps, VAILLANT_MIN_RPS), VAILLANT_MAX_RPS) : rps;
+}
+
+/**
+ * Modulation envelope: deliverable output range at a condition, from the
+ * capacity model and the compressor speed limits.
+ * Approximate: the true max is additionally limited by the operating
+ * envelope (max flow temp vs ambient, power limits) at the extremes.
+ * @returns {{minKW: number, maxKW: number}}
+ */
+function outputRange(qnomKW, flowTemp, ambientTemp, maxRps = VAILLANT_MAX_RPS) {
+    const c = volumetricCapacity(flowTemp, ambientTemp);
+    return { minKW: qnomKW * c * VAILLANT_MIN_RPS,
+             maxKW: qnomKW * c * maxRps };
+}
+
+/**
+ * Generic v2: speed-based efficiency curve, pre-defrost by construction.
+ * Same interface as copFitGeneric; speed is inferred and clamped internally.
+ */
+function copFitGenericV2(qnomKW, flowTemp, ambientTemp, outputKW, opts = {}) {
+    const { etaScale = 1.0 } = opts;
+    const [e0, e1, e2, exz, a1, a2, a3, b1] = vaillant_generic_v2_params;
+
+    const qh = outputKW / qnomKW;
+    const s  = estimateSpeed(qnomKW, flowTemp, ambientTemp, outputKW, true) / 100.0;
+
+    const Tc = flowTemp + 273.15 + 4.0 * qh;
+    const Te = ambientTemp + 273.15 - 7.0 * qh;
+    const L  = Math.max(Tc - Te, 5.0);
+    const z = (L - 45.0) / 45.0;
+    const w = (flowTemp - 50.0) / 15.0;
+
+    const eta = etaScale
+              * (e0 + e1 * s + e2 * s * s + exz * s * z)
+              * (1.0 + a1 * z + a2 * z * z + a3 * z * z * z)
+              * (1.0 + b1 * w);
+
+    return eta * Tc / L;
+}
+
 // Example:
 // console.log(copFit("5kW", 45, 2, 4.0).toFixed(2));   // ~2.9
 // console.log(copFit("12kW", 35, 7, 9.6).toFixed(2));  // ~5.0
 // const s = calibrateEtaScale(7.0, [{flow:35, ambient:7, outputKW:7.0, cop:4.8}]);
 // console.log(copFitGeneric(7.0, 45, 2, 5.0, { etaScale: s }).toFixed(2));
+// console.log(estimateSpeed(5, 35, -7, 5.1).toFixed(0), 'rps (table: 97)');
+// console.log(copFitGenericV2(5, 35, -7, 5.1).toFixed(2));
+// console.log(outputRange(5, 45, -7));   // {minKW, maxKW} at this condition
 
-// module.exports = { copFit, carnotCOP, copFitGeneric, calibrateEtaScale,
-//                    vaillant_cop_fit_params, vaillant_generic_params };  // if using Node
+// module.exports = { copFit, carnotCOP, copFitGeneric, copFitGenericV2,
+//                    estimateSpeed, outputRange, calibrateEtaScale,
+//                    VAILLANT_MIN_RPS, VAILLANT_MAX_RPS,
+//                    vaillant_cop_fit_params, vaillant_generic_params,
+//                    vaillant_generic_v2_params, vaillant_capacity_params };

@@ -301,7 +301,11 @@ var app = new Vue({
             standby: 11,
             pumps: 15,
             minimum_modulation: 30,
-            ramp_rate: 1
+            ramp_rate: 1,
+            // Optional cap on the unit's total electrical input
+            // (compressor + pumps + standby), disabled by default
+            max_elec_enabled: false,
+            max_elec: 2000
         },
         // Primary pipework between the heat pump and the building entry.
         // "simple" = uniform copper pipe exposed to the live outside air
