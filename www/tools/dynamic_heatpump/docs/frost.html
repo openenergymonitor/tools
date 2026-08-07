@@ -121,6 +121,29 @@
     }
     .eq .c { color: var(--muted); }
 
+    /* Draft notice: same accent-rule treatment as .eq, in the warning amber */
+    .notice {
+        display: flex;
+        align-items: baseline;
+        gap: .6rem;
+        font-size: .88rem;
+        background: #fdf6e3;
+        border: 1px solid #f2e2b0;
+        border-left: 3px solid #fab219;
+        border-radius: 6px;
+        padding: .7rem 1rem;
+        margin: 0 0 1.25rem;
+        color: var(--ink);
+    }
+    .notice .notice-tag {
+        flex: none;
+        font-size: .7rem;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: #7a5600;
+    }
+
     /* --- Stat tiles ------------------------------------------------------ */
     .tiles {
         display: grid;
@@ -260,6 +283,12 @@
 <main>
 
 <h1>How the frost &amp; defrost model works</h1>
+
+<div class="notice">
+    <span class="notice-tag">Draft</span>
+    <span>This document has been generated with the help of Claude Code. It is work in progress and is still being reviewed.</span>
+</div>
+
 <p class="lede">
     Air source heat pumps build up frost on the evaporator in cold and damp weather. The
     evaporator is the outdoor heat exchanger, also known as the outdoor coil, it is
