@@ -22,6 +22,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/solid.min.css">
 <script src="<?php echo $path_lib;?>ecodan.js?v=1"></script>
 <script src="<?php echo $path_lib;?>vaillant.js?v=11"></script>
+<script src="<?php echo $path_lib;?>vaillant_cop_fit.js?v=1"></script>
 
 <style>
     /* Hide the raw template until Vue has mounted */
@@ -782,6 +783,7 @@
                             <option value="ecodan">Ecodan datasheet</option>
                             <option value="vaillant5">Vaillant datasheet 5kW</option>
                             <option value="vaillant12">Vaillant datasheet 12kW</option>
+                            <option value="generic">Vaillant generic fitted (capacity normalised)</option>
                         </select>
                     </div>
                     <div class="hp-field">
@@ -956,6 +958,7 @@
                         <div class="hp-field">
                             <label class="hp-field-label">COP model</label>
                             <select class="form-select form-select-sm" v-model="heatpump.cop_model" @change="simulate">
+                                <option value="generic">Generic fitted (capacity normalised)</option>
                                 <option value="carnot_fixed">Carnot (fixed offsets flow+2, outside-6)</option>
                                 <option value="carnot_variable">Carnot (variable offsets &prop; heat)</option>
                                 <option value="ecodan">Ecodan datasheet</option>
@@ -963,9 +966,15 @@
                                 <option value="vaillant12">Vaillant datasheet 12kW</option>
                             </select>
                         </div>
-                        <param-field v-if="heatpump.cop_model != 'ecodan' && heatpump.cop_model != 'vaillant5' && heatpump.cop_model != 'vaillant12'"
+                        <param-field v-if="heatpump.cop_model == 'carnot_fixed' || heatpump.cop_model == 'carnot_variable'"
                             label="Practical COP factor" unit="%" :step="1" :min="0" :max="100"
                             v-model="heatpump.prc_carnot" @change="simulate"></param-field>
+                        <param-field v-if="heatpump.cop_model == 'generic'"
+                            label="Nominal capacity (A7/W35)" unit="W" :step="500" :min="500"
+                            v-model="heatpump.nominal_capacity" @change="simulate"></param-field>
+                        <param-field v-if="heatpump.cop_model == 'generic'"
+                            label="Efficiency scale" unit="&times; &eta;" :step="0.01" :min="0.1" :max="2"
+                            v-model="heatpump.eta_scale" @change="simulate"></param-field>
                         <param-field label="Minimum modulation" unit="%" :step="5" :min="0" :max="100"
                             v-model="heatpump.minimum_modulation" @change="simulate"></param-field>
                         <div class="hp-field">

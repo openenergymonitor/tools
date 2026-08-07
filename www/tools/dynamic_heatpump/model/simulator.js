@@ -29,7 +29,8 @@
 // per-timestep series for plotting.
 //
 // Depends on the model modules (pipework, cylinder, controller, building) and
-// the COP model globals from lib/ (get_ecodan_cop, getCOP, vaillant_data).
+// the COP model globals from lib/ (get_ecodan_cop, getCOP, vaillant_data,
+// copFitGeneric).
 // ============================================================================
 
 var simulator = (function () {
@@ -259,6 +260,10 @@ var simulator = (function () {
         var hp_radiatorRatedDT = cfg.heatpump.radiatorRatedDT;
         var hp_prc_carnot = cfg.heatpump.prc_carnot;
         var hp_cop_model = cfg.heatpump.cop_model;
+        // Generic COP model inputs: nominal (rated) capacity rather than the
+        // top-end capacity above, plus an efficiency scale for other units
+        var hp_nominal_capacity = cfg.heatpump.nominal_capacity;
+        var hp_eta_scale = cfg.heatpump.eta_scale;
         var hp_standby = cfg.heatpump.standby;
         var hp_pumps = cfg.heatpump.pumps;
         var bld_lac_gains = cfg.building.lac_gains;
@@ -577,6 +582,16 @@ var simulator = (function () {
                     PracticalCOP = getCOP(vaillant_data['5kW'], flow_temperature, outside, 0.001 * heatpump_heat);
                 } else if (hp_cop_model == "vaillant12") {
                     PracticalCOP = getCOP(vaillant_data['12kW'], flow_temperature, outside, 0.001 * heatpump_heat);
+                } else if (hp_cop_model == "generic") {
+                    // Capacity-normalised fit (lib/vaillant_cop_fit.js): one
+                    // pooled parameter set, scaled by the unit's nominal
+                    // capacity, with an optional efficiency scale for units
+                    // other than the Arotherm+. Frost is left off here since
+                    // the frost model above applies its own derating.
+                    PracticalCOP = copFitGeneric(0.001 * hp_nominal_capacity, flow_temperature, outside, 0.001 * heatpump_heat, {
+                        etaScale: hp_eta_scale,
+                        includeFrost: false
+                    });
                 }
 
                 // Pre-defrost derating: capacity falls with frost while the

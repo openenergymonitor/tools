@@ -82,6 +82,7 @@ function load(file) {
 }
 load(path.join(LIB, 'ecodan.js'));
 load(path.join(LIB, 'vaillant.js'));
+load(path.join(LIB, 'vaillant_cop_fit.js'));
 // Model modules and plot glue (order matters); older self-contained app
 // versions passed via --app may predate the split, so only load what exists
 const MODEL_FILES = ['pipework.js', 'cylinder.js', 'controller.js', 'building.js', 'frost.js', 'simulator.js'];

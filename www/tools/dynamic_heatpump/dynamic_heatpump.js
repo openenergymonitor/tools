@@ -294,6 +294,10 @@ var app = new Vue({
             radiatorRatedDT: 50,
             prc_carnot: 47,
             cop_model: "vaillant5",
+            // Generic COP model: nominal (rated) capacity drives the load
+            // fraction, eta_scale calibrates the fit to other units
+            nominal_capacity: 5000,
+            eta_scale: 1.0,
             standby: 11,
             pumps: 15,
             minimum_modulation: 30,
@@ -1002,11 +1006,13 @@ var app = new Vue({
                     app.heatpump.capacity = 8500;
                     // modulation to 30
                     app.heatpump.minimum_modulation = 30;
+                    app.heatpump.nominal_capacity = 5000;
                 } else if (app.heatpump.cop_model == "vaillant12") {
                     // top end max capacity 12kW model
                     app.heatpump.capacity = 17900;
                     // modulation to 20
                     app.heatpump.minimum_modulation = 30;
+                    app.heatpump.nominal_capacity = 12000;
                 }
 
                 // These only need to be calculated once
