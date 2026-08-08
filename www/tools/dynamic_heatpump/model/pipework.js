@@ -63,8 +63,8 @@ var pipework = (function () {
         // 0.034 @ 0 C, 0.036 @ 20 C, 0.038 @ 40 C
         armaflex: 0.038,
         // Primary Pro — closed cell polyethylene, coated for external UV/water
-        // exposure. 0.035 @ 40 C (BS EN 12667:2001, BS 5422:2023), datasheet
-        // REV JULY 2025. Note this beats Armaflex at the same thickness.
+        // exposure. 0.035 @ 40 C (BS EN 12667:2001, BS 5422:2023 & Part L),
+        // datasheet JULY 2026. Note this beats Armaflex at the same thickness.
         primarypro: 0.035,
         pe_foam: 0.035, // PE foam jacket of pre-insulated buried pipe
         mdpe:    0.40   // MDPE pipe wall (copper's is negligible, so omitted)
@@ -122,47 +122,133 @@ var pipework = (function () {
     // copper sizes we model, with the tube bore matching the pipe OD.
     var ARMAFLEX_WALLS = [9, 13, 19, 25, 32]; // mm
     //
-    // Primary Pro comes in ONE thickness per pipe size, and its tubes are
-    // deliberately oversized — both bore and wall run over nominal, so the
-    // measured dimensions from the datasheet are used rather than the nominal
-    // ones. "28mm x 19mm" is really a 29 mm bore with a 21 mm wall. Taking the
-    // foam bore as r1 (not the pipe OD) leaves the small annular gap outside
-    // the insulation, which is the conservative reading.
-    var PRIMARY_PRO = { // bore/t m, as measured; nominal for the label
-        "22": { nominal: 25, bore: 0.023, t: 0.025 },
-        "28": { nominal: 19, bore: 0.029, t: 0.021 },
-        "35": { nominal: 19, bore: 0.036, t: 0.021 }
-        // 42 mm x 19 mm also exists but is outside the PIPES range
+    // Primary Pro comes in ONE thickness per pipe size, and its tubes run
+    // oversized on the bore — a "28 mm" tube has a 29 mm bore, leaving a small
+    // annular gap around 28 mm copper. Taking the foam bore as r1 (not the pipe
+    // OD) leaves that gap outside the insulation, which is the conservative
+    // reading.
+    //
+    // The JULY 2026 datasheet names each tube by its measured wall, so the
+    // label and the modelled thickness are the same number — earlier sheets
+    // called these "19 mm" while measuring 21-22 mm, which is where the stale
+    // 19 mm labels in this file came from.
+    var PRIMARY_PRO = { // bore/t m, as measured — label is t in mm
+        "22": { bore: 0.023, t: 0.025 }, // 23 x 25 +/-1
+        "28": { bore: 0.029, t: 0.021 }, // 29 x 21 +/-1
+        "35": { bore: 0.036, t: 0.022 }  // 36 x 22 +/-1
+        // 42 mm (43 x 23 +/-2) also exists but is outside the PIPES range
     };
     // Superseded option keys from before the range was product-specific, kept
     // so previously saved configs still load
     var INSUL_LEGACY = { "13": "af13", "19": "af19", "25": "af25" };
 
+    // ---- BS 5422 Table 20A --------------------------------------------------
+    // "Base level thickness of insulation for domestic heating and hot water
+    // systems having high emissivity outer surfaces". Indexed by the OD of the
+    // PIPE the thickness is based on, it gives a base thickness per lambda band
+    // and, more usefully here, a maximum permissible heat loss in W per metre
+    // of run. That is the number an installer's lagging choice is judged
+    // against, so it is what the dropdowns report.
+    //
+    // NOTE 1 of the table fixes the basis: thicknesses computed to
+    // BS EN ISO 12241:2008 for a horizontal pipe at 60 C in still air at 15 C
+    // — i.e. dT 45 K — with the insulation's outer surface at emissivity 0.90.
+    // t35 below is the base thickness for lambda = 0.035 W/m.K, kept as a
+    // cross-check rather than used directly.
+    var BS5422_T20A = [ // od mm (upper bound of band), t35 mm, max loss W/m
+        { od: 8,  t35: 9,  max: 7.06 },
+        { od: 10, t35: 11, max: 7.23 },
+        { od: 12, t35: 14, max: 7.35 },
+        { od: 15, t35: 15, max: 7.89 },
+        { od: 22, t35: 18, max: 9.12 },
+        { od: 28, t35: 20, max: 10.07 },
+        { od: 35, t35: 22, max: 11.08 },
+        { od: 42, t35: 23, max: 12.19 },
+        { od: 54, t35: 24, max: 14.12 }
+    ];
+    var BS5422_DT = 45; // K, the standard's 60 C pipe in 15 C still air
+
+    // The standard accounts for the film on the OUTSIDE of the lagging, which
+    // pipe_u() deliberately omits (the model wants the conduction-only figure,
+    // which slightly overstates loss). 10 W/m2.K is the still-air convection +
+    // radiation coefficient for a high-emissivity surface at the few-K excess
+    // these assemblies sit at. It is not fitted to the table, but it does
+    // reproduce it: every base thickness in BS5422_T20A comes out 0.4-1.1%
+    // INSIDE its own limit, so the check neither flatters nor penalises a
+    // product that is built exactly to the standard.
+    var H_SURFACE = 10; // W/m2.K
+
+    // Maximum permissible loss W/m for a pipe of outer diameter od (m).
+    // Above the largest band the table gives no figure, so neither do we.
+    function bs5422_max(od) {
+        var mm = od * 1000;
+        for (var i = 0; i < BS5422_T20A.length; i++) {
+            if (mm <= BS5422_T20A[i].od + 1e-9) return BS5422_T20A[i].max;
+        }
+        return null;
+    }
+
+    // Heat loss W per metre of run on the standard's basis: U' of the assembly
+    // in series with the external surface film, times dT 45 K. For a bare pipe
+    // the film IS the whole loss.
+    function standard_loss(spec) {
+        var r_surface = 1 / (H_SURFACE * Math.PI * outer_od(spec));
+        var r = spec.insul ? 1 / pipe_u(spec) + r_surface : r_surface;
+        return BS5422_DT / r;
+    }
+
+    // How an option stands against Table 20A. pipe_od is the OD of the pipe
+    // itself (m) — NOT the assembly's, and NOT the foam bore, since the table
+    // bands on pipe size. Verdicts are three-state because the surface
+    // coefficient above carries a few percent of uncertainty, and calling a
+    // product non-compliant on a 1% margin computed from an assumed h would be
+    // overclaiming:
+    //   "meets"    at or under the limit
+    //   "marginal" up to 5% over — inside the method's uncertainty
+    //   "over"     clearly above
+    function bs5422_check(spec, pipe_od) {
+        var loss = standard_loss(spec);
+        var max = bs5422_max(pipe_od);
+        return {
+            loss: loss,
+            max: max,
+            verdict: max === null ? "n/a"
+                : loss <= max ? "meets"
+                : loss <= max * 1.05 ? "marginal" : "over"
+        };
+    }
+    var BS5422_MARK = { meets: "✓", marginal: "≈", over: "✗", "n/a": "" };
+
     // The insulation options available for a given pipe size, in dropdown
-    // order: [{key, label, product, u}]
+    // order: [{key, label, product, u, loss, max, verdict}] — u the model's
+    // conduction-only U', the rest the BS 5422 Table 20A comparison
     function insul_options(pipe) {
         var pd = PIPES[pipe];
-        var opts = [{
-            key: "bare", label: "Bare pipe", product: "bare",
-            u: pipe_u({ od: pd.od, insul: null })
-        }];
+        var specs = [{ key: "bare", label: "Bare pipe", product: "bare", spec: { od: pd.od, insul: null } }];
         for (var i = 0; i < ARMAFLEX_WALLS.length; i++) {
             var w = ARMAFLEX_WALLS[i];
-            opts.push({
+            specs.push({
                 key: "af" + w,
                 label: "Armaflex Class O " + w + " mm",
                 product: "armaflex",
-                u: pipe_u({ od: pd.od, insul: [{ t: w / 1000, lambda: LAMBDA.armaflex }] })
+                spec: { od: pd.od, insul: [{ t: w / 1000, lambda: LAMBDA.armaflex }] }
             });
         }
         var pp = PRIMARY_PRO[pipe];
-        if (pp) opts.push({
+        if (pp) specs.push({
             key: "pp",
-            label: "Primary Pro " + pipe + " mm x " + pp.nominal + " mm",
+            label: "Primary Pro " + pipe + " mm x " + Math.round(pp.t * 1000) + " mm",
             product: "primarypro",
-            u: pipe_u({ od: pp.bore, insul: [{ t: pp.t, lambda: LAMBDA.primarypro }] })
+            spec: { od: pp.bore, insul: [{ t: pp.t, lambda: LAMBDA.primarypro }] }
         });
-        return opts;
+        return specs.map(function (o) {
+            var chk = bs5422_check(o.spec, pd.od);
+            return {
+                key: o.key, label: o.label, product: o.product,
+                u: pipe_u(o.spec),
+                loss: chk.loss, max: chk.max, verdict: chk.verdict
+            };
+        });
     }
 
     // U' for simple mode, from a pipe size and an option key from insul_options
@@ -288,12 +374,17 @@ var pipework = (function () {
         ground: "Buried"
     };
 
-    // Segment types for the segmented path. Geometry only — u is derived below.
+    // Segment types for the segmented path. Geometry only — u and the BS 5422
+    // comparison are derived below.
     // wallC is the pipe wall heat capacity J/K per m (MDPE walls carry over
     // twice the heat capacity of copper).
-    // Primary Pro entries use the oversized bore as od, per PRIMARY_PRO above.
+    // Primary Pro entries use the oversized bore as od, per PRIMARY_PRO above,
+    // so pipe_od carries the OD of the pipe itself — od and pipe_od differ
+    // wherever the lagging's bore is not the pipe OD, and Table 20A bands on
+    // the pipe.
     var SEGTYPES = {
-        cu28_pp:   { label: "28mm Cu + Primary Pro 19mm", od: 0.029, id: 0.0262, wallC: 264,
+        cu28_pp:   { label: "28mm Cu + Primary Pro 21mm", od: 0.029, id: 0.0262, wallC: 264,
+                     pipe_od: 0.028,
                      insul: [{ t: 0.021, lambda: LAMBDA.primarypro }] },
         cu28_af25: { label: "28mm Cu + Armaflex 25mm",    od: 0.028, id: 0.0262, wallC: 264,
                      insul: [{ t: 0.025, lambda: LAMBDA.armaflex }] },
@@ -306,14 +397,20 @@ var pipework = (function () {
         mdpe32_75: { label: "32mm MDPE in 75mm jacket",   od: 0.032, id: 0.026,  wallC: 591,
                      wall_lambda: LAMBDA.mdpe,
                      insul: [{ t: 0.0215, lambda: LAMBDA.pe_foam }] },
-        // Primary Pro for 22mm copper is only made in 25mm wall — there is no
-        // 22mm x 19mm product
+        // Primary Pro for 22mm copper is only made in 25mm wall
         cu22_pp:   { label: "22mm Cu + Primary Pro 25mm", od: 0.023, id: 0.0202, wallC: 205,
+                     pipe_od: 0.022,
                      insul: [{ t: 0.025, lambda: LAMBDA.primarypro }] },
-        cu35_pp:   { label: "35mm Cu + Primary Pro 19mm", od: 0.036, id: 0.0327, wallC: 385,
-                     insul: [{ t: 0.021, lambda: LAMBDA.primarypro }] }
+        cu35_pp:   { label: "35mm Cu + Primary Pro 22mm", od: 0.036, id: 0.0327, wallC: 385,
+                     pipe_od: 0.035,
+                     insul: [{ t: 0.022, lambda: LAMBDA.primarypro }] }
     };
-    for (var st in SEGTYPES) SEGTYPES[st].u = pipe_u(SEGTYPES[st]);
+    for (var st in SEGTYPES) {
+        var _t = SEGTYPES[st];
+        _t.u = pipe_u(_t);
+        var _chk = bs5422_check(_t, _t.pipe_od || _t.od);
+        _t.loss = _chk.loss; _t.max = _chk.max; _t.verdict = _chk.verdict;
+    }
     // Superseded segment keys, kept so previously saved configs still load.
     // cu22_pp19 never existed as a product; it maps to the real 25mm version.
     var SEGTYPE_LEGACY = { cu28_pp19: "cu28_pp", cu28_25: "cu28_af25", cu22_pp19: "cu22_pp" };
@@ -612,7 +709,14 @@ var pipework = (function () {
         PIPES: PIPES,
         LAMBDA: LAMBDA,
         H_BARE: H_BARE,
+        H_SURFACE: H_SURFACE,
         UNIT_UA: UNIT_UA,
+        BS5422_T20A: BS5422_T20A,
+        BS5422_DT: BS5422_DT,
+        BS5422_MARK: BS5422_MARK,
+        bs5422_max: bs5422_max,
+        bs5422_check: bs5422_check,
+        standard_loss: standard_loss,
         YEAR_S: YEAR_S,
         SOIL_LAMBDA: SOIL_LAMBDA,
         SOIL_RHOC: SOIL_RHOC,

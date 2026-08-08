@@ -335,6 +335,7 @@ var app = new Vue({
         },
         pw_segtypes: pipework.SEGTYPES,
         pw_ambsrc: pipework.AMBSRC_LABEL,
+        pw_marks: pipework.BS5422_MARK,
         control: {
             mode: AUTO_ADAPT,
             wc_use_outside_mean: 1,
@@ -550,18 +551,24 @@ var app = new Vue({
         },
 
         // --- Primary pipework insulation --------------------------------
-        // U' depends on the pipe diameter as well as the lagging thickness,
-        // so the options are rebuilt whenever the pipe size changes. The unit
-        // is spelled out as "W/K per m of pipe" because U' and the foam's own
-        // conductivity both come out as W/m.K and are easily confused — see
-        // the derivation in model/pipework.js
+        // Options are rebuilt whenever the pipe size changes, because both U'
+        // and the BS 5422 limit depend on the pipe diameter as well as the
+        // lagging. Each is labelled with its heat loss on the standard's own
+        // basis (W per metre of run at dT 45 K) rather than U' in W/K per m —
+        // that is the number Table 20A is written in, so the comparison is
+        // like for like. See model/pipework.js for the derivation.
         insul_options: function () {
             return pipework.insul_options(this.primary.pipe).map(function (o) {
                 return {
                     value: o.key,
-                    label: o.label + " — " + o.u.toFixed(3) + " W/K per m of pipe"
+                    label: o.label + " — " + o.loss.toFixed(1) + " W/m at ΔT45 " +
+                        pipework.BS5422_MARK[o.verdict]
                 };
             });
+        },
+        // Table 20A's maximum permissible loss for the selected pipe size
+        insul_limit: function () {
+            return pipework.bs5422_max(pipework.PIPES[this.primary.pipe].od);
         },
 
         // Cool-down time constant of the heat pump's internal water circuit,

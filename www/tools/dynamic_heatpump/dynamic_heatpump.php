@@ -1160,7 +1160,14 @@
                         </div>
                     </div>
                     <p class="hp-note" v-if="primary.mode != 'segmented'">Simple mode pipework is exposed to
-                        the live outside air temperature.</p>
+                        the live outside air temperature.<br>
+                        Heat loss is quoted on BS 5422 Table 20A's own basis &mdash; a horizontal pipe at
+                        60 &deg;C in still air at 15 &deg;C (&Delta;T 45 K), high-emissivity outer surface
+                        &mdash; so it can be read against the table's limit of
+                        <strong>{{ insul_limit }} W/m</strong> for {{ primary.pipe }} mm pipe.
+                        &#10004; meets it, &#8776; within 5% (inside the method's uncertainty),
+                        &#10008; over. The simulation itself uses the assembly's own U&prime; against live
+                        temperatures, not this figure.</p>
 
                     <div v-if="primary.mode == 'segmented'" class="mt-2">
                         <div class="table-responsive">
@@ -1178,7 +1185,7 @@
                                     <td><input type="text" class="form-control form-control-sm" style="width:60px" v-model.number="sg.len" @change="simulate"></td>
                                     <td>
                                         <select class="form-select form-select-sm" style="min-width:140px" v-model="sg.type" @change="simulate">
-                                            <option v-for="(t, k) in pw_segtypes" :value="k">{{ t.label }} &middot; {{ t.u.toFixed(3) }} W/K per m</option>
+                                            <option v-for="(t, k) in pw_segtypes" :value="k">{{ t.label }} &middot; {{ t.loss.toFixed(1) }} W/m at &Delta;T45 {{ pw_marks[t.verdict] }}</option>
                                         </select>
                                     </td>
                                     <td>
@@ -1195,7 +1202,10 @@
                                 </tr>
                             </table>
                         </div>
-                        <p class="hp-note">Stage order = heat pump &rarr; building; the heat pump itself sits in
+                        <p class="hp-note">Heat loss is quoted on BS 5422 Table 20A's basis (60 &deg;C pipe,
+                            15 &deg;C still air, &Delta;T 45 K) against the table's limit for that pipe size:
+                            &#10004; meets it, &#8776; within 5%, &#10008; over.<br>
+                            Stage order = heat pump &rarr; building; the heat pump itself sits in
                             the first stage's environment. <em>Outside air</em> and <em>Indoor</em> stages track
                             the live simulated temperatures. <em>Buried</em> stages follow the seasonal ground
                             temperature at their depth &mdash; at 200&ndash;400 mm the soil still swings within
