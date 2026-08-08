@@ -1169,7 +1169,8 @@
                                     <th>Stage</th>
                                     <th>Length m</th>
                                     <th>Construction</th>
-                                    <th>Ambient &deg;C</th>
+                                    <th>Ambient</th>
+                                    <th>&deg;C / depth mm</th>
                                     <th class="text-end"><button type="button" class="btn btn-sm btn-outline-secondary" @click="add_segment"><i class="fas fa-plus"></i></button></th>
                                 </tr>
                                 <tr v-for="(sg, index) in primary.segments">
@@ -1180,23 +1181,75 @@
                                             <option v-for="(t, k) in pw_segtypes" :value="k">{{ t.label }} &middot; {{ t.u.toFixed(3) }} W/K per m</option>
                                         </select>
                                     </td>
-                                    <td><input type="text" class="form-control form-control-sm" style="width:60px" v-model.number="sg.amb" @change="simulate"></td>
+                                    <td>
+                                        <select class="form-select form-select-sm" style="min-width:110px" v-model="sg.amb_type" @change="simulate">
+                                            <option v-for="(label, k) in pw_ambsrc" :value="k">{{ label }}</option>
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <input v-if="sg.amb_type == 'ground'" type="text" class="form-control form-control-sm" style="width:60px" v-model.number="sg.depth" @change="simulate">
+                                        <input v-else-if="!sg.amb_type || sg.amb_type == 'fixed'" type="text" class="form-control form-control-sm" style="width:60px" v-model.number="sg.amb" @change="simulate">
+                                        <span v-else class="hp-note">tracked</span>
+                                    </td>
                                     <td class="text-end"><button type="button" class="btn btn-sm btn-outline-secondary" @click="delete_segment(index)"><i class="fas fa-trash"></i></button></td>
                                 </tr>
                             </table>
                         </div>
-                        <p class="hp-note">Stage order = heat pump &rarr; building. Stage ambients are fixed
-                            (e.g. ground temperature around buried MDPE); the heat pump itself sits in the
-                            first stage's environment.</p>
+                        <p class="hp-note">Stage order = heat pump &rarr; building; the heat pump itself sits in
+                            the first stage's environment. <em>Outside air</em> and <em>Indoor</em> stages track
+                            the live simulated temperatures. <em>Buried</em> stages follow the seasonal ground
+                            temperature at their depth &mdash; at 200&ndash;400 mm the soil still swings within
+                            ~12% of the surface's annual swing, roughly a week behind it, so a shallow buried
+                            run is nearly as cold as the air in January.</p>
+
+                        <div v-if="has_buried_segment">
+                            <div class="hp-field-grid mt-2">
+                                <param-field label="Soil thermal conductivity" unit="W/m&middot;K" :step="0.1" :min="0.2" :max="2.5"
+                                    v-model="primary.ground.conductivity" @change="simulate"></param-field>
+                                <param-field label="Soil surface annual mean above air" unit="K" :step="0.5" :min="-2" :max="6"
+                                    v-model="primary.ground.surface_offset" @change="simulate"></param-field>
+                            </div>
+                            <div class="table-responsive mt-2">
+                                <table class="table table-sm hp-table-panel">
+                                    <tr>
+                                        <th>Buried as</th>
+                                        <th>Depth mm</th>
+                                        <th>Swing kept</th>
+                                        <th>Lag</th>
+                                        <th>U&prime; with soil</th>
+                                    </tr>
+                                    <tr v-for="g in ground_depth_summary">
+                                        <td>{{ g.label }}</td>
+                                        <td>{{ g.depth }}</td>
+                                        <td>{{ g.kept }}%</td>
+                                        <td>{{ g.lag }} days</td>
+                                        <td>{{ g.u_pipe | toFixed(3) }} &rarr; {{ g.u | toFixed(3) }} ({{ g.u_drop }}% lower)</td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <p class="hp-note">Damping depth {{ ground_damping_depth | toFixed(2) }} m. Soil
+                                conductivity 0.4 dry peat, 0.8 dry sand, 1.2 damp loam, 2.0 wet clay &mdash; it sets
+                                both how far the seasonal swing reaches down and the soil resistance in series with
+                                the lagging, which is why it is one input rather than two. The offset is the surface
+                                energy balance: paving has no evaporative cooling and absorbs more shortwave than
+                                grass, running ~2 K above the air annual mean.</p>
+                        </div>
+
                         <button type="button" class="btn btn-sm btn-outline-secondary" @click="load_buried_example">Load example: buried MDPE run</button>
                     </div>
 
                     <div class="hp-field-grid mt-3">
                         <param-field label="Water volume inside the heat pump" unit="L" :step="0.5" :min="0"
                             v-model="primary.unit_volume" @change="simulate"></param-field>
+                        <param-field label="Heat pump internal insulation" unit="W/K" :step="0.1" :min="0" :max="10"
+                            v-model="primary.unit_UA" @change="simulate"></param-field>
                         <param-field label="Pump overrun after stop" unit="min" :step="1" :min="0"
                             v-model="primary.pump_overrun" @change="simulate"></param-field>
                     </div>
+                    <p class="hp-note">The unit's own heat exchanger and internal pipework, sitting in the
+                        first stage's environment &mdash; {{ (primary.unit_UA * 30) | toFixed(0) }} W at
+                        &Delta;T 30 K, cooling with a time constant of {{ unit_time_constant | toFixed(1) }} h
+                        once the pump stops. A product property, independent of the pipework chosen above.</p>
 
                     <div class="hp-stats">
                         <div class="hp-stat">

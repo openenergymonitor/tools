@@ -341,6 +341,20 @@
 <div class="eq">T_coil = T_outside &minus; coil_dt        <span class="c">// coil_dt = 5 K, measured 4-5 K on test units</span></div>
 
 <p>
+    A fixed drop is a simplification: the real approach temperature scales with how hard
+    the compressor is working, so the coil sits close to air temperature at minimum
+    modulation and 7&ndash;8&nbsp;K below it at full output. The COP models that build the
+    COP from a refrigerant-side lift &mdash; the carnot models and the fitted models in
+    <code>lib/vaillant_cop_fit.js</code> &mdash; already track that evaporating temperature,
+    and the <em>Use the COP model's evaporating temperature as the coil temperature</em>
+    option feeds it to the frost model in place of <code>coil_dt</code>. Two things to keep in
+    mind when using it: those models report the refrigerant saturation temperature, which is
+    a little below the air-side fin surface that frost actually forms on, so
+    <code>capture_eff</code> is the knob to re-calibrate on; and the datasheet lookup models
+    (Ecodan, Vaillant) carry no such internal temperature, so they stay on the fixed drop.
+</p>
+
+<p>
     This means that whenever the outside air is below about +5&nbsp;&deg;C, the
     evaporator surface is below freezing. If the air arriving at the evaporator carries
     more water than saturated air at the evaporator temperature can hold, the excess
@@ -564,7 +578,7 @@
     </tr>
     <tr>
         <td><code>coil_dt</code></td><td class="num">5 K</td>
-        <td>How far the evaporator surface runs below the outside air</td>
+        <td>How far the evaporator surface runs below the outside air (unused when the coil temperature is taken from the COP model's evaporating temperature)</td>
         <td>Zanetti Table&nbsp;2 (page&nbsp;4): evaporator at &minus;2.1&nbsp;&deg;C in 2&nbsp;&deg;C air and &minus;0.3&nbsp;&deg;C in 5&nbsp;&deg;C air, so 4.1 and 5.3&nbsp;K</td>
     </tr>
     <tr>

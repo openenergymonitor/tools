@@ -309,23 +309,32 @@ var app = new Vue({
         },
         // Primary pipework between the heat pump and the building entry.
         // "simple" = uniform copper pipe exposed to the live outside air
-        // temperature; "segmented" = per-stage material & fixed ambient
-        // (e.g. the buried MDPE example).
+        // temperature; "segmented" = per-stage material & ambient, where each
+        // stage either holds a fixed temperature or tracks the outside air, the
+        // room, or the seasonal ground temperature at its burial depth.
         primary: {
             mode: "simple",
             length: 2,          // m, one way
             pipe: "28",          // 22 | 28 | 35 mm copper
             insulation: "pp",    // key from pipework.insul_options(pipe)
             unit_volume: 1.5,    // L of water inside the heat pump itself
+            unit_UA: 0.3,        // W/K, insulation of that internal water circuit
             pump_overrun: 5,     // minutes of circulation after the heat pump stops
+            // Ground model for buried stages (see model/pipework.js)
+            ground: {
+                conductivity: 1.2,  // soil thermal conductivity W/m.K — sets both
+                                    // the seasonal damping and the soil resistance
+                surface_offset: 2.0 // K, soil surface annual mean above air (paving)
+            },
             segments: [
-                { name: "HP tails",   len: 0.8, type: "cu28_pp", amb: 18 },
-                { name: "Buried out", len: 5.0, type: "mdpe32_75", amb: 15 },
-                { name: "Buried in",  len: 3.5, type: "mdpe32_75", amb: 16 },
-                { name: "To meter",   len: 0.6, type: "cu28_pp", amb: 20 }
+                { name: "HP tails",   len: 0.8, type: "cu28_pp",   amb_type: "air",    amb: 5,  depth: 300 },
+                { name: "Buried out", len: 5.0, type: "mdpe32_75", amb_type: "ground", amb: 15, depth: 300 },
+                { name: "Buried in",  len: 3.5, type: "mdpe32_75", amb_type: "ground", amb: 16, depth: 300 },
+                { name: "To meter",   len: 0.6, type: "cu28_pp",   amb_type: "room",   amb: 20, depth: 300 }
             ]
         },
         pw_segtypes: pipework.SEGTYPES,
+        pw_ambsrc: pipework.AMBSRC_LABEL,
         control: {
             mode: AUTO_ADAPT,
             wc_use_outside_mean: 1,
@@ -553,6 +562,51 @@ var app = new Vue({
                     label: o.label + " — " + o.u.toFixed(3) + " W/K per m of pipe"
                 };
             });
+        },
+
+        // Cool-down time constant of the heat pump's internal water circuit,
+        // Ch/UAh in hours — the readable form of the W/K input, and the thing
+        // an off-period cool-down could be measured against
+        unit_time_constant: function () {
+            var ua = this.primary.unit_UA * 1;
+            if (!(ua > 0)) return Infinity;
+            return Math.max(0.5, this.primary.unit_volume) * 4187 * 1.1 / ua / 3600;
+        },
+
+        // --- Buried primary pipework ------------------------------------
+        // The ground model only needs explaining when something is actually
+        // buried, so its inputs and the depth summary below are conditional
+        has_buried_segment: function () {
+            return this.primary.mode == "segmented" &&
+                this.primary.segments.some(function (sg) { return sg.amb_type == "ground"; });
+        },
+        ground_damping_depth: function () {
+            return pipework.damping_depth(pipework.soil_alpha(this.primary.ground));
+        },
+        // One row per distinct buried construction+depth in use: how much of the
+        // surface's annual swing reaches it, how far behind, and what the series
+        // soil resistance does to its U'
+        ground_depth_summary: function () {
+            var d = this.ground_damping_depth, primary = this.primary, seen = {}, out = [];
+            primary.segments.forEach(function (sg) {
+                if (sg.amb_type != "ground") return;
+                var depth = sg.depth * 1 || pipework.SOIL_DEPTH;
+                var key = depth + "/" + sg.type;
+                if (seen[key]) return;
+                seen[key] = true;
+                var x = (depth / 1000) / d;
+                var su = pipework.segment_u(primary, sg);
+                out.push({
+                    depth: depth,
+                    label: su.type.label,
+                    kept: Math.round(100 * Math.exp(-x)),
+                    lag: Math.round(x * 365 / (2 * Math.PI)),
+                    u_pipe: su.u_pipe,
+                    u: su.u,
+                    u_drop: Math.round(100 * (1 - su.u / su.u_pipe))
+                });
+            });
+            return out.sort(function (a, b) { return a.depth - b.depth; });
         },
 
         // --- Chart navigation state -------------------------------------
@@ -1226,7 +1280,7 @@ var app = new Vue({
         add_segment: function () {
             this.primary.segments.push({
                 name: "stage " + (this.primary.segments.length + 1),
-                len: 2, type: "cu28_pp", amb: 10
+                len: 2, type: "cu28_pp", amb_type: "air", amb: 10, depth: 300
             });
             this.simulate();
         },
@@ -1239,10 +1293,10 @@ var app = new Vue({
         load_buried_example: function () {
             this.primary.mode = "segmented";
             this.primary.segments = [
-                { name: "HP tails",   len: 0.8, type: "cu28_pp", amb: 18 },
-                { name: "Buried out", len: 5.0, type: "mdpe32_75", amb: 15 },
-                { name: "Buried in",  len: 3.5, type: "mdpe32_75", amb: 16 },
-                { name: "To meter",   len: 0.6, type: "cu28_pp", amb: 20 }
+                { name: "HP tails",   len: 0.8, type: "cu28_pp",   amb_type: "air",    amb: 5,  depth: 300 },
+                { name: "Buried out", len: 5.0, type: "mdpe32_75", amb_type: "ground", amb: 15, depth: 300 },
+                { name: "Buried in",  len: 3.5, type: "mdpe32_75", amb_type: "ground", amb: 16, depth: 300 },
+                { name: "To meter",   len: 0.6, type: "cu28_pp",   amb_type: "room",   amb: 20, depth: 300 }
             ];
             this.simulate();
         },
@@ -1315,6 +1369,13 @@ var app = new Vue({
             }
             if (config.primary) {
                 Object.assign(this.primary, JSON.parse(JSON.stringify(config.primary)));
+                // Configs saved before stage ambients could track the weather
+                // carry a bare temperature, which stays a fixed ambient
+                if (!this.primary.ground) this.primary.ground = { conductivity: 1.2, surface_offset: 2.0 };
+                this.primary.segments.forEach(function (sg) {
+                    if (!sg.amb_type) sg.amb_type = "fixed";
+                    if (sg.depth === undefined) sg.depth = pipework.SOIL_DEPTH;
+                });
             }
             if (config.control) {
                 Object.assign(this.control, config.control);

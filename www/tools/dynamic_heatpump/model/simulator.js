@@ -58,6 +58,31 @@ var simulator = (function () {
         return null;
     }
 
+    // Least-squares fit of the annual sinusoid T = mean + amp*cos(2pi(i/n - peak))
+    // to a series spanning exactly one year, for the buried-pipework ground
+    // model. Only the fundamental is wanted, so this is a one-pass Fourier
+    // coefficient rather than an iterative fit. peak is returned as a fraction
+    // of the year in [0,1).
+    // Llanberis 2024 fits mean 10.18 C, amp 4.49 K, peak day 206 (25 July).
+    function fit_annual(series) {
+        var n = series.length;
+        if (n < 48) return null;
+        var w = 2 * Math.PI / n, s0 = 0, sc = 0, ss = 0, used = 0, v;
+        for (var i = 0; i < n; i++) {
+            v = series[i];
+            if (!isFinite(v)) continue;
+            s0 += v; sc += v * Math.cos(w * i); ss += v * Math.sin(w * i); used++;
+        }
+        if (!used) return null;
+        var a = 2 * sc / used, b = 2 * ss / used;
+        var peak = Math.atan2(b, a) / (2 * Math.PI);
+        return { mean: s0 / used, amp: Math.sqrt(a * a + b * b), peak: peak - Math.floor(peak) };
+    }
+
+    // Fallback annual air temperature signal for runs with no calendar (the
+    // synthetic day-mode weather model). UK lowland typical.
+    var UK_SEASON = { mean: 10.2, amp: 5.0, peak: 206 / 365 };
+
     // 99.6% / 99.0% design temperatures from the outside temperature
     // histogram (seconds spent in 0.1 degree buckets)
     function design_temperatures(outsideT_histogram, days) {
@@ -379,7 +404,38 @@ var simulator = (function () {
         });
         if (!state.pw) state.pw = { sig: "", flow: null, ret: null, Th: fabric_state.room, Te: fabric_state.room };
         var pw = state.pw;
-        pipework.init_state(pw_params, prim, ext_mid, fabric_state.room, pw);
+
+        // Seasonal soil surface temperature driving buried segments. The annual
+        // air signal is fitted to whatever weather data is loaded, so the ground
+        // tracks the same year the rest of the run sees, then lifted by
+        // ground.surface_offset for the surface energy balance — an impermeable
+        // paved surface runs about 2 K above the air annual mean, having no
+        // evaporative cooling and absorbing more shortwave than grass. The
+        // annual swing is taken as the air swing (see pipework.js for how depth
+        // damps and lags it).
+        var gcfg = prim.ground || {};
+        var season = (ext_use_csv && dataset && dataset.loaded &&
+            fit_annual(dataset.outsideT)) || UK_SEASON;
+        var g_offset = gcfg.surface_offset === undefined ? 2.0 : gcfg.surface_offset * 1;
+        var ground_sig = { mean: season.mean + g_offset, amp: season.amp, phase: 0 };
+        var season_peak_rad = 2 * Math.PI * season.peak;
+        // With CSV weather, t = 0 is 1 January, so the phase follows the clock.
+        // The synthetic day-mode weather has no calendar: place the day in the
+        // year from its mean air temperature instead, which lands on the
+        // autumn/winter side of the curve — the half that matters for heating.
+        var ground_calendar = !!(ext_use_csv && dataset && dataset.loaded);
+        var ground_phase_fixed = null;
+        if (!ground_calendar) {
+            var s = season.amp > 0 ? (ext_mid - season.mean) / season.amp : 0;
+            ground_phase_fixed = Math.acos(s < -1 ? -1 : (s > 1 ? 1 : s));
+        }
+        ground_sig.phase = ground_calendar ? -season_peak_rad : ground_phase_fixed;
+
+        pipework.init_state(pw_params, prim,
+            pipework.ambients(pw_params, {
+                outside: ext_mid, room: fabric_state.room, ground: ground_sig
+            }),
+            fabric_state.room, pw);
 
         // Metering accumulators: source is the condenser output (heat_kwh),
         // M1 the heat metered at the heat pump connections, M2 at the
@@ -636,12 +692,17 @@ var simulator = (function () {
                     }
                 }
 
+                if (ground_calendar) {
+                    ground_sig.phase = 2 * Math.PI * (time / pipework.YEAR_S) - season_peak_rad;
+                }
+
                 var pw_out = pipework.step(pw_params, pw, {
                     pump_on: pump_on,
                     heat_W: heatpump_heat - defrost_draw,
                     dhw_mode: dhw_mode,
                     outside: outside,
                     room: fabric_state.room,
+                    ground: ground_sig,
                     coil: dhw_coil_exchange
                 });
 
