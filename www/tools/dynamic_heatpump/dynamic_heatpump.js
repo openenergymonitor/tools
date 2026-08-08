@@ -515,6 +515,9 @@ var app = new Vue({
         hpm_model: null,
         hpm_model_days: 0,
         baseline_enabled: false,
+        // Flow temperature summary for the coldest day of the last run,
+        // built by coldest_day_build(); null until a run completes
+        coldest_day: null,
         max_room_temp: 0,
         outsideT_996: 0,
         outsideT_990: 0,
@@ -1244,6 +1247,9 @@ var app = new Vue({
                 // daily bar chart
                 bargraph_build();
 
+                // Flow temperatures on the coldest day, from the same rollup
+                app.coldest_day = coldest_day_build();
+
                 // Set view if not already set
                 if (view.start == 0 && view.end == 0) {
                     view.start = 0;
@@ -1503,6 +1509,17 @@ var app = new Vue({
             } else {
                 return val.toFixed(dp)
             }
+        },
+        // Temperature and temperature difference, blanked when the run has
+        // nothing to average (e.g. a day with no space heating at all)
+        degC: function (val, dp) {
+            if (val === null || val === undefined || isNaN(val)) return "---";
+            return val.toFixed(dp === undefined ? 1 : dp) + " °C";
+        },
+        deltaK: function (val, dp) {
+            if (val === null || val === undefined || isNaN(val)) return "---";
+            var s = val.toFixed(dp === undefined ? 1 : dp);
+            return (val > 0 ? "+" : "") + s + " K";
         }
     }
 });
@@ -1519,6 +1536,97 @@ function hour_to_time_str(hour_min) {
     if (hour < 10) hour = "0" + hour;
     if (min < 10) min = "0" + min;
     return hour + ":" + min;
+}
+
+// ----------------------------------------------------------------------------
+// Coldest day flow temperatures
+// ----------------------------------------------------------------------------
+// The design flow temperature is a claim about the coldest weather, so the
+// like-for-like check is what the flow temperature actually did on the coldest
+// day of the run. Picks the day with the lowest mean outside temperature from
+// the per-day rollup already built for the daily bar chart, then re-reads the
+// 30 s series over that day and summarises the flow temperature the way a heat
+// meter dataset would be: heat weighted and plain time averages, space heating
+// only and space + water, plus the peak reached during space heating.
+//
+// Steps only count while the unit is running (at or above the
+// heatpumpmonitor.org 200 W starting power threshold), the same categorisation
+// the simulator's own stats use, so the standing losses between cycles do not
+// drag the averages down. Space vs water follows the diverter, and the
+// weighting heat is the metered heat net of any reverse cycle defrost draw,
+// clamped at zero — as in the headline weighted flow temperature.
+function coldest_day_build() {
+    if (!sim_series || !sim_series.flowT_data || !daily.length) return null;
+
+    var coldest = null;
+    for (var d = 0; d < daily.length; d++) {
+        if (daily[d].outsideT === null) continue;
+        if (coldest === null || daily[d].outsideT < coldest.outsideT) coldest = daily[d];
+    }
+    if (coldest === null) return null;
+
+    var timestep = 30;                       // seconds, fixed by the simulator
+    var power_to_kwh = timestep / 3600000;
+    var HPM_STARTING_POWER = 200;            // W, heatpumpmonitor.org default
+
+    var n = sim_series.flowT_data.length;
+    var first = coldest.index * (DAY_SECONDS / timestep);
+    var last = Math.min(first + DAY_SECONDS / timestep, n);
+
+    var space = { max: null, flowT_sum: 0, count: 0, weighted_sum: 0, heat: 0 };
+    var combined = { max: null, flowT_sum: 0, count: 0, weighted_sum: 0, heat: 0 };
+    var min_outsideT = null;
+
+    for (var i = first; i < last; i++) {
+        var outside = sim_series.outsideT_data[i];
+        if (min_outsideT === null || outside < min_outsideT) min_outsideT = outside;
+
+        if (sim_series.elec_data[i] < HPM_STARTING_POWER) continue;
+
+        var flowT = sim_series.flowT_data[i];
+        var defrost = sim_series.defrost_data ? sim_series.defrost_data[i] : 0;
+        var heat = (sim_series.heat_data[i] - defrost) * power_to_kwh;
+        if (heat < 0) heat = 0;
+
+        var dhw = sim_series.dhw_mode_data && sim_series.dhw_mode_data[i];
+        var buckets = dhw ? [combined] : [combined, space];
+        for (var b = 0; b < buckets.length; b++) {
+            var t = buckets[b];
+            if (t.max === null || flowT > t.max) t.max = flowT;
+            t.flowT_sum += flowT;
+            t.count++;
+            t.weighted_sum += flowT * heat;
+            t.heat += heat;
+        }
+    }
+
+    var summarise = function (t) {
+        return {
+            max: t.max,
+            mean: t.count > 0 ? t.flowT_sum / t.count : null,
+            weighted: t.heat > 0 ? t.weighted_sum / t.heat : null,
+            hours: t.count * timestep / 3600
+        };
+    };
+
+    // Simulation time starts at epoch 0, so read the date in UTC. Only the
+    // annual runs have a calendar to name; a synthetic day is just "Day 1"
+    var months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    var date = new Date(coldest.time);
+    var label = "Day " + (coldest.index + 1);
+    if (app.mode == "year") {
+        label += " · " + months[date.getUTCMonth()] + " " + date.getUTCDate();
+    }
+
+    return {
+        index: coldest.index,
+        label: label,
+        mean_outsideT: coldest.outsideT,
+        min_outsideT: min_outsideT,
+        space: summarise(space),
+        combined: summarise(combined)
+    };
 }
 
 

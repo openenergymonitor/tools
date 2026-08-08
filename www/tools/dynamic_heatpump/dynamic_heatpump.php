@@ -1738,6 +1738,62 @@
                             The source &rarr; point 1 gap is the unit's own standing loss; the
                             point 1 &rarr; point 2 gap is heat lost from the primary pipework
                             (while flowing, plus stranded loop charge that cools between cycles).</p>
+
+                        <!-- Coldest day flow temperatures: the design flow
+                             temperature is a claim about the coldest weather,
+                             so compare it with what the flow temperature
+                             actually did on the coldest day of the run -->
+                        <div class="hp-card-header mt-3" v-if="coldest_day">Coldest day flow temperature measurements</div>
+                        <div class="table-responsive" v-if="coldest_day">
+                            <table class="table">
+                                <tr>
+                                    <th>Measurement</th>
+                                    <th>Flow temperature</th>
+                                    <th>vs design</th>
+                                </tr>
+                                <tr class="table-success">
+                                    <td>Design flow temperature</td>
+                                    <td>{{ heatpump.design_flowT | degC }}</td>
+                                    <td>&mdash;</td>
+                                </tr>
+                                <tr>
+                                    <td>Maximum during space heating</td>
+                                    <td>{{ coldest_day.space.max | degC }}</td>
+                                    <td>{{ (coldest_day.space.max - heatpump.design_flowT) | deltaK }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Weighted average &middot; space heating only</td>
+                                    <td>{{ coldest_day.space.weighted | degC }}</td>
+                                    <td>{{ (coldest_day.space.weighted - heatpump.design_flowT) | deltaK }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Average &middot; space heating only</td>
+                                    <td>{{ coldest_day.space.mean | degC }}</td>
+                                    <td>{{ (coldest_day.space.mean - heatpump.design_flowT) | deltaK }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Weighted average &middot; space and water heating</td>
+                                    <td>{{ coldest_day.combined.weighted | degC }}</td>
+                                    <td>{{ (coldest_day.combined.weighted - heatpump.design_flowT) | deltaK }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Average &middot; space and water heating</td>
+                                    <td>{{ coldest_day.combined.mean | degC }}</td>
+                                    <td>{{ (coldest_day.combined.mean - heatpump.design_flowT) | deltaK }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <p class="hp-note" v-if="coldest_day">Coldest day: {{ coldest_day.label }},
+                            mean outside {{ coldest_day.mean_outsideT | degC }} (minimum
+                            {{ coldest_day.min_outsideT | degC }}).
+                            Running hours that day: {{ coldest_day.space.hours | toFixed(1) }} h space heating,
+                            {{ coldest_day.combined.hours | toFixed(1) }} h space and water.
+                            Averages only count steps where the unit is running (&ge; 200 W), so
+                            standing losses between cycles do not pull them down. The weighted
+                            averages weight each step by the heat delivered &mdash; the same basis
+                            heatpumpmonitor.org publishes flow temperatures on &mdash; so they sit
+                            above the plain time average whenever the hardest working periods run
+                            hottest.</p>
                     </div>
                 </div>
 

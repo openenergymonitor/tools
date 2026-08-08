@@ -199,6 +199,22 @@ function report() {
         console.log('space / water heat:  ', space_heat.toFixed(3), '/', water_heat.toFixed(3));
         console.log('mean daily COP:      ', elec > 0 ? (heat / elec).toFixed(3) : '-');
     }
+
+    // Coldest day flow temperatures, against the design flow temperature the
+    // emitters were sized to
+    if (app.coldest_day) {
+        const c = app.coldest_day;
+        const f = (v, dp) => (v === null || v === undefined) ? '-' : (+v).toFixed(dp === undefined ? 2 : dp);
+        console.log('--- coldest day flow temperatures ---');
+        console.log('coldest day:         ', c.label, '· mean outside', f(c.mean_outsideT),
+            '· min outside', f(c.min_outsideT));
+        console.log('design flowT:        ', f(app.heatpump.design_flowT));
+        console.log('space max flowT:     ', f(c.space.max));
+        console.log('space weighted/mean: ', f(c.space.weighted), '/', f(c.space.mean),
+            '(' + f(c.space.hours, 1) + ' h)');
+        console.log('all weighted/mean:   ', f(c.combined.weighted), '/', f(c.combined.mean),
+            '(' + f(c.combined.hours, 1) + ' h)');
+    }
 }
 
 // --- Run --------------------------------------------------------------------
