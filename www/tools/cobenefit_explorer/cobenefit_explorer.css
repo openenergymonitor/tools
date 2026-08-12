@@ -1,351 +1,1789 @@
-/* cobenefit_explorer/cobenefit_explorer.css — page styling for the co-benefit
-   explorer. Loaded by cobenefit_explorer.php; the markup lives there and the
-   Vue app in cobenefit_explorer.js. */
+/* =============================================================================
+   cobenefit_explorer.css — page styling for the co-benefit explorer.
 
-:root{
-  --ink:#10151b;
-  --panel:#171e26;
-  --panel2:#1e2731;
-  --raise:#26313d;
-  --line:#2c3742;
-  --line2:#384654;
-  --text:#e7edf3;
-  --muted:#8a97a5;
-  --faint:#5f6c79;
-  /* energy-carrier palette — the one expressive system */
-  --petrol:#c2553a;
-  --gas:#ef9b3e;
-  --grid:#4aa3df;
-  --solar:#f5c542;
-  --battery:#54c08a;
-  --hp:#39b5ac;
-  --ev:#8a86f5;
-  --good:#54c08a;
-  --bad:#d8694d;
-  --oem:#44a1f2;
-  /* header bar + tools menu, shared with the dynamic heat pump simulator */
-  --oem-bar:#45a2c9;
-  --font-bs:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue","Noto Sans","Liberation Sans",Arial,sans-serif;
-  --radius:10px;
+   Loaded by cobenefit_explorer.php; the markup lives there and the Vue app in
+   cobenefit_explorer.js.
+
+   How this file is organised
+     1.  Design tokens .......... the custom properties everything else reads
+     2.  Base .................... reset, typography, page shell
+     3.  Masthead ................ page title block
+     4.  Hero ledger ............. the stacked cost bars at the top
+     5.  Layout .................. two-column grid + card shell
+     6.  Technology switches ..... the "what is installed" builder
+     7.  Marginal-value tooltip .. the (i) step-detail popover
+     8.  Toggle + checkbox ....... shared form controls
+     9.  Tariff controls ......... segmented buttons, sub-cards, schedule editor
+    10.  Accordions and inputs ... <details> panels and number fields
+    11.  Results ................. stat tiles, flow tables, spark bars
+    12.  Footer and page actions . reset button, mode switch, footnotes
+    13.  Site nav ................ header bar + Bootstrap offcanvas subset
+    14.  Utilities ............... single-purpose helpers
+
+   Rule order is significant — several later rules deliberately out-specify
+   earlier ones (see the notes in sections 7 and 13). Keep blocks in place when
+   editing.
+   ========================================================================== */
+
+/* =============================================================================
+   1. Design tokens
+   ========================================================================== */
+
+:root {
+  /* Surfaces, from the page background up to the raised tooltip */
+  --ink: #10151b;
+  --panel: #171e26;
+  --panel2: #1e2731;
+  --raise: #26313d;
+
+  /* Borders: --line for dividers, --line2 for interactive edges */
+  --line: #2c3742;
+  --line2: #384654;
+
+  /* Text, in descending prominence */
+  --text: #e7edf3;
+  --muted: #8a97a5;
+  --faint: #5f6c79;
+
+  /* Energy-carrier palette — the one expressive system */
+  --petrol: #c2553a;
+  --gas: #ef9b3e;
+  --grid: #4aa3df;
+  --solar: #f5c542;
+  --battery: #54c08a;
+  --hp: #39b5ac;
+  --ev: #8a86f5;
+
+  /* Verdict colours: savings vs. extra cost */
+  --good: #54c08a;
+  --bad: #d8694d;
+
+  /* Brand */
+  --oem: #44a1f2;
+
+  /* Header bar + tools menu, shared with the dynamic heat pump simulator */
+  --oem-bar: #45a2c9;
+
+  /* Family names are matched case-insensitively, so the lower-case spelling
+     here is the same stack Bootstrap ships as its native font list */
+  --font-bs:
+    system-ui, -apple-system, "Segoe UI", roboto, "Helvetica Neue", "Noto Sans",
+    "Liberation Sans", arial, sans-serif;
+
+  /* Typography. --font-display carries headings and control labels;
+     --font-mono every number, so figures stay tabular and aligned. Both name a
+     generic family last, so the page degrades sensibly if the webfont fails. */
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Currently unused — every corner radius below is set explicitly */
+  --radius: 10px;
 }
-*{box-sizing:border-box}
-html,body{margin:0}
-body{
+
+/* =============================================================================
+   2. Base
+   ========================================================================== */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+body {
+  /* A soft glow in the top-right corner, laid over the flat --ink base */
   background:
-    radial-gradient(1200px 600px at 85% -10%, #1a2530 0%, rgba(26,37,48,0) 60%),
+    radial-gradient(
+      1200px 600px at 85% -10%,
+      #1a2530 0%,
+      rgb(26 37 48 / 0%) 60%
+    ),
     var(--ink);
-  color:var(--text);
-  font-family:"Inter",system-ui,sans-serif;
-  font-size:14px;line-height:1.5;
-  -webkit-font-smoothing:antialiased;
+  color: var(--text);
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
-.num{font-family:"JetBrains Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;}
-h1,h2,h3,.display{font-family:"Space Grotesk",sans-serif;}
-.wrap{max-width:1280px;margin:0 auto;padding:28px 22px 80px;}
 
-/* ---- masthead ---- */
-.masthead{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:24px;}
-.brand .eyebrow{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--oem);margin:0 0 6px;}
-.brand h1{font-size:30px;font-weight:700;margin:0;letter-spacing:-.01em;}
-.brand p{margin:6px 0 0;color:var(--muted);max-width:48ch;font-size:13px;}
-
-/* ---- hero ledger ---- */
-.hero{background:linear-gradient(180deg,var(--panel) 0%,#141b22 100%);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin-bottom:26px;}
-.hero-top{display:flex;justify-content:space-between;align-items:baseline;gap:18px;flex-wrap:wrap;margin-bottom:18px;}
-.hero-headline{font-family:"Space Grotesk";font-size:15px;font-weight:500;color:var(--muted);}
-.saving-badge{font-family:"JetBrains Mono";font-size:13px;font-weight:700;padding:7px 13px;border-radius:999px;border:1px solid var(--line2);white-space:nowrap;}
-.saving-badge.pos{color:var(--good);border-color:rgba(84,192,138,.4);background:rgba(84,192,138,.08);}
-.saving-badge.neg{color:var(--bad);border-color:rgba(216,105,77,.4);background:rgba(216,105,77,.08);}
-
-.ledger-row{display:grid;grid-template-columns:160px 1fr 96px;align-items:center;gap:14px;margin:11px 0;}
-.ledger-label{font-size:12px;color:var(--muted);}
-.ledger-label b{display:block;color:var(--text);font-family:"Space Grotesk";font-size:13px;font-weight:600;}
-.bar{position:relative;height:34px;border-radius:7px;background:#0d1217;overflow:hidden;border:1px solid var(--line);}
-.barfill{position:absolute;top:0;height:100%;display:flex;overflow:hidden;border-radius:6px;transition:left .55s cubic-bezier(.22,.61,.36,1), width .55s cubic-bezier(.22,.61,.36,1);}
-.barfill.credit{background:repeating-linear-gradient(45deg,rgba(84,192,138,.85) 0 8px,rgba(84,192,138,.6) 8px 16px);}
-.zero-line{position:absolute;top:-1px;bottom:-1px;width:1px;background:var(--line2);z-index:2;pointer-events:none;}
-.seg{height:100%;transition:flex-grow .55s cubic-bezier(.22,.61,.36,1), background .3s;position:relative;}
-.seg:first-child{border-top-left-radius:6px;border-bottom-left-radius:6px}
-.ledger-total{font-family:"JetBrains Mono";font-weight:700;font-size:17px;text-align:right;}
-.ledger-total span{display:block;font-size:10px;color:var(--faint);font-weight:400;letter-spacing:.05em;}
-
-.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:16px;padding-top:14px;border-top:1px dashed var(--line);}
-.legend .lg{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);}
-.dot{width:10px;height:10px;border-radius:3px;flex:none;}
-
-/* ---- layout ---- */
-.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:22px;align-items:start;}
-@media(max-width:900px){.grid{grid-template-columns:1fr}}
-
-.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 18px 6px;margin-bottom:18px;}
-.card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;}
-.card-head h2{font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text);margin:0;}
-.card-head .hint{font-size:11px;color:var(--faint);}
-
-/* ---- technology switches ---- */
-.builder{padding-bottom:18px;}
-.tech{display:flex;align-items:center;gap:13px;padding:12px 0;border-top:1px solid var(--line);}
-.tech:first-of-type{border-top:none;}
-.tech.disabled{opacity:.45;}
-.tech.disabled .sw,.tech.disabled .sw input{cursor:not-allowed;}
-.tech .icon{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;font-family:"JetBrains Mono";font-weight:700;font-size:13px;color:#0d1217;flex:none;}
-.tech .tx{flex:1;min-width:0;}
-.tech .tx b{font-family:"Space Grotesk";font-weight:600;font-size:14px;}
-.tech .tx small{display:block;color:var(--muted);font-size:11.5px;}
-.tech .mg{font-family:"JetBrains Mono";font-size:12.5px;font-weight:700;text-align:right;white-space:nowrap;}
-.tech .mg .co2{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-top:1px;}
-.tech .mg .abate{display:block;font-size:11px;font-weight:600;color:var(--faint);margin-top:1px;}
-.tech .mg .val{font-weight:700;color:#fff;}
-.tech .mg span{display:block;font-size:10px;color:var(--faint);font-weight:400;}
-.tech .mg span.val{display:inline;font-size:12.5px;}
-
-/* marginal value + step-detail tooltip */
-.mg .mgtop{display:flex;align-items:center;justify-content:flex-end;gap:6px;}
-.mg .infotip{position:relative;display:inline-flex;align-items:center;cursor:help;}
-.mg .infotip .ic{
-  width:15px;height:15px;border-radius:50%;display:grid;place-items:center;
-  font-family:"JetBrains Mono",monospace;font-style:italic;font-weight:700;font-size:10px;line-height:1;
-  color:var(--muted);border:1px solid var(--line2);background:var(--panel2);
-  transition:color .15s,border-color .15s,background .15s;
+/* Tabular figures so numbers do not jitter as the model re-runs */
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
-.mg .infotip:hover .ic,.mg .infotip:focus-within .ic{color:var(--ink);background:var(--grid);border-color:var(--grid);}
-.mg .tipcard{
-  position:absolute;top:calc(100% + 9px);right:-6px;z-index:50;
-  width:268px;text-align:left;font-weight:400;line-height:1.5;white-space:normal;
-  background:linear-gradient(180deg,var(--raise) 0%,var(--panel2) 100%);
-  border:1px solid var(--line2);border-radius:11px;
-  box-shadow:0 14px 40px rgba(0,0,0,.5);
-  padding:13px 14px;
-  opacity:0;visibility:hidden;transform:translateY(-4px);
-  transition:opacity .16s ease,transform .16s ease,visibility .16s;
-  pointer-events:none;
+
+h1,
+h2,
+h3,
+.display {
+  font-family: var(--font-display);
 }
-.mg .infotip:hover .tipcard,.mg .infotip:focus-within .tipcard{opacity:1;visibility:visible;transform:translateY(0);}
-.mg .tipcard::before{
-  content:"";position:absolute;top:-6px;right:9px;width:11px;height:11px;
-  background:var(--raise);border-left:1px solid var(--line2);border-top:1px solid var(--line2);
-  transform:rotate(45deg);
+
+/* Page shell: centred column with room for the sticky header above it */
+.wrap {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 28px 22px 80px;
 }
-.tipcard .tiphd{display:flex;align-items:center;gap:7px;font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:13px;color:var(--text);}
-.tipcard .tdot{width:9px;height:9px;border-radius:3px;flex:none;}
-.tipcard .tipsub{font-size:11px;color:var(--muted);line-height:1.5;margin:3px 0 9px;font-weight:400;}
-.tipcard .tiprow{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:12px;color:var(--text);padding:3px 0;}
-/* label spans sit inside .mg, so out-specify .tech .mg span (which paints them faint) */
-.mg .tipcard .tiprow > span:first-child{color:var(--text);}
-.tipcard .tiprow .tv,.tipcard .tiprow .tg,.tipcard .tiprow .tb{font-family:"JetBrains Mono",monospace;font-weight:700;font-variant-numeric:tabular-nums;}
-.mg .tipcard .tv{color:var(--text);}
-.mg .tipcard .tg{color:var(--good);}
-.mg .tipcard .tb{color:var(--bad);}
-.tipcard .tipnet{border-top:1px solid var(--line);margin-top:4px;padding-top:7px;}
-.tipcard .tipnet > span:first-child{color:var(--text);font-weight:600;}
-.tipcard .tiphd2{font-family:"Space Grotesk",sans-serif;font-weight:600;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--gas);margin:13px 0 7px;padding-top:11px;border-top:1px dashed var(--line);}
-.tipcard .tipnote{font-size:10px;color:var(--muted);margin-top:9px;font-family:"JetBrains Mono",monospace;}
 
-/* toggle */
-.sw{position:relative;width:46px;height:26px;flex:none;cursor:pointer;}
-.sw input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;}
-.sw .track{position:absolute;inset:0;background:#2b3641;border-radius:999px;transition:background .2s;border:1px solid var(--line2);}
-.sw .knob{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#aab6c2;transition:transform .2s, background .2s;}
-.sw input:checked + .track{background:rgba(84,192,138,.32);border-color:var(--good);}
-.sw input:checked + .track + .knob{transform:translateX(20px);background:var(--good);}
-.sw input:focus-visible + .track{outline:2px solid var(--grid);outline-offset:2px;}
+/* =============================================================================
+   3. Masthead
+   ========================================================================== */
 
-.subtoggle{display:flex;gap:18px;flex-wrap:wrap;padding:10px 0 2px;border-top:1px solid var(--line);margin-top:4px;}
-.chk{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--muted);cursor:pointer;}
-.chk input{width:16px;height:16px;accent-color:var(--good);cursor:pointer;}
-
-/* ---- tariff: segmented controls + schedule editor ---- */
-.tseg{display:inline-flex;flex:none;background:var(--ink);border:1px solid var(--line2);border-radius:8px;padding:2px;gap:2px;}
-.tseg button{font-family:"Space Grotesk";font-weight:600;font-size:12px;color:var(--muted);background:none;border:none;border-radius:6px;padding:6px 11px;cursor:pointer;white-space:nowrap;transition:background .2s,color .2s;}
-.tseg button:hover:not(:disabled){color:var(--text);}
-.tseg button.on{background:rgba(84,192,138,.32);color:var(--good);}
-.tseg button:disabled{opacity:.4;cursor:not-allowed;}
-.tseg button:focus-visible{outline:2px solid var(--grid);outline-offset:1px;}
-
-/* nested sub-card (battery dispatch, tariff details) */
-.subcard{background:rgba(0,0,0,.16);border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin:2px 0 6px;}
-.subcard-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0;}
-.subcard-row label{font-size:12.5px;color:var(--muted);}
-.subcard-row .unit{font-size:11px;color:var(--faint);font-family:"JetBrains Mono";margin-left:6px;}
-.subcard .chk{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--text);cursor:pointer;}
-.subcard .chk input{width:16px;height:16px;accent-color:var(--good);cursor:pointer;flex:none;}
-.subcard .chk b{font-family:"Space Grotesk";font-weight:600;}
-.subcard-note{font-size:11px;color:var(--faint);margin:7px 0 0;line-height:1.5;}
-.num-in{width:108px;background:var(--ink);border:1px solid var(--line2);color:var(--text);font-family:"JetBrains Mono";font-size:13px;font-weight:500;text-align:right;padding:7px 9px;border-radius:7px;}
-.num-in:focus{outline:2px solid var(--grid);outline-offset:1px;border-color:var(--grid);}
-
-.tsched-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:2px 0 8px;}
-.tsched-head b{font-family:"Space Grotesk";font-size:12.5px;}
-.tsched-presets{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;}
-.preset-lbl{font-size:10.5px;color:var(--faint);font-family:"JetBrains Mono";text-transform:uppercase;letter-spacing:.04em;}
-.presetbtn{font-family:"Space Grotesk";font-weight:600;font-size:11px;color:var(--muted);background:var(--ink);border:1px solid var(--line2);border-radius:6px;padding:4px 9px;cursor:pointer;transition:background .2s,color .2s,border-color .2s;}
-.presetbtn:hover{color:var(--text);border-color:var(--grid);}
-.presetbtn:focus-visible{outline:2px solid var(--grid);outline-offset:1px;}
-/* grid keeps Time / Import / Export / bin columns aligned across rows */
-.tsched-row{display:grid;grid-template-columns:1fr 1fr 1fr 30px;gap:9px;align-items:center;padding:3px 0;}
-.tsched-row input{
-  width:100%;min-width:0;background:var(--ink);border:1px solid var(--line2);color:var(--text);
-  font-family:"JetBrains Mono";font-size:13px;text-align:right;padding:6px 8px;border-radius:7px;
+.masthead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 20px;
+  margin-bottom: 24px;
 }
-.tsched-row input[type=time]{text-align:left;}
-.tsched-row input:focus{outline:2px solid var(--grid);outline-offset:1px;border-color:var(--grid);}
-.tsched-row input:disabled{opacity:.4;cursor:not-allowed;}
-.tsched-labels{font-size:10.5px;color:var(--faint);font-family:"JetBrains Mono";text-transform:uppercase;letter-spacing:.04em;padding:0 0 1px;}
-.tsched-labels span{align-self:end;}
-.tsched-labels .r{text-align:right;}
-.tsched-labels .strike{text-decoration:line-through;opacity:.55;}
-.tsched-row .iconbtn,.addband{background:none;border:none;color:var(--faint);cursor:pointer;border-radius:6px;line-height:1;}
-.tsched-row .iconbtn{font-size:15px;padding:2px 4px;justify-self:center;}
-.tsched-row .iconbtn:hover:not(:disabled){color:var(--text);background:var(--ink);}
-.tsched-row .iconbtn:disabled{opacity:.3;cursor:not-allowed;}
-.addband{font-family:"Space Grotesk";font-weight:600;font-size:11.5px;color:var(--muted);padding:6px 2px 0;}
-.addband:hover{color:var(--text);}
 
-/* ---- accordions / inputs ---- */
-details{border-top:1px solid var(--line);}
-details:first-of-type{border-top:none;}
-summary{list-style:none;cursor:pointer;padding:13px 2px;display:flex;align-items:center;justify-content:space-between;font-family:"Space Grotesk";font-weight:600;font-size:13px;}
-summary::-webkit-details-marker{display:none;}
-summary .chev{color:var(--faint);transition:transform .2s;font-family:"JetBrains Mono";}
-details[open] summary .chev{transform:rotate(90deg);}
-.fields{padding:2px 2px 16px;}
-.field{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;}
-.field label{font-size:12.5px;color:var(--muted);flex:1;}
-.field .unit{font-size:11px;color:var(--faint);font-family:"JetBrains Mono";margin-left:6px;}
-.field input[type=number]{
-  width:108px;background:var(--ink);border:1px solid var(--line2);color:var(--text);
-  font-family:"JetBrains Mono";font-size:13px;font-weight:500;text-align:right;
-  padding:7px 9px;border-radius:7px;
+.brand .eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--oem);
+  margin: 0 0 6px;
 }
-.field input[type=number]:focus{outline:2px solid var(--grid);outline-offset:1px;border-color:var(--grid);}
 
-.kona-select{
-  background:var(--ink);border:1px solid var(--line2);color:var(--text);
-  font-family:"JetBrains Mono";font-size:12px;padding:8px 10px;border-radius:8px;
-  max-width:210px;cursor:pointer;
+.brand h1 {
+  font-size: 30px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.01em;
 }
-.kona-select:focus{outline:2px solid var(--grid);outline-offset:1px;border-color:var(--grid);}
 
-/* ---- results ---- */
-.stat-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
-.stat-row.q4{grid-template-columns:repeat(4,1fr);}
-@media(max-width:480px){.stat-row{grid-template-columns:1fr 1fr}.stat-row.q4{grid-template-columns:1fr 1fr}}
-.stat{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:13px;}
-.stat .k{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);}
-.stat .v{font-family:"JetBrains Mono";font-weight:700;font-size:20px;margin-top:5px;}
-.stat .s{font-size:11px;color:var(--muted);margin-top:2px;}
+.brand p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  max-width: 48ch;
+  font-size: 13px;
+}
 
-table.flows{width:100%;border-collapse:collapse;margin-top:4px;}
-table.flows td{padding:7px 0;border-top:1px solid var(--line);font-size:13px;}
-table.flows td:last-child{text-align:right;font-family:"JetBrains Mono";font-weight:500;}
-table.flows tr:first-child td{border-top:none;}
-table.flows .tag{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:9px;vertical-align:baseline;}
-table.flows .grp{color:var(--faint);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;padding-top:14px;}
-table.flows .sub{color:var(--muted);}
-table.flows .tot td{font-weight:700;border-top:1.5px solid var(--line2);}
-.credit{color:var(--good);}
+/* =============================================================================
+   4. Hero ledger
 
-.bartrack{height:8px;border-radius:5px;background:#0d1217;overflow:hidden;display:flex;margin-top:14px;border:1px solid var(--line);}
-.bartrack .seg{transition:flex-grow .55s ease;}
+   The headline comparison: one horizontal bar per scenario, each split into
+   coloured segments for the individual cost flows.
+   ========================================================================== */
 
-.subhead{font-size:10.5px;color:var(--faint);letter-spacing:.08em;text-transform:uppercase;margin:20px 2px 4px;font-weight:600;}
-table.ucost{width:100%;border-collapse:collapse;}
-table.ucost td,table.ucost th{padding:6px 0;font-size:12.5px;border-top:1px solid var(--line);}
-table.ucost th{color:var(--faint);font-size:10px;letter-spacing:.05em;text-transform:uppercase;font-weight:600;border:none;}
-table.ucost th.n,table.ucost td.n{text-align:right;}
-table.ucost td.n{font-family:"JetBrains Mono";font-variant-numeric:tabular-nums;font-weight:500;}
-table.ucost td.lev{color:var(--text);}
-table.ucost .tag{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:9px;vertical-align:baseline;}
-.sparkgap{margin-top:16px;padding:13px 14px;border-radius:10px;background:#0d1217;border:1px solid var(--line);}
-.sparkgap h3{font-size:12px;margin:0 0 8px;color:var(--text);font-weight:700;}
-.sparkgap p{margin:6px 0;font-size:12px;color:var(--muted);line-height:1.6;}
-.sparkgap b{color:var(--text);font-family:"JetBrains Mono";font-variant-numeric:tabular-nums;}
-.sparkgap .verdict{font-size:12.5px;color:var(--text);}
-.sparkbar{height:8px;border-radius:5px;background:#0d1217;overflow:hidden;display:flex;margin:9px 0 4px;border:1px solid var(--line);}
-.sparkbar .seg{transition:flex-grow .55s ease;}
+.hero {
+  background: linear-gradient(180deg, var(--panel) 0%, #141b22 100%);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 22px 24px;
+  margin-bottom: 26px;
+}
 
-.foot{margin-top:26px;color:var(--faint);font-size:11.5px;line-height:1.65;border-top:1px solid var(--line);padding-top:16px;}
-.foot b{color:var(--muted);}
-.reset{background:none;border:1px solid var(--line2);color:var(--muted);font-family:"JetBrains Mono";font-size:11px;padding:6px 11px;border-radius:7px;cursor:pointer;}
-.reset:hover{color:var(--text);border-color:var(--text);}
-.masthead-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
-.modeseg{display:inline-flex;border:1px solid var(--line2);border-radius:7px;overflow:hidden;}
-.modeseg button{background:none;border:none;color:var(--muted);font-family:"JetBrains Mono";font-size:11px;padding:6px 11px;cursor:pointer;white-space:nowrap;}
-.modeseg button + button{border-left:1px solid var(--line2);}
-.modeseg button:hover:not(.on){color:var(--text);}
-.modeseg button.on{background:var(--raise);color:var(--text);}
-.pill{font-family:"JetBrains Mono";font-size:10px;padding:2px 7px;border-radius:5px;border:1px solid var(--line2);color:var(--muted);}
-a{color:var(--grid);}
+.hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
 
-/* ---- site nav ----------------------------------------------------------
+.hero-headline {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+/* Pill showing the bottom-line saving; .pos / .neg are set by the Vue app */
+.saving-badge {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--line2);
+  white-space: nowrap;
+}
+
+.saving-badge.pos {
+  color: var(--good);
+  border-color: rgb(84 192 138 / 40%);
+  background: rgb(84 192 138 / 8%);
+}
+
+.saving-badge.neg {
+  color: var(--bad);
+  border-color: rgb(216 105 77 / 40%);
+  background: rgb(216 105 77 / 8%);
+}
+
+/* Fixed label and total columns keep the bars themselves aligned across rows */
+.ledger-row {
+  display: grid;
+  grid-template-columns: 160px 1fr 96px;
+  align-items: center;
+  gap: 14px;
+  margin: 11px 0;
+}
+
+.ledger-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ledger-label b {
+  display: block;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* .bar is the track; .barfill is positioned inside it and animates */
+.bar {
+  position: relative;
+  height: 34px;
+  border-radius: 7px;
+  background: #0d1217;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+
+.barfill {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  display: flex;
+  overflow: hidden;
+  border-radius: 6px;
+  transition:
+    left 0.55s cubic-bezier(0.22, 0.61, 0.36, 1),
+    width 0.55s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* Hatched fill marks a credit — money flowing back, not spent */
+.barfill.credit {
+  background: repeating-linear-gradient(
+    45deg,
+    rgb(84 192 138 / 85%) 0 8px,
+    rgb(84 192 138 / 60%) 8px 16px
+  );
+}
+
+/* Marks £0 when a bar extends into credit on the left */
+.zero-line {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 1px;
+  background: var(--line2);
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* One flow within a bar; flex-grow carries the value, so it animates */
+.seg {
+  height: 100%;
+  transition:
+    flex-grow 0.55s cubic-bezier(0.22, 0.61, 0.36, 1),
+    background 0.3s;
+  position: relative;
+}
+
+.seg:first-child {
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+
+.ledger-total {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 17px;
+  text-align: right;
+}
+
+.ledger-total span {
+  display: block;
+  font-size: 10px;
+  color: var(--faint);
+  font-weight: 400;
+  letter-spacing: 0.05em;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--line);
+}
+
+.legend .lg {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* Swatch; its colour comes from an inline style bound to the carrier */
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+}
+
+/* =============================================================================
+   5. Layout
+   ========================================================================== */
+
+/* Inputs left, results right. minmax(0, …) lets the columns shrink below the
+   intrinsic width of their content — without it, wide tables blow the grid
+   out and the page scrolls sideways. */
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 22px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Short bottom padding: cards end in an accordion or table that brings its own */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px 18px 6px;
+  margin-bottom: 18px;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.card-head h2 {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text);
+  margin: 0;
+}
+
+.card-head .hint {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+/* =============================================================================
+   6. Technology switches
+
+   One .tech row per measure (heat pump, PV, battery, EV …): icon, label,
+   marginal value, toggle.
+   ========================================================================== */
+
+.builder {
+  padding-bottom: 18px;
+}
+
+.tech {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.tech:first-of-type {
+  border-top: none;
+}
+
+/* Dimmed when a measure depends on another that is switched off */
+.tech.disabled {
+  opacity: 0.45;
+}
+
+.tech.disabled .sw,
+.tech.disabled .sw input {
+  cursor: not-allowed;
+}
+
+.tech .icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  color: #0d1217;
+  flex: none;
+}
+
+/* min-width: 0 lets long descriptions ellipsis rather than push the toggle out */
+.tech .tx {
+  flex: 1;
+  min-width: 0;
+}
+
+.tech .tx b {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.tech .tx small {
+  display: block;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+/* .mg — the marginal £/yr and CO2 figures on the right of each row */
+.tech .mg {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.tech .mg .co2 {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.tech .mg .abate {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--faint);
+  margin-top: 1px;
+}
+
+.tech .mg .val {
+  font-weight: 700;
+  color: #fff;
+}
+
+/* Generic caption styling for spans in the block; .val opts back out below */
+.tech .mg span {
+  display: block;
+  font-size: 10px;
+  color: var(--faint);
+  font-weight: 400;
+}
+
+.tech .mg span.val {
+  display: inline;
+  font-size: 12.5px;
+}
+
+/* =============================================================================
+   7. Marginal value + step-detail tooltip
+
+   A CSS-only popover: hidden with opacity/visibility so it can transition, and
+   revealed on :hover or :focus-within of the (i) button.
+   ========================================================================== */
+
+.mg .mgtop {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.mg .infotip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: help;
+}
+
+.mg .infotip .ic {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--muted);
+  border: 1px solid var(--line2);
+  background: var(--panel2);
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.mg .infotip:hover .ic,
+.mg .infotip:focus-within .ic {
+  color: var(--ink);
+  background: var(--grid);
+  border-color: var(--grid);
+}
+
+.mg .tipcard {
+  position: absolute;
+  top: calc(100% + 9px);
+  right: -6px;
+  z-index: 50;
+  width: 268px;
+
+  /* The row it hangs off is right-aligned, bold and nowrap — reset all three */
+  text-align: left;
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: normal;
+  background: linear-gradient(180deg, var(--raise) 0%, var(--panel2) 100%);
+  border: 1px solid var(--line2);
+  border-radius: 11px;
+  box-shadow: 0 14px 40px rgb(0 0 0 / 50%);
+  padding: 13px 14px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    visibility 0.16s;
+  pointer-events: none;
+}
+
+.mg .infotip:hover .tipcard,
+.mg .infotip:focus-within .tipcard {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* The little arrow: a rotated square with two borders showing */
+.mg .tipcard::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 9px;
+  width: 11px;
+  height: 11px;
+  background: var(--raise);
+  border-left: 1px solid var(--line2);
+  border-top: 1px solid var(--line2);
+  transform: rotate(45deg);
+}
+
+.tipcard .tiphd {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.tipcard .tdot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.tipcard .tipsub {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 3px 0 9px;
+  font-weight: 400;
+}
+
+.tipcard .tiprow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text);
+  padding: 3px 0;
+}
+
+/* Label spans sit inside .mg, so out-specify .tech .mg span (which paints them
+   faint). Keep the leading .mg — dropping it loses the specificity contest. */
+.mg .tipcard .tiprow > span:first-child {
+  color: var(--text);
+}
+
+.tipcard .tiprow .tv,
+.tipcard .tiprow .tg,
+.tipcard .tiprow .tb {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Value colours — again scoped under .mg to beat the generic span rule */
+.mg .tipcard .tv {
+  color: var(--text);
+}
+
+.mg .tipcard .tg {
+  color: var(--good);
+}
+
+.mg .tipcard .tb {
+  color: var(--bad);
+}
+
+.tipcard .tipnet {
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+  padding-top: 7px;
+}
+
+.tipcard .tipnet > span:first-child {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tipcard .tiphd2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--gas);
+  margin: 13px 0 7px;
+  padding-top: 11px;
+  border-top: 1px dashed var(--line);
+}
+
+.tipcard .tipnote {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 9px;
+  font-family: var(--font-mono);
+}
+
+/* =============================================================================
+   8. Toggle + checkbox
+
+   .sw is a real <input type="checkbox"> made invisible and stretched over the
+   track, so keyboard and screen-reader behaviour comes for free. The sibling
+   combinators below depend on the markup order: input, .track, .knob.
+   ========================================================================== */
+
+.sw {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  flex: none;
+  cursor: pointer;
+}
+
+.sw input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+.sw .track {
+  position: absolute;
+  inset: 0;
+  background: #2b3641;
+  border-radius: 999px;
+  transition: background 0.2s;
+  border: 1px solid var(--line2);
+}
+
+.sw .knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #aab6c2;
+  transition:
+    transform 0.2s,
+    background 0.2s;
+}
+
+.sw input:checked + .track {
+  background: rgb(84 192 138 / 32%);
+  border-color: var(--good);
+}
+
+.sw input:checked + .track + .knob {
+  transform: translateX(20px);
+  background: var(--good);
+}
+
+/* The input is invisible, so the focus ring has to be drawn on the track */
+.sw input:focus-visible + .track {
+  outline: 2px solid var(--grid);
+  outline-offset: 2px;
+}
+
+.subtoggle {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 10px 0 2px;
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+}
+
+.chk {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12.5px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.chk input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--good);
+  cursor: pointer;
+}
+
+/* =============================================================================
+   9. Tariff controls — segmented buttons, sub-cards, schedule editor
+   ========================================================================== */
+
+.tseg {
+  display: inline-flex;
+  flex: none;
+  background: var(--ink);
+  border: 1px solid var(--line2);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.tseg button {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.2s,
+    color 0.2s;
+}
+
+.tseg button:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.tseg button.on {
+  background: rgb(84 192 138 / 32%);
+  color: var(--good);
+}
+
+.tseg button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tseg button:focus-visible {
+  outline: 2px solid var(--grid);
+  outline-offset: 1px;
+}
+
+/* --- Nested sub-card (battery dispatch, tariff details) --- */
+
+/* Translucent black rather than a solid colour, so it reads as "inset" on both
+   the .card and .hero backgrounds it appears on */
+.subcard {
+  background: rgb(0 0 0 / 16%);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 12px 14px;
+  margin: 2px 0 6px;
+}
+
+.subcard-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.subcard-row label {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.subcard-row .unit {
+  font-size: 11px;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  margin-left: 6px;
+}
+
+/* Checkboxes inside a sub-card are headings for their row, so brighter */
+.subcard .chk {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.subcard .chk input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--good);
+  cursor: pointer;
+  flex: none;
+}
+
+.subcard .chk b {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.subcard-note {
+  font-size: 11px;
+  color: var(--faint);
+  margin: 7px 0 0;
+  line-height: 1.5;
+}
+
+.num-in {
+  width: 108px;
+  background: var(--ink);
+  border: 1px solid var(--line2);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: right;
+  padding: 7px 9px;
+  border-radius: 7px;
+}
+
+.num-in:focus {
+  outline: 2px solid var(--grid);
+  outline-offset: 1px;
+  border-color: var(--grid);
+}
+
+/* --- Schedule editor: one row per tariff band --- */
+
+.tsched-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 2px 0 8px;
+}
+
+.tsched-head b {
+  font-family: var(--font-display);
+  font-size: 12.5px;
+}
+
+.tsched-presets {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.preset-lbl {
+  font-size: 10.5px;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.presetbtn {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--ink);
+  border: 1px solid var(--line2);
+  border-radius: 6px;
+  padding: 4px 9px;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    color 0.2s,
+    border-color 0.2s;
+}
+
+.presetbtn:hover {
+  color: var(--text);
+  border-color: var(--grid);
+}
+
+.presetbtn:focus-visible {
+  outline: 2px solid var(--grid);
+  outline-offset: 1px;
+}
+
+/* Grid keeps Time / Import / Export / bin columns aligned across rows */
+.tsched-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 30px;
+  gap: 9px;
+  align-items: center;
+  padding: 3px 0;
+}
+
+/* min-width: 0 overrides the default intrinsic width of a text input, which
+   would otherwise stop the 1fr columns from ever shrinking */
+.tsched-row input {
+  width: 100%;
+  min-width: 0;
+  background: var(--ink);
+  border: 1px solid var(--line2);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  text-align: right;
+  padding: 6px 8px;
+  border-radius: 7px;
+}
+
+.tsched-row input[type="time"] {
+  text-align: left;
+}
+
+.tsched-row input:focus {
+  outline: 2px solid var(--grid);
+  outline-offset: 1px;
+  border-color: var(--grid);
+}
+
+.tsched-row input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tsched-labels {
+  font-size: 10.5px;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 0 1px;
+}
+
+.tsched-labels span {
+  align-self: end;
+}
+
+.tsched-labels .r {
+  text-align: right;
+}
+
+/* Struck through when a column does not apply to the selected tariff */
+.tsched-labels .strike {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+
+.tsched-row .iconbtn,
+.addband {
+  background: none;
+  border: none;
+  color: var(--faint);
+  cursor: pointer;
+  border-radius: 6px;
+  line-height: 1;
+}
+
+.tsched-row .iconbtn {
+  font-size: 15px;
+  padding: 2px 4px;
+  justify-self: center;
+}
+
+.tsched-row .iconbtn:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--ink);
+}
+
+.tsched-row .iconbtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.addband {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 6px 2px 0;
+}
+
+.addband:hover {
+  color: var(--text);
+}
+
+/* =============================================================================
+   10. Accordions and inputs
+
+   Assumption-level detail lives in <details> elements so the page opens on the
+   headline result rather than a wall of fields.
+   ========================================================================== */
+
+details {
+  border-top: 1px solid var(--line);
+}
+
+details:first-of-type {
+  border-top: none;
+}
+
+summary {
+  /* list-style plus the WebKit pseudo-element below removes the native marker
+     in every engine; the .chev span replaces it */
+  list-style: none;
+  cursor: pointer;
+  padding: 13px 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+summary .chev {
+  color: var(--faint);
+  transition: transform 0.2s;
+  font-family: var(--font-mono);
+}
+
+details[open] summary .chev {
+  transform: rotate(90deg);
+}
+
+.fields {
+  padding: 2px 2px 16px;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+}
+
+.field label {
+  font-size: 12.5px;
+  color: var(--muted);
+  flex: 1;
+}
+
+.field .unit {
+  font-size: 11px;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  margin-left: 6px;
+}
+
+.field input[type="number"] {
+  width: 108px;
+  background: var(--ink);
+  border: 1px solid var(--line2);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: right;
+  padding: 7px 9px;
+  border-radius: 7px;
+}
+
+.field input[type="number"]:focus {
+  outline: 2px solid var(--grid);
+  outline-offset: 1px;
+  border-color: var(--grid);
+}
+
+/* Kona = the vehicle preset dropdown */
+.kona-select {
+  background: var(--ink);
+  border: 1px solid var(--line2);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  max-width: 210px;
+  cursor: pointer;
+}
+
+.kona-select:focus {
+  outline: 2px solid var(--grid);
+  outline-offset: 1px;
+  border-color: var(--grid);
+}
+
+/* =============================================================================
+   11. Results — stat tiles, flow tables, spark bars
+   ========================================================================== */
+
+.stat-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+
+/* .q4 — the four-up variant */
+.stat-row.q4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* Both variants fall back to two columns on a phone */
+@media (max-width: 480px) {
+  .stat-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .stat-row.q4 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* .k key, .v value, .s sub-caption */
+.stat {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 13px;
+}
+
+.stat .k {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.stat .v {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 20px;
+  margin-top: 5px;
+}
+
+.stat .s {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* --- Flow table: itemised energy and cost lines --- */
+
+table.flows {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 4px;
+}
+
+table.flows td {
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+
+table.flows td:last-child {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+table.flows tr:first-child td {
+  border-top: none;
+}
+
+table.flows .tag {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  margin-right: 9px;
+  vertical-align: baseline;
+}
+
+/* .grp group heading, .sub indented detail line, .tot subtotal */
+table.flows .grp {
+  color: var(--faint);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding-top: 14px;
+}
+
+table.flows .sub {
+  color: var(--muted);
+}
+
+table.flows .tot td {
+  font-weight: 700;
+  border-top: 1.5px solid var(--line2);
+}
+
+.credit {
+  color: var(--good);
+}
+
+.bartrack {
+  height: 8px;
+  border-radius: 5px;
+  background: #0d1217;
+  overflow: hidden;
+  display: flex;
+  margin-top: 14px;
+  border: 1px solid var(--line);
+}
+
+.bartrack .seg {
+  transition: flex-grow 0.55s ease;
+}
+
+.subhead {
+  font-size: 10.5px;
+  color: var(--faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 20px 2px 4px;
+  font-weight: 600;
+}
+
+/* --- Unit-cost table: p/kWh by carrier --- */
+
+table.ucost {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table.ucost td,
+table.ucost th {
+  padding: 6px 0;
+  font-size: 12.5px;
+  border-top: 1px solid var(--line);
+}
+
+table.ucost th {
+  color: var(--faint);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-weight: 600;
+  border: none;
+}
+
+/* .n — numeric columns, right-aligned and tabular */
+table.ucost th.n,
+table.ucost td.n {
+  text-align: right;
+}
+
+table.ucost td.n {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+/* .lev — levelised row, lifted out of the muted default */
+table.ucost td.lev {
+  color: var(--text);
+}
+
+table.ucost .tag {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  margin-right: 9px;
+  vertical-align: baseline;
+}
+
+/* --- Spark gap: the narrative "is it worth it" panel --- */
+
+.sparkgap {
+  margin-top: 16px;
+  padding: 13px 14px;
+  border-radius: 10px;
+  background: #0d1217;
+  border: 1px solid var(--line);
+}
+
+.sparkgap h3 {
+  font-size: 12px;
+  margin: 0 0 8px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.sparkgap p {
+  margin: 6px 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* Figures inline in the prose */
+.sparkgap b {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.sparkgap .verdict {
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.sparkbar {
+  height: 8px;
+  border-radius: 5px;
+  background: #0d1217;
+  overflow: hidden;
+  display: flex;
+  margin: 9px 0 4px;
+  border: 1px solid var(--line);
+}
+
+.sparkbar .seg {
+  transition: flex-grow 0.55s ease;
+}
+
+/* =============================================================================
+   12. Footer and page actions
+   ========================================================================== */
+
+.foot {
+  margin-top: 26px;
+  color: var(--faint);
+  font-size: 11.5px;
+  line-height: 1.65;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
+.foot b {
+  color: var(--muted);
+}
+
+.reset {
+  background: none;
+  border: 1px solid var(--line2);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 6px 11px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.reset:hover {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+.masthead-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Joined button group — the shared border comes from the + combinator below,
+   and overflow: hidden clips the end buttons to the group's radius */
+.modeseg {
+  display: inline-flex;
+  border: 1px solid var(--line2);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.modeseg button {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 6px 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.modeseg button + button {
+  border-left: 1px solid var(--line2);
+}
+
+.modeseg button:hover:not(.on) {
+  color: var(--text);
+}
+
+.modeseg button.on {
+  background: var(--raise);
+  color: var(--text);
+}
+
+.pill {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--line2);
+  color: var(--muted);
+}
+
+a {
+  color: var(--grid);
+}
+
+/* =============================================================================
+   13. Site nav
+
    Header bar and tools menu, matched to the dynamic heat pump simulator.
 
    The menu itself is the shared components/tool_sidebar.php, included
-   unmodified, so tool entries stay defined only in menu.php. That
-   component is Bootstrap offcanvas markup, but this page cannot load
-   Bootstrap — its .card rules collide with the panel styling here. So
-   the handful of Bootstrap classes the component actually uses are
-   reimplemented below, with the values read off the rendered
-   dynamic_heatpump sidebar so the two look the same. The bs-* helper at
-   the foot of the page stands in for Bootstrap's offcanvas javascript.
-   ------------------------------------------------------------------- */
+   unmodified, so tool entries stay defined only in menu.php. That component is
+   Bootstrap offcanvas markup, but this page cannot load Bootstrap — its .card
+   rules collide with the panel styling here. So the handful of Bootstrap
+   classes the component actually uses are reimplemented below, with the values
+   read off the rendered dynamic_heatpump sidebar so the two look the same. The
+   bs-* helper at the foot of the page stands in for Bootstrap's offcanvas
+   javascript.
+   ========================================================================== */
 
-/* --- header bar (mirrors .hp-header / .hp-btn-dark) --- */
-.topbar{position:sticky;top:0;z-index:1030;display:flex;align-items:center;justify-content:space-between;
-  gap:.75rem;flex-wrap:wrap;padding:.6rem 1.25rem;background:var(--oem-bar);font-family:var(--font-bs);}
+/* --- Header bar (mirrors .hp-header / .hp-btn-dark) --- */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 1.25rem;
+  background: var(--oem-bar);
+  font-family: var(--font-bs);
+}
+
 /* The menu button is centred rather than baseline-aligned: its hamburger is
    drawn in CSS, so there is no glyph to take a baseline from and the browser
    would synthesise one from the button's bottom edge, dropping it below the
-   Source button at the other end of the bar. The title and its subtitle
-   still share a baseline, as they do in the heat pump simulator. */
-.topbar-left{display:flex;align-items:center;gap:.6rem;min-width:0;}
-.topbar-titles{display:flex;align-items:baseline;flex-wrap:wrap;min-width:0;}
-.topbar-brand{font-size:1.02rem;font-weight:600;color:#fff;text-decoration:none;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.topbar-brand:hover{color:#fff;text-decoration:underline;}
-.topbar-here{font-size:.83rem;color:rgba(255,255,255,.85);margin-left:.5rem;white-space:nowrap;}
-@media (max-width:640px){.topbar-here{display:none;}}
-/* Outlined in the bar's own colour rather than a fixed shade, so the
-   buttons stay legible if --oem-bar changes */
-.btn-bar{display:inline-flex;align-items:center;gap:.4rem;font-family:inherit;font-size:.875rem;line-height:1.5;
-  padding:.25rem .5rem;border-radius:.25rem;text-decoration:none;cursor:pointer;
-  color:#fff;border:1px solid rgba(255,255,255,.55);background:rgba(255,255,255,.12);}
-.btn-bar:hover,.btn-bar:focus{color:#fff;border-color:#fff;background:rgba(255,255,255,.24);}
-.btn-bar:focus-visible{outline:2px solid #fff;outline-offset:1px;}
-.btn-bar.icon-only{padding:.25rem .55rem;}
-/* Hamburger drawn in CSS at fa-solid fa-bars' proportions (448x512 viewBox
-   at a .875rem font), rather than pulling in the whole Font Awesome
-   stylesheet for one glyph */
-.icon-bars{display:inline-flex;flex-direction:column;justify-content:center;gap:2.6px;width:12.25px;height:21px;}
-.icon-bars i{display:block;height:1.75px;background:currentColor;border-radius:.5px;}
+   Source button at the other end of the bar. The title and its subtitle still
+   share a baseline, as they do in the heat pump simulator. */
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
 
-/* --- bootstrap subset: offcanvas, list-group, btn-close --- */
-.offcanvas-backdrop{position:fixed;inset:0;z-index:1040;background:#000;opacity:0;
-  pointer-events:none;transition:opacity .3s ease-in-out;}
-.offcanvas-backdrop.show{opacity:.5;pointer-events:auto;}
-.offcanvas{position:fixed;bottom:0;z-index:1045;display:flex;flex-direction:column;max-width:100%;
-  background:#fff;color:#212529;font-family:var(--font-bs);font-size:1rem;line-height:1.5;
-  background-clip:padding-box;outline:0;transition:transform .3s ease-in-out;}
-.offcanvas-start{top:0;left:0;width:400px;border-right:1px solid rgba(0,0,0,.175);transform:translateX(-100%);}
-.offcanvas.show{transform:none;}
-.offcanvas-header{display:flex;align-items:center;justify-content:space-between;padding:1rem;}
-.offcanvas-header h5{font-family:inherit;font-size:1.25rem;font-weight:500;line-height:1.2;margin:0;color:#212529;}
-.offcanvas-body{flex-grow:1;padding:1rem;overflow-y:auto;}
-.offcanvas-body h5{font-family:inherit;font-size:1.25rem;font-weight:500;line-height:1.2;margin:0;color:#212529;}
-.offcanvas .mt-3{margin-top:1rem;}
-.btn-close{box-sizing:content-box;width:1em;height:1em;padding:.25em;border:0;border-radius:.375rem;opacity:.5;cursor:pointer;
-  background:transparent url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23000'%3e%3cpath d='M.293.293a1 1 0 0 1 1.414 0L8 6.586 14.293.293a1 1 0 1 1 1.414 1.414L9.414 8l6.293 6.293a1 1 0 0 1-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 0 1-1.414-1.414L6.586 8 .293 1.707a1 1 0 0 1 0-1.414z'/%3e%3c/svg%3e") center/1em auto no-repeat;}
-.btn-close:hover{opacity:.75;}
-.list-group{display:flex;flex-direction:column;padding-left:0;margin-bottom:0;border-radius:.375rem;}
-.list-group-item{position:relative;display:block;padding:.5rem 1rem;font-size:1rem;text-decoration:none;
-  color:#212529;background:#fff;border:1px solid #dee2e6;}
-.list-group-item:first-child{border-top-left-radius:inherit;border-top-right-radius:inherit;}
-.list-group-item:last-child{border-bottom-left-radius:inherit;border-bottom-right-radius:inherit;}
-.list-group-item + .list-group-item{border-top-width:0;}
-.list-group-item-action:hover,.list-group-item-action:focus{color:#495057;background:#f8f9fa;}
+.topbar-titles {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.topbar-brand {
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: #fff;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar-brand:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+/* "You are here" subtitle — dropped rather than wrapped on narrow screens */
+.topbar-here {
+  font-size: 0.83rem;
+  color: rgb(255 255 255 / 85%);
+  margin-left: 0.5rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .topbar-here {
+    display: none;
+  }
+}
+
+/* Outlined in the bar's own colour rather than a fixed shade, so the buttons
+   stay legible if --oem-bar changes */
+.btn-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  text-decoration: none;
+  cursor: pointer;
+  color: #fff;
+  border: 1px solid rgb(255 255 255 / 55%);
+  background: rgb(255 255 255 / 12%);
+}
+
+.btn-bar:hover,
+.btn-bar:focus {
+  color: #fff;
+  border-color: #fff;
+  background: rgb(255 255 255 / 24%);
+}
+
+.btn-bar:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+
+.btn-bar.icon-only {
+  padding: 0.25rem 0.55rem;
+}
+
+/* Hamburger drawn in CSS at fa-solid fa-bars' proportions (448x512 viewBox at
+   a 0.875rem font), rather than pulling in the whole Font Awesome stylesheet
+   for one glyph. The three <i> children are the bars. */
+.icon-bars {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2.6px;
+  width: 12.25px;
+  height: 21px;
+}
+
+.icon-bars i {
+  display: block;
+  height: 1.75px;
+  background: currentcolor;
+  border-radius: 0.5px;
+}
+
+/* --- Bootstrap subset: offcanvas, list-group, btn-close --- */
+
+/* Kept in the DOM and faded with opacity so it can transition; pointer-events
+   is what actually makes it click-through when hidden */
+.offcanvas-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1040;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.offcanvas-backdrop.show {
+  opacity: 0.5;
+  pointer-events: auto;
+}
+
+.offcanvas {
+  position: fixed;
+  bottom: 0;
+  z-index: 1045;
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+  background: #fff;
+  color: #212529;
+  font-family: var(--font-bs);
+  font-size: 1rem;
+  line-height: 1.5;
+  background-clip: padding-box;
+  outline: 0;
+  transition: transform 0.3s ease-in-out;
+}
+
+/* Parked off-screen to the left; .show slides it back in */
+.offcanvas-start {
+  top: 0;
+  left: 0;
+  width: 400px;
+  border-right: 1px solid rgb(0 0 0 / 17.5%);
+  transform: translateX(-100%);
+}
+
+.offcanvas.show {
+  transform: none;
+}
+
+.offcanvas-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+}
+
+.offcanvas-header h5 {
+  font-family: inherit;
+  font-size: 1.25rem;
+  font-weight: 500;
+  line-height: 1.2;
+  margin: 0;
+  color: #212529;
+}
+
+.offcanvas-body {
+  flex-grow: 1;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.offcanvas-body h5 {
+  font-family: inherit;
+  font-size: 1.25rem;
+  font-weight: 500;
+  line-height: 1.2;
+  margin: 0;
+  color: #212529;
+}
+
+/* The one Bootstrap spacing utility the component uses */
+.offcanvas .mt-3 {
+  margin-top: 1rem;
+}
+
+.btn-close {
+  box-sizing: content-box;
+  width: 1em;
+  height: 1em;
+  padding: 0.25em;
+  border: 0;
+  border-radius: 0.375rem;
+  opacity: 0.5;
+  cursor: pointer;
+  background: transparent
+    url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23000'%3e%3cpath d='M.293.293a1 1 0 0 1 1.414 0L8 6.586 14.293.293a1 1 0 1 1 1.414 1.414L9.414 8l6.293 6.293a1 1 0 0 1-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 0 1-1.414-1.414L6.586 8 .293 1.707a1 1 0 0 1 0-1.414z'/%3e%3c/svg%3e")
+    center/1em auto no-repeat;
+}
+
+.btn-close:hover {
+  opacity: 0.75;
+}
+
+/* border-radius: inherit on the first and last items is how Bootstrap rounds a
+   list group without knowing which item is where */
+.list-group {
+  display: flex;
+  flex-direction: column;
+  padding-left: 0;
+  margin-bottom: 0;
+  border-radius: 0.375rem;
+}
+
+.list-group-item {
+  position: relative;
+  display: block;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  text-decoration: none;
+  color: #212529;
+  background: #fff;
+  border: 1px solid #dee2e6;
+}
+
+.list-group-item:first-child {
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+}
+
+.list-group-item:last-child {
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+}
+
+/* Collapse the double border between adjacent items */
+.list-group-item + .list-group-item {
+  border-top-width: 0;
+}
+
+.list-group-item-action:hover,
+.list-group-item-action:focus {
+  color: #495057;
+  background: #f8f9fa;
+}
+
 /* Not a Bootstrap default — marks the tool you are already on */
-.list-group-item.active{color:#fff;background:var(--oem-bar);border-color:var(--oem-bar);}
-.list-group-item.active + .list-group-item{border-top-width:1px;}
-@media (prefers-reduced-motion: reduce){*{transition:none !important;}}
+.list-group-item.active {
+  color: #fff;
+  background: var(--oem-bar);
+  border-color: var(--oem-bar);
+}
 
-[v-cloak]{display:none;}
+/* The active item paints its own bottom border, so give the next item its top
+   border back to keep the seam an even weight */
+.list-group-item.active + .list-group-item {
+  border-top-width: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
+
+/* =============================================================================
+   14. Utilities
+   ========================================================================== */
+
+/* Hides un-compiled Vue markup until the app mounts */
+[v-cloak] {
+  display: none;
+}
