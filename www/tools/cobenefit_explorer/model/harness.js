@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// cobenefit_explorer/harness.js
+// cobenefit_explorer/model/harness.js
 //
 // Node test harness for the household energy ledger. It wires the real
 // half-hourly dataset into model.js and runs the exact ledger logic the browser
@@ -30,7 +30,7 @@ const model = require('./model.js');
 const ledger = require('./ledger.js');
 
 // ---- load the real half-hourly dataset into the model -----------------------
-const DATA_PATH = path.join(__dirname, 'solarmatching_data.json');
+const DATA_PATH = path.join(__dirname, 'data.json');
 (function loadData() {
   const raw = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8'));
   model._apply(raw);        // remap 8 raw series -> sim layout, then normalise

@@ -49,5 +49,6 @@ foreach ($json_data as &$feed) {
 
 $data = json_encode($json_data);
 
-// 4. Save the data to a file
-file_put_contents('solarmatching_data.json', $data);
+// 4. Save the data to a file, next to this script rather than in the working
+// directory, so it lands where model.js and harness.js expect it
+file_put_contents(__DIR__ . '/data.json', $data);

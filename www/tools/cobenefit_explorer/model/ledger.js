@@ -1,4 +1,4 @@
-// cobenefit_explorer/ledger.js
+// cobenefit_explorer/model/ledger.js
 //
 // The household cost & carbon ledger, extracted from the page so the
 // same logic can run both in the browser (the Vue view) and in Node (the test
