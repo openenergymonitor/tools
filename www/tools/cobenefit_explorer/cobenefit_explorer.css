@@ -132,11 +132,17 @@
     system-ui, -apple-system, "Segoe UI", roboto, "Helvetica Neue", "Noto Sans",
     "Liberation Sans", arial, sans-serif;
 
+  /* Bootstrap's native monospace list, likewise verbatim */
+  --font-bs-mono:
+    sfmono-regular, menlo, monaco, consolas, "Liberation Mono", "Courier New",
+    monospace;
+
   /* Typography. --font-display carries headings and control labels;
-     --font-mono every number, so figures stay tabular and aligned. Both name a
-     generic family last, so the page degrades sensibly if the webfont fails. */
-  --font-display: "Space Grotesk", sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+     --font-mono every number, so figures stay tabular and aligned. Both point
+     at the Bootstrap native stacks, so the tool renders in the same faces as
+     the dynamic heat pump simulator with no webfont to download. */
+  --font-display: var(--font-bs);
+  --font-mono: var(--font-bs-mono);
 
   /* Currently unused — every corner radius below is set explicitly */
   --radius: 10px;
@@ -254,7 +260,7 @@ body {
     ),
     var(--ink);
   color: var(--text);
-  font-family: Inter, system-ui, sans-serif;
+  font-family: var(--font-bs);
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;

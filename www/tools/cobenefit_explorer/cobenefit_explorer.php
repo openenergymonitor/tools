@@ -5,10 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title><?php echo $title; ?></title>
 <meta name="description" content="<?php echo $description; ?>">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="<?php echo $path; ?>cobenefit_explorer.css?v=2">
+<link rel="stylesheet" href="<?php echo $path; ?>cobenefit_explorer.css?v=3">
 <script>
 // Theme, applied before the first paint so the page never flashes the palette
 // the visitor is about to switch away from. A stored choice wins; with none,
