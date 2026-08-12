@@ -10,15 +10,27 @@
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
     <div class="offcanvas-body">
-        <div class="list-group">
-            <?php foreach ($menu as $key => $value): ?>
-                <?php if (isset($value['hide']) && $value['hide'] === true) continue; ?>
-                <a href="<?php echo $value['case']; ?>" class="list-group-item list-group-item-action"><?php echo $value['title']; ?></a>
-            <?php endforeach; ?>
-        </div>
+        <?php
+        // Group by the menu entry's category, keeping the order categories and
+        // tools first appear in menu.php
+        $categories = array();
+        foreach ($menu as $key => $value) {
+            if (isset($value['hide']) && $value['hide'] === true) continue;
+            $category = isset($value['category']) ? $value['category'] : 'Other';
+            $categories[$category][$key] = $value;
+        }
+        ?>
+        <?php foreach ($categories as $category => $tools): ?>
+            <h6 class="text-uppercase text-muted mt-3"><?php echo $category; ?></h6>
+            <div class="list-group">
+                <?php foreach ($tools as $key => $value): ?>
+                    <a href="<?php echo $value['case']; ?>" class="list-group-item list-group-item-action"><?php echo $value['title']; ?></a>
+                <?php endforeach; ?>
+            </div>
+        <?php endforeach; ?>
 
-        <h5 class="mt-3">Other tools</h5>
-        <div class="list-group mt-3">
+        <h6 class="text-uppercase text-muted mt-3">Other tools</h6>
+        <div class="list-group">
             <a href="https://openenergymonitor.org/heatlossjs" class="list-group-item list-group-item-action">HeatLoss.js</a>
             <a href="https://openenergymonitor.org/sapjs" class="list-group-item list-group-item-action">SAP.js</a>
             <a href="https://openenergymonitor.org/zcem" class="list-group-item list-group-item-action">ZeroCarbonBritain energy model</a>
