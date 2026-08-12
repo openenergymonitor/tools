@@ -1,10 +1,10 @@
-// solarmatching/model.js
+// cobenefit_explorer/model.js
 //
 // Core half-hourly solar / battery / demand simulation, extracted from
-// solarmatching.php so it can be reused independently of the Vue view.
+// the tool page so it can be reused independently of the Vue view.
 //
 // Usage:
-//   model.load("tools/solarmatching/solarmatching_data.json", function () {
+//   model.load("tools/cobenefit_explorer/solarmatching_data.json", function () {
 //       var result = model.run(params);   // params described in defaultParams()
 //       // ... use result ...
 //   });

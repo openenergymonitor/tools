@@ -1,6 +1,6 @@
-// solarmatching/ledger.js
+// cobenefit_explorer/ledger.js
 //
-// The household cost & carbon ledger, extracted from energy-ledger.html so the
+// The household cost & carbon ledger, extracted from the page so the
 // same logic can run both in the browser (the Vue view) and in Node (the test
 // harness, harness.js). Everything here is pure: functions take a parameter
 // object `p`, a build config `c`, and a small context `ctx`, and return plain

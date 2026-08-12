@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Household Energy Ledger</title>
+<title><?php echo $title; ?></title>
+<meta name="description" content="<?php echo $description; ?>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -29,6 +30,9 @@
     --good:#54c08a;
     --bad:#d8694d;
     --oem:#44a1f2;
+    /* header bar + tools menu, shared with the dynamic heat pump simulator */
+    --oem-bar:#45a2c9;
+    --font-bs:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue","Noto Sans","Liberation Sans",Arial,sans-serif;
     --radius:10px;
   }
   *{box-sizing:border-box}
@@ -279,16 +283,107 @@
   .modeseg button.on{background:var(--raise);color:var(--text);}
   .pill{font-family:"JetBrains Mono";font-size:10px;padding:2px 7px;border-radius:5px;border:1px solid var(--line2);color:var(--muted);}
   a{color:var(--grid);}
+
+  /* ---- site nav ----------------------------------------------------------
+     Header bar and tools menu, matched to the dynamic heat pump simulator.
+
+     The menu itself is the shared components/tool_sidebar.php, included
+     unmodified, so tool entries stay defined only in menu.php. That
+     component is Bootstrap offcanvas markup, but this page cannot load
+     Bootstrap — its .card rules collide with the panel styling here. So
+     the handful of Bootstrap classes the component actually uses are
+     reimplemented below, with the values read off the rendered
+     dynamic_heatpump sidebar so the two look the same. The bs-* helper at
+     the foot of the page stands in for Bootstrap's offcanvas javascript.
+     ------------------------------------------------------------------- */
+
+  /* --- header bar (mirrors .hp-header / .hp-btn-dark) --- */
+  .topbar{position:sticky;top:0;z-index:1030;display:flex;align-items:center;justify-content:space-between;
+    gap:.75rem;flex-wrap:wrap;padding:.6rem 1.25rem;background:var(--oem-bar);font-family:var(--font-bs);}
+  /* The menu button is centred rather than baseline-aligned: its hamburger is
+     drawn in CSS, so there is no glyph to take a baseline from and the browser
+     would synthesise one from the button's bottom edge, dropping it below the
+     Source button at the other end of the bar. The title and its subtitle
+     still share a baseline, as they do in the heat pump simulator. */
+  .topbar-left{display:flex;align-items:center;gap:.6rem;min-width:0;}
+  .topbar-titles{display:flex;align-items:baseline;flex-wrap:wrap;min-width:0;}
+  .topbar-brand{font-size:1.02rem;font-weight:600;color:#fff;text-decoration:none;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .topbar-brand:hover{color:#fff;text-decoration:underline;}
+  .topbar-here{font-size:.83rem;color:rgba(255,255,255,.85);margin-left:.5rem;white-space:nowrap;}
+  @media (max-width:640px){.topbar-here{display:none;}}
+  /* Outlined in the bar's own colour rather than a fixed shade, so the
+     buttons stay legible if --oem-bar changes */
+  .btn-bar{display:inline-flex;align-items:center;gap:.4rem;font-family:inherit;font-size:.875rem;line-height:1.5;
+    padding:.25rem .5rem;border-radius:.25rem;text-decoration:none;cursor:pointer;
+    color:#fff;border:1px solid rgba(255,255,255,.55);background:rgba(255,255,255,.12);}
+  .btn-bar:hover,.btn-bar:focus{color:#fff;border-color:#fff;background:rgba(255,255,255,.24);}
+  .btn-bar:focus-visible{outline:2px solid #fff;outline-offset:1px;}
+  .btn-bar.icon-only{padding:.25rem .55rem;}
+  /* Hamburger drawn in CSS at fa-solid fa-bars' proportions (448x512 viewBox
+     at a .875rem font), rather than pulling in the whole Font Awesome
+     stylesheet for one glyph */
+  .icon-bars{display:inline-flex;flex-direction:column;justify-content:center;gap:2.6px;width:12.25px;height:21px;}
+  .icon-bars i{display:block;height:1.75px;background:currentColor;border-radius:.5px;}
+
+  /* --- bootstrap subset: offcanvas, list-group, btn-close --- */
+  .offcanvas-backdrop{position:fixed;inset:0;z-index:1040;background:#000;opacity:0;
+    pointer-events:none;transition:opacity .3s ease-in-out;}
+  .offcanvas-backdrop.show{opacity:.5;pointer-events:auto;}
+  .offcanvas{position:fixed;bottom:0;z-index:1045;display:flex;flex-direction:column;max-width:100%;
+    background:#fff;color:#212529;font-family:var(--font-bs);font-size:1rem;line-height:1.5;
+    background-clip:padding-box;outline:0;transition:transform .3s ease-in-out;}
+  .offcanvas-start{top:0;left:0;width:400px;border-right:1px solid rgba(0,0,0,.175);transform:translateX(-100%);}
+  .offcanvas.show{transform:none;}
+  .offcanvas-header{display:flex;align-items:center;justify-content:space-between;padding:1rem;}
+  .offcanvas-header h5{font-family:inherit;font-size:1.25rem;font-weight:500;line-height:1.2;margin:0;color:#212529;}
+  .offcanvas-body{flex-grow:1;padding:1rem;overflow-y:auto;}
+  .offcanvas-body h5{font-family:inherit;font-size:1.25rem;font-weight:500;line-height:1.2;margin:0;color:#212529;}
+  .offcanvas .mt-3{margin-top:1rem;}
+  .btn-close{box-sizing:content-box;width:1em;height:1em;padding:.25em;border:0;border-radius:.375rem;opacity:.5;cursor:pointer;
+    background:transparent url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23000'%3e%3cpath d='M.293.293a1 1 0 0 1 1.414 0L8 6.586 14.293.293a1 1 0 1 1 1.414 1.414L9.414 8l6.293 6.293a1 1 0 0 1-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 0 1-1.414-1.414L6.586 8 .293 1.707a1 1 0 0 1 0-1.414z'/%3e%3c/svg%3e") center/1em auto no-repeat;}
+  .btn-close:hover{opacity:.75;}
+  .list-group{display:flex;flex-direction:column;padding-left:0;margin-bottom:0;border-radius:.375rem;}
+  .list-group-item{position:relative;display:block;padding:.5rem 1rem;font-size:1rem;text-decoration:none;
+    color:#212529;background:#fff;border:1px solid #dee2e6;}
+  .list-group-item:first-child{border-top-left-radius:inherit;border-top-right-radius:inherit;}
+  .list-group-item:last-child{border-bottom-left-radius:inherit;border-bottom-right-radius:inherit;}
+  .list-group-item + .list-group-item{border-top-width:0;}
+  .list-group-item-action:hover,.list-group-item-action:focus{color:#495057;background:#f8f9fa;}
+  /* Not a Bootstrap default — marks the tool you are already on */
+  .list-group-item.active{color:#fff;background:var(--oem-bar);border-color:var(--oem-bar);}
+  .list-group-item.active + .list-group-item{border-top-width:1px;}
   @media (prefers-reduced-motion: reduce){*{transition:none !important;}}
 </style>
 </head>
 <body>
+
+<!-- ================= Site nav ================= -->
+<header class="topbar">
+  <div class="topbar-left">
+    <button type="button" class="btn-bar icon-only" data-bs-toggle="offcanvas" data-bs-target="#sidebar"
+            aria-controls="sidebar" aria-label="Open tools menu">
+      <span class="icon-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+    </button>
+    <div class="topbar-titles">
+      <!-- Tool urls are one level deep (/tools/cobenefit_explorer), so "./"
+           is the site home and the menu's own 'case' values resolve as-is -->
+      <a class="topbar-brand" href="./">OpenEnergyMonitor.org Tools</a>
+      <span class="topbar-here">&middot; <?php echo $title; ?></span>
+    </div>
+  </div>
+  <a class="btn-bar" href="<?php echo $github; ?>">Source</a>
+</header>
+
+<!-- Shared tool navigation sidebar, pulled in from the core -->
+<?php echo view("components/tool_sidebar.php", array('menu' => $menu)); ?>
+
 <div id="app" class="wrap" v-cloak>
 
   <header class="masthead">
     <div class="brand">
       <p class="eyebrow">UK Household · cost &amp; carbon ledger</p>
-      <h1>Household Energy Ledger</h1>
+      <h1>Household Co-benefit Explorer</h1>
       <p>Start from the fossil status quo, then switch on technologies in any order. Running costs <em>and</em> the assets you'd replace anyway are tracked together, so each step is compared fairly.</p>
     </div>
     <div class="masthead-actions">
@@ -842,7 +937,7 @@
 
       <div class="foot">
         <p><b>How to read this.</b> Lumpy purchases (a car, a boiler) are spread over their life as an equivalent annual cost — discounted for the time-value of money — so options compare like-for-like. The fossil status quo already carries a car and a boiler you'd replace anyway — switching to an EV or heat pump swaps one asset cost for another rather than adding to it. “Extra upfront” is the cash needed today for the new kit beyond a like-for-like petrol-car / boiler replacement.</p>
-        <p style="margin-top:10px;"><b>Simplifications.</b> Solar self-consumption is, by default, run through a half-hourly simulation of a real year (the same engine as the <a href="solar-matching.html">Solar Matching</a> tool) — solar, battery and EV charging are dispatched interval-by-interval, so self-consumption and the import / export split emerge from the timing. A simple annualised daytime-match estimate is available under <em>Advanced · solar matching</em> for comparison. The <b>Agile tariff</b> switch prices every half-hour of import and export against the dataset's wholesale-linked rates (the same dispatch, re-costed); with it off, a flat unit rate and a flat export rate apply. The EV charges within the window set under <em>Electric vehicle</em>. Lumpy purchases are converted to an equivalent annual cost with a capital-recovery (annuity) factor at a real discount rate (default {{ p.discountRate }}%, editable under <em>Assumptions · Discounting</em>), so capital spent today weighs more than future spend and resale values are discounted back — set it to 0 for plain straight-line spreading. Insurance is treated as roughly neutral between petrol and EV. All prices are inc. VAT (flat rates default to the price cap; Agile import comes from the region-D dataset, grossed up by 5%). Prices are a mid-2026 snapshot and unusually high. <span class="pill">v2 · half-hourly</span></p>
+        <p style="margin-top:10px;"><b>Simplifications.</b> Solar self-consumption is, by default, run through a half-hourly simulation of a real year (the solar-matching engine, <code>model.js</code>) — solar, battery and EV charging are dispatched interval-by-interval, so self-consumption and the import / export split emerge from the timing. A simple annualised daytime-match estimate is available under <em>Advanced · solar matching</em> for comparison. The <b>Agile tariff</b> switch prices every half-hour of import and export against the dataset's wholesale-linked rates (the same dispatch, re-costed); with it off, a flat unit rate and a flat export rate apply. The EV charges within the window set under <em>Electric vehicle</em>. Lumpy purchases are converted to an equivalent annual cost with a capital-recovery (annuity) factor at a real discount rate (default {{ p.discountRate }}%, editable under <em>Assumptions · Discounting</em>), so capital spent today weighs more than future spend and resale values are discounted back — set it to 0 for plain straight-line spreading. Insurance is treated as roughly neutral between petrol and EV. All prices are inc. VAT (flat rates default to the price cap; Agile import comes from the region-D dataset, grossed up by 5%). Prices are a mid-2026 snapshot and unusually high. <span class="pill">v2 · half-hourly</span></p>
         <p style="margin-top:10px;"><b>Carbon basis.</b> Petrol ~2.9 kgCO₂e/L well-to-wheel; gas 0.183 kgCO₂e/kWh combustion plus an upstream/methane uplift (default +20%, GWP100 — the evidence suggests this is the floor, not the ceiling). Grid taken at ~75 gCO₂/kWh — a deliberately conservative forward average (2024-25 actual is ~125, falling fast toward ~50 by 2030), so the electrified case looks better every year. Exported solar is credited against the gas (CCGT) generation it displaces (~400 gCO₂/kWh, <em>marginal</em>) — deliberately a different, consequential basis from the attributional ~75 g <em>average</em> applied to imports, since an exported unit backs out the marginal plant rather than the grid mix. Both the import average and the export displacement factor are editable under <em>Carbon · operational factors</em>. Both the financial and carbon value of export would be expected to fall over time: as more solar is added to the grid, daytime wholesale (and so export) prices decline and curtailment from over-generation rises, so each exported unit displaces less and earns less. Embodied carbon follows the Hoekstra framing: the car glider is ~equal for petrol and EV, with the battery the main difference (~75 kgCO₂e/kWh of cell). “Carbon payback” = one-off extra manufacturing carbon ÷ annual operational saving. <b>“Abatement cost”</b> = the change in all-in annual cost ÷ the tonnes of CO₂e abated per year (whole build vs status quo, or per step given the rest of the build): a <b>negative</b> figure means the measure cuts carbon <em>and</em> saves money — effectively being paid to decarbonise — while a positive figure is the cost per tonne avoided (for context, UK government appraisal currently values carbon at roughly £250/tCO₂e). It is shown two ways: the <b>household</b> figure is net of any grant, so the homeowner may privately be paid to decarbonise; the <b>societal</b> figure adds the BUS grant back, since a grant is a transfer from taxpayers — a real resource cost, not a saving the measure creates. Steps that don't cut carbon show “—”. <span class="pill">factors editable</span></p>
       </div>
     </div>
@@ -850,8 +945,8 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
-<script src="tools/solarmatching/model.js?v=6"></script>
-<script src="tools/solarmatching/ledger.js?v=9"></script>
+<script src="<?php echo $path; ?>model.js?v=6"></script>
+<script src="<?php echo $path; ?>ledger.js?v=9"></script>
 <script>
 const { createApp } = Vue;
 
@@ -862,7 +957,7 @@ const { createApp } = Vue;
 const modelCache = new Map();
 
 // Ledger logic (DEFAULTS, ann, flowsHH, compute) lives in the shared
-// tools/solarmatching/ledger.js so the Node test harness runs the exact same
+// ledger.js in this folder so the Node test harness runs the exact same
 // code. See the methods below — they're thin wrappers over ledger.*.
 const DEFAULTS = ledger.DEFAULTS;
 const LITRES_PER_GALLON = ledger.LITRES_PER_GALLON;
@@ -1352,13 +1447,54 @@ createApp({
     // falls back to a synthetic year if the file is missing, so this always
     // resolves; until it does, compute() uses the annual estimate.
     if(typeof model !== 'undefined'){
-      model.load('tools/solarmatching/solarmatching_data.json', () => {
+      model.load('<?php echo $path; ?>solarmatching_data.json', () => {
         this.usingSynthetic = model.usingSynthetic;
         this.modelReady = true;
       });
     }
   }
 }).mount('#app');
+</script>
+
+<script>
+// Minimal stand-in for Bootstrap's offcanvas javascript, so the shared
+// components/tool_sidebar.php works here without the Bootstrap bundle.
+// Honours the same data-bs-toggle / data-bs-target / data-bs-dismiss
+// attributes the component already carries.
+(function(){
+  const backdrop = document.body.appendChild(document.createElement('div'));
+  backdrop.className = 'offcanvas-backdrop';
+
+  function show(panel, open){
+    panel.classList.toggle('show', open);
+    backdrop.classList.toggle('show', open);
+    document.querySelectorAll('[data-bs-target="#' + panel.id + '"]')
+      .forEach(t => t.setAttribute('aria-expanded', open ? 'true' : 'false'));
+  }
+  const open = () => document.querySelector('.offcanvas.show');
+
+  document.addEventListener('click', e => {
+    const toggle = e.target.closest('[data-bs-toggle="offcanvas"]');
+    if (toggle) {
+      const panel = document.querySelector(toggle.dataset.bsTarget);
+      if (panel) { show(panel, !panel.classList.contains('show')); return; }
+    }
+    if (e.target.closest('[data-bs-dismiss="offcanvas"]') || e.target === backdrop) {
+      const panel = open();
+      if (panel) show(panel, false);
+    }
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && open()) show(open(), false);
+  });
+
+  // Mark the entry for the tool we are already on. The shared component
+  // renders a plain list, so the current page is matched by its url.
+  const here = location.pathname.replace(/\/$/, '').split('/').pop();
+  document.querySelectorAll('#sidebar .list-group-item').forEach(a => {
+    if (a.getAttribute('href').toLowerCase() === here) a.classList.add('active');
+  });
+})();
 </script>
 <style>[v-cloak]{display:none}</style>
 </body>

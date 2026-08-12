@@ -25,7 +25,13 @@ $github = 'https://github.com/openenergymonitor/tools';
 
 // Hardcoded redirects
 $moved = array(
-    'dynamic_heatpump_v1' => 'dynamic_heatpump'
+    'dynamic_heatpump_v1' => 'dynamic_heatpump',
+    // The solar matching tool and the standalone energy ledger prototypes that
+    // lived at the web root are superseded by the co-benefit explorer, which
+    // carries the same half-hourly model.js engine.
+    'solarmatching' => 'cobenefit_explorer',
+    'solar-matching' => 'cobenefit_explorer',
+    'energy-ledger' => 'cobenefit_explorer'
 );
 if (isset($moved[$q])) $q = $moved[$q];
 

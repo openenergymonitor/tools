@@ -1,11 +1,11 @@
 <?php
 
-// CLI only script to cache data for solarmatching tool
+// CLI only script to cache data for the co-benefit explorer
 if (php_sapi_name() !== 'cli') {
     die("This script can only be run from the command line.");
 }
 
-// Cache data for solarmatching tool
+// Cache data for the co-benefit explorer
 
 // Feeds:
 // appliance demand: 542259

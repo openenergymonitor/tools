@@ -43,11 +43,12 @@ $menu = array(
         "title" => "Vaillant COP model",
         "description" => "Explore if a simple model can reproduce the vaillant COP datasheet"
     ),
-    "solarmatching" => array(
+    "cobenefit_explorer" => array(
         "category" => "Electric Supply",
-        "case" => "SolarMatching",
-        "title" => "Explore Solar Matching",
-        "description" => "Explore how much home electric + heat pump demand can be met by solar and a battery"
+        "case" => "cobenefit_explorer",
+        "title" => "Household Co-benefit Explorer",
+        "description" => "Start from the fossil status quo and switch on solar, battery, heat pump and EV in any order. Running costs, asset replacement and carbon are tracked together, over a half-hourly simulation of a real year.",
+        "standalone" => true
     ),
     "hex1" => array(
         "category" => "Hydraulic Separation",

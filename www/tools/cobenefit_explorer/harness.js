@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// solarmatching/harness.js
+// cobenefit_explorer/harness.js
 //
 // Node test harness for the household energy ledger. It wires the real
 // half-hourly dataset into model.js and runs the exact ledger logic the browser
