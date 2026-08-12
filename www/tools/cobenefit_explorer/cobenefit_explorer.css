@@ -6,6 +6,7 @@
 
    How this file is organised
      1.  Design tokens .......... the custom properties everything else reads
+     1b. Light theme ............ the same tokens, re-valued
      2.  Base .................... reset, typography, page shell
      3.  Masthead ................ page title block
      4.  Hero ledger ............. the stacked cost bars at the top
@@ -17,7 +18,7 @@
     10.  Accordions and inputs ... <details> panels and number fields
     11.  Results ................. stat tiles, flow tables, spark bars
     12.  Footer and page actions . reset button, mode switch, footnotes
-    13.  Site nav ................ header bar + Bootstrap offcanvas subset
+    13.  Site nav ................ header bar, theme switch, offcanvas subset
     14.  Utilities ............... single-purpose helpers
 
    Rule order is significant — several later rules deliberately out-specify
@@ -29,12 +30,41 @@
    1. Design tokens
    ========================================================================== */
 
+/* Two palettes share one set of names: every rule below this section reads
+   tokens only, so a theme is a re-valuing of this block and nothing else.
+
+   Dark is the page's original look and stays the fallback here. The theme
+   script in the page head stamps data-theme on <html> before first paint —
+   from the visitor's stored choice, or the operating system's preference if
+   they have not chosen — so in practice one of the two blocks always wins and
+   this one only applies with javascript off. */
 :root {
+  /* Ships the matching scrollbars, number spinners and time pickers */
+  color-scheme: dark;
+
   /* Surfaces, from the page background up to the raised tooltip */
   --ink: #10151b;
   --panel: #171e26;
   --panel2: #1e2731;
   --raise: #26313d;
+
+  /* Recessed surfaces: --well behind fields and segmented controls, --track
+     behind bars, --inset for a sub-card sitting on either of the two above */
+  --well: #10151b;
+  --track: #0d1217;
+  --inset: rgb(0 0 0 / 16%);
+
+  /* The soft corner glow behind the page, and the hero's own gradient */
+  --glow: #1a2530;
+  --glow-fade: rgb(26 37 48 / 0%);
+  --hero-a: var(--panel);
+  --hero-b: #141b22;
+
+  /* Elevation. The dark theme separates surfaces by value alone; the light
+     one needs a shadow under anything that should read as raised. */
+  --card-shadow: none;
+  --seg-shadow: none;
+  --raise-shadow: 0 14px 40px rgb(0 0 0 / 50%);
 
   /* Borders: --line for dividers, --line2 for interactive edges */
   --line: #2c3742;
@@ -45,6 +75,15 @@
   --muted: #8a97a5;
   --faint: #5f6c79;
 
+  /* Text laid over a carrier fill — an icon tile, a hovered (i) button */
+  --on-accent: #0d1217;
+
+  /* Toggle switch: the off track, the knob that rides it, and the shadow the
+     knob needs where the two are close in value */
+  --track-off: #2b3641;
+  --knob: #aab6c2;
+  --knob-shadow: none;
+
   /* Energy-carrier palette — the one expressive system */
   --petrol: #c2553a;
   --gas: #ef9b3e;
@@ -54,9 +93,32 @@
   --hp: #39b5ac;
   --ev: #8a86f5;
 
+  /* Reading versions of the two carriers that also appear as text. The fills
+     above are tuned to be seen against a surface, not read on one — on the
+     light theme they part company. */
+  --link: var(--grid);
+  --gas-ink: var(--gas);
+  --solar-ink: var(--solar);
+
   /* Verdict colours: savings vs. extra cost */
   --good: #54c08a;
   --bad: #d8694d;
+
+  /* Tinted backgrounds and edges derived from the verdict pair: --soft for a
+     badge, --fill for a control that is switched on */
+  --good-soft: rgb(84 192 138 / 8%);
+  --good-line: rgb(84 192 138 / 40%);
+  --good-fill: rgb(84 192 138 / 32%);
+  --bad-soft: rgb(216 105 77 / 8%);
+  --bad-line: rgb(216 105 77 / 40%);
+
+  /* The same pair in amber, for the one pill that warns rather than judges */
+  --warn-soft: rgb(245 197 66 / 10%);
+  --warn-line: rgb(245 197 66 / 45%);
+
+  /* The two stripes of the credit hatch */
+  --credit-a: rgb(84 192 138 / 85%);
+  --credit-b: rgb(84 192 138 / 60%);
 
   /* Brand */
   --oem: #44a1f2;
@@ -81,6 +143,95 @@
 }
 
 /* =============================================================================
+   1b. Light theme
+
+   Paper, not an inverted screen: a warm off-white ground with white cards on
+   it, the greys and borders carrying a trace of the same warmth so nothing
+   reads as a cold grey box dropped onto cream. The surface values are the
+   dynamic heat pump simulator's, so a visitor moving between the two tools
+   stays in one house style.
+   ========================================================================== */
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --ink: #f6f4f0;
+  --panel: #fff;
+  --panel2: #faf8f5;
+  --raise: #fff;
+
+  --well: #f4f2ee;
+  --track: #ebe7e0;
+  --inset: rgb(31 29 26 / 3.5%);
+
+  /* Light from the top-right corner, as in the dark theme — there it is a
+     lift out of the ink, here a paler patch of the same paper */
+  --glow: #fffdf8;
+  --glow-fade: rgb(255 253 248 / 0%);
+  --hero-a: #fff;
+  --hero-b: #f9f7f3;
+
+  /* Shadows are warm-grey rather than black: a neutral shadow over cream
+     greys the paper it falls on */
+  --card-shadow: 0 1px 2px rgb(43 38 30 / 5%);
+  --seg-shadow: 0 1px 2px rgb(43 38 30 / 12%);
+  --raise-shadow: 0 14px 34px rgb(43 38 30 / 16%);
+
+  --line: #e3e0da;
+  --line2: #d3cec5;
+
+  /* Black body copy, and the two quieter levels kept dark with it: the
+     hierarchy here is carried by size and weight rather than by fading the
+     text out, so a caption stays as readable as the figure it explains.
+     Against white that is 21:1, 13:1 and 7.4:1, and only a little less on
+     the cream ground. --muted is the heat pump simulator's. */
+  --text: #000;
+  --muted: #33302b;
+  --faint: #5a544c;
+
+  --on-accent: #000;
+
+  --track-off: #d8d2c9;
+  --knob: #fff;
+  --knob-shadow: 0 1px 2px rgb(43 38 30 / 28%);
+
+  /* The carriers deepen a little: the dark theme's fills were mixed to glow
+     against ink and go chalky on paper */
+  --petrol: #b8503a;
+  --gas: #d98a2b;
+  --grid: #3a92cf;
+  --solar: #e4b22e;
+  --battery: #35a76e;
+  --hp: #2aa39b;
+  --ev: #7570e2;
+
+  /* Where these are read rather than seen they darken further: the link
+     blue, the gas amber and the solar gold all fail on white at fill
+     strength. Each lands at 6–7:1, so coloured text carries the same weight
+     as the greys around it rather than reading as a lighter tier. */
+  --link: #15618f;
+  --gas-ink: #8a5009;
+  --solar-ink: #7a5906;
+
+  --good: #17683a;
+  --bad: #9c2418;
+
+  --good-soft: rgb(23 104 58 / 9%);
+  --good-line: rgb(23 104 58 / 38%);
+  --good-fill: rgb(23 104 58 / 15%);
+  --bad-soft: rgb(156 36 24 / 8%);
+  --bad-line: rgb(156 36 24 / 38%);
+
+  --warn-soft: rgb(228 178 46 / 16%);
+  --warn-line: rgb(184 134 11 / 45%);
+
+  --credit-a: rgb(23 104 58 / 85%);
+  --credit-b: rgb(23 104 58 / 55%);
+
+  --oem: #15618f;
+}
+
+/* =============================================================================
    2. Base
    ========================================================================== */
 
@@ -98,8 +249,8 @@ body {
   background:
     radial-gradient(
       1200px 600px at 85% -10%,
-      #1a2530 0%,
-      rgb(26 37 48 / 0%) 60%
+      var(--glow) 0%,
+      var(--glow-fade) 60%
     ),
     var(--ink);
   color: var(--text);
@@ -175,11 +326,12 @@ h3,
    ========================================================================== */
 
 .hero {
-  background: linear-gradient(180deg, var(--panel) 0%, #141b22 100%);
+  background: linear-gradient(180deg, var(--hero-a) 0%, var(--hero-b) 100%);
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 22px 24px;
   margin-bottom: 26px;
+  box-shadow: var(--card-shadow);
 }
 
 .hero-top {
@@ -211,14 +363,14 @@ h3,
 
 .saving-badge.pos {
   color: var(--good);
-  border-color: rgb(84 192 138 / 40%);
-  background: rgb(84 192 138 / 8%);
+  border-color: var(--good-line);
+  background: var(--good-soft);
 }
 
 .saving-badge.neg {
   color: var(--bad);
-  border-color: rgb(216 105 77 / 40%);
-  background: rgb(216 105 77 / 8%);
+  border-color: var(--bad-line);
+  background: var(--bad-soft);
 }
 
 /* Fixed label and total columns keep the bars themselves aligned across rows */
@@ -248,7 +400,7 @@ h3,
   position: relative;
   height: 34px;
   border-radius: 7px;
-  background: #0d1217;
+  background: var(--track);
   overflow: hidden;
   border: 1px solid var(--line);
 }
@@ -269,8 +421,8 @@ h3,
 .barfill.credit {
   background: repeating-linear-gradient(
     45deg,
-    rgb(84 192 138 / 85%) 0 8px,
-    rgb(84 192 138 / 60%) 8px 16px
+    var(--credit-a) 0 8px,
+    var(--credit-b) 8px 16px
   );
 }
 
@@ -366,6 +518,7 @@ h3,
   border-radius: 12px;
   padding: 18px 18px 6px;
   margin-bottom: 18px;
+  box-shadow: var(--card-shadow);
 }
 
 .card-head {
@@ -432,8 +585,18 @@ h3,
   font-family: var(--font-mono);
   font-weight: 700;
   font-size: 13px;
-  color: #0d1217;
+  color: var(--on-accent);
   flex: none;
+}
+
+/* The one icon tile with no carrier behind it (the vehicle preset row). It
+   takes a border as well as a fill: on the light theme a neutral tile is only
+   a shade off the card it sits on, where the carrier tiles are self-evident. */
+.tech .icon.neutral {
+  background: var(--panel2);
+  border: 1px solid var(--line2);
+  color: var(--text);
+  font-size: 15px;
 }
 
 /* min-width: 0 lets long descriptions ellipsis rather than push the toggle out */
@@ -481,7 +644,7 @@ h3,
 
 .tech .mg .val {
   font-weight: 700;
-  color: #fff;
+  color: var(--text);
 }
 
 /* Generic caption styling for spans in the block; .val opts back out below */
@@ -540,7 +703,7 @@ h3,
 
 .mg .infotip:hover .ic,
 .mg .infotip:focus-within .ic {
-  color: var(--ink);
+  color: var(--on-accent);
   background: var(--grid);
   border-color: var(--grid);
 }
@@ -560,7 +723,7 @@ h3,
   background: linear-gradient(180deg, var(--raise) 0%, var(--panel2) 100%);
   border: 1px solid var(--line2);
   border-radius: 11px;
-  box-shadow: 0 14px 40px rgb(0 0 0 / 50%);
+  box-shadow: var(--raise-shadow);
   padding: 13px 14px;
   opacity: 0;
   visibility: hidden;
@@ -672,7 +835,7 @@ h3,
   font-size: 10.5px;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--gas);
+  color: var(--gas-ink);
   margin: 13px 0 7px;
   padding-top: 11px;
   border-top: 1px dashed var(--line);
@@ -713,7 +876,7 @@ h3,
 .sw .track {
   position: absolute;
   inset: 0;
-  background: #2b3641;
+  background: var(--track-off);
   border-radius: 999px;
   transition: background 0.2s;
   border: 1px solid var(--line2);
@@ -726,14 +889,17 @@ h3,
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #aab6c2;
+  background: var(--knob);
   transition:
     transform 0.2s,
     background 0.2s;
+
+  /* Lifts the knob off a light track, where the two are close in value */
+  box-shadow: var(--knob-shadow);
 }
 
 .sw input:checked + .track {
-  background: rgb(84 192 138 / 32%);
+  background: var(--good-fill);
   border-color: var(--good);
 }
 
@@ -780,7 +946,7 @@ h3,
 .tseg {
   display: inline-flex;
   flex: none;
-  background: var(--ink);
+  background: var(--well);
   border: 1px solid var(--line2);
   border-radius: 8px;
   padding: 2px;
@@ -808,7 +974,7 @@ h3,
 }
 
 .tseg button.on {
-  background: rgb(84 192 138 / 32%);
+  background: var(--good-fill);
   color: var(--good);
 }
 
@@ -824,10 +990,10 @@ h3,
 
 /* --- Nested sub-card (battery dispatch, tariff details) --- */
 
-/* Translucent black rather than a solid colour, so it reads as "inset" on both
-   the .card and .hero backgrounds it appears on */
+/* A translucent wash rather than a solid colour, so it reads as "inset" on
+   both the .card and .hero backgrounds it appears on */
 .subcard {
-  background: rgb(0 0 0 / 16%);
+  background: var(--inset);
   border: 1px solid var(--line);
   border-radius: 11px;
   padding: 12px 14px;
@@ -886,7 +1052,7 @@ h3,
 
 .num-in {
   width: 108px;
-  background: var(--ink);
+  background: var(--well);
   border: 1px solid var(--line2);
   color: var(--text);
   font-family: var(--font-mono);
@@ -939,7 +1105,7 @@ h3,
   font-weight: 600;
   font-size: 11px;
   color: var(--muted);
-  background: var(--ink);
+  background: var(--well);
   border: 1px solid var(--line2);
   border-radius: 6px;
   padding: 4px 9px;
@@ -974,7 +1140,7 @@ h3,
 .tsched-row input {
   width: 100%;
   min-width: 0;
-  background: var(--ink);
+  background: var(--well);
   border: 1px solid var(--line2);
   color: var(--text);
   font-family: var(--font-mono);
@@ -1040,7 +1206,7 @@ h3,
 
 .tsched-row .iconbtn:hover:not(:disabled) {
   color: var(--text);
-  background: var(--ink);
+  background: var(--well);
 }
 
 .tsched-row .iconbtn:disabled {
@@ -1130,7 +1296,7 @@ details[open] summary .chev {
 
 .field input[type="number"] {
   width: 108px;
-  background: var(--ink);
+  background: var(--well);
   border: 1px solid var(--line2);
   color: var(--text);
   font-family: var(--font-mono);
@@ -1149,7 +1315,7 @@ details[open] summary .chev {
 
 /* Kona = the vehicle preset dropdown */
 .kona-select {
-  background: var(--ink);
+  background: var(--well);
   border: 1px solid var(--line2);
   color: var(--text);
   font-family: var(--font-mono);
@@ -1278,7 +1444,7 @@ table.flows .tot td {
 .bartrack {
   height: 8px;
   border-radius: 5px;
-  background: #0d1217;
+  background: var(--track);
   overflow: hidden;
   display: flex;
   margin-top: 14px;
@@ -1353,7 +1519,7 @@ table.ucost .tag {
   margin-top: 16px;
   padding: 13px 14px;
   border-radius: 10px;
-  background: #0d1217;
+  background: var(--track);
   border: 1px solid var(--line);
 }
 
@@ -1386,7 +1552,7 @@ table.ucost .tag {
 .sparkbar {
   height: 8px;
   border-radius: 5px;
-  background: #0d1217;
+  background: var(--track);
   overflow: hidden;
   display: flex;
   margin: 9px 0 4px;
@@ -1465,9 +1631,13 @@ table.ucost .tag {
   color: var(--text);
 }
 
+/* The selected mode is the one raised surface in the group. On the light
+   theme it is white against the page's cream, which needs the shadow to
+   read as lifted rather than as a gap. */
 .modeseg button.on {
   background: var(--raise);
   color: var(--text);
+  box-shadow: var(--seg-shadow);
 }
 
 .pill {
@@ -1479,8 +1649,15 @@ table.ucost .tag {
   color: var(--muted);
 }
 
+/* Amber variant — flags a setting that costs something (here, run time) */
+.pill.warn {
+  color: var(--solar-ink);
+  border-color: var(--warn-line);
+  background: var(--warn-soft);
+}
+
 a {
-  color: var(--grid);
+  color: var(--link);
 }
 
 /* =============================================================================
@@ -1594,6 +1771,34 @@ a {
 
 .btn-bar.icon-only {
   padding: 0.25rem 0.55rem;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* --- Theme switch ---------------------------------------------------------
+
+   One button carrying both glyphs; the theme decides which is drawn. It shows
+   where you are going, not where you are: a sun on the dark theme, a moon on
+   the light one. The pair are the same size and optical weight, so the bar
+   does not shift as they swap. */
+
+.theme-toggle svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+}
+
+.theme-toggle .icon-moon,
+:root[data-theme="light"] .theme-toggle .icon-sun {
+  display: none;
+}
+
+:root[data-theme="light"] .theme-toggle .icon-moon {
+  display: block;
 }
 
 /* Hamburger drawn in CSS at fa-solid fa-bars' proportions (448x512 viewBox at

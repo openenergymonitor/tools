@@ -8,7 +8,20 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="<?php echo $path; ?>cobenefit_explorer.css?v=1">
+<link rel="stylesheet" href="<?php echo $path; ?>cobenefit_explorer.css?v=2">
+<script>
+// Theme, applied before the first paint so the page never flashes the palette
+// the visitor is about to switch away from. A stored choice wins; with none,
+// follow the operating system. The switch itself is wired up in
+// cobenefit_explorer.js, which writes the same key.
+(function () {
+  var stored = null;
+  try { stored = localStorage.getItem('oem-theme'); } catch (e) { /* private mode */ }
+  var light = stored ? stored === 'light'
+                     : window.matchMedia('(prefers-color-scheme: light)').matches;
+  document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
+})();
+</script>
 </head>
 <body>
 
@@ -26,7 +39,22 @@
       <span class="topbar-here">&middot; <?php echo $title; ?></span>
     </div>
   </div>
-  <a class="btn-bar" href="<?php echo $github; ?>">Source</a>
+  <div class="topbar-right">
+    <!-- Both glyphs are in the markup; the stylesheet draws the one for the
+         theme you would switch to. -->
+    <button type="button" class="btn-bar icon-only theme-toggle" id="theme-toggle"
+            aria-label="Switch to light theme" title="Switch to light theme">
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4.2" />
+        <path d="M12 2.4v2.3M12 19.3v2.3M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2.4 12h2.3M19.3 12h2.3M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7" />
+      </svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M20.8 14.7A8.7 8.7 0 0 1 9.3 3.2 8.7 8.7 0 1 0 20.8 14.7z" />
+      </svg>
+    </button>
+    <a class="btn-bar" href="<?php echo $github; ?>">Source</a>
+  </div>
 </header>
 
 <!-- Shared tool navigation sidebar, pulled in from the core -->
@@ -188,7 +216,7 @@
         </div>
 
         <div class="subcard" v-if="cfg.battery && useHHModel">
-          <label class="chk"><input type="checkbox" v-model="optimalDispatch"><b>Optimal battery dispatch</b> <span class="pill" v-if="optimalDispatch" style="border-color:rgba(245,197,66,.45);color:var(--solar);background:rgba(245,197,66,.1);">slower</span></label>
+          <label class="chk"><input type="checkbox" v-model="optimalDispatch"><b>Optimal battery dispatch</b> <span class="pill warn" v-if="optimalDispatch">slower</span></label>
           <p class="subcard-note">Schedules the battery to minimise cost against the half-hourly prices — charge when cheap, discharge / export when expensive, with perfect foresight — instead of the simple solar-surplus rule.<template v-if="!timeVaryingPricing"> With flat import &amp; export prices there's nothing to arbitrage, so this makes little difference.</template></p>
         </div>
 
@@ -266,7 +294,7 @@
         </div>
 
         <div class="tech">
-          <div class="icon" style="background:var(--raise);color:var(--text);font-size:15px;">◆</div>
+          <div class="icon neutral">◆</div>
           <div class="tx"><b>Hyundai Kona preset</b><small>loads real new &amp; used petrol car / EV figures into the car cells</small></div>
           <select v-model="konaChoice" @change="applyKona" class="kona-select">
             <option value="">— choose —</option>
@@ -606,6 +634,6 @@
 // dataset without being templated by php.
 const TOOL_PATH = '<?php echo $path; ?>';
 </script>
-<script src="<?php echo $path; ?>cobenefit_explorer.js?v=1"></script>
+<script src="<?php echo $path; ?>cobenefit_explorer.js?v=2"></script>
 </body>
 </html>

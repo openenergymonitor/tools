@@ -515,6 +515,31 @@ createApp({
   }
 }).mount('#app');
 
+// Theme switch. The theme itself is already on <html> — the inline script in
+// the page head sets it before the first paint — so this only has to flip the
+// attribute, remember the choice, and keep the button's label describing where
+// it takes you. Nothing else reads the theme: the stylesheet does the rest.
+(function(){
+  const root = document.documentElement;
+  const btn = document.getElementById('theme-toggle');
+  if (!btn) return;
+
+  function describe(){
+    const next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    const label = 'Switch to ' + next + ' theme';
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
+  }
+  describe();
+
+  btn.addEventListener('click', () => {
+    const next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('oem-theme', next); } catch (e) { /* private mode */ }
+    describe();
+  });
+})();
+
 // Minimal stand-in for Bootstrap's offcanvas javascript, so the shared
 // components/tool_sidebar.php works here without the Bootstrap bundle.
 // Honours the same data-bs-toggle / data-bs-target / data-bs-dismiss
