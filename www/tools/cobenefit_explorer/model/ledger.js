@@ -4,18 +4,18 @@
 // same logic can run both in the browser (the Vue view) and in Node (the test
 // harness, harness.js). Everything here is pure: functions take a parameter
 // object `p`, a build config `c`, and a small context `ctx`, and return plain
-// results. Nothing reads globals except the optional half-hourly model, which is
+// results. Nothing reads globals except the optional 15-minute model, which is
 // reached only through ctx.runModel.
 //
 // Layering:
-//   model.js   – half-hourly solar/battery/EV/heat-pump simulation
+//   model.js   – 15-minute solar/battery/EV/heat-pump simulation
 //   ledger.js  – annual cost & carbon ledger built on top of those flows  <-- here
 //   the view / the harness – wire parameters in and present the results
 //
 // ctx fields used by compute():
 //   p               the full parameter object (DEFAULTS shape)
-//   useHHModel      use the half-hourly simulation for solar/battery flows
-//   modelReady      the half-hourly dataset has loaded
+//   useHHModel      use the 15-minute simulation for solar/battery flows
+//   modelReady      the 15-minute dataset has loaded
 //   optimalDispatch battery uses the cost-optimised Agile DP dispatch
 //   runModel(mp)    run model.js for the mapped params (caller memoises)
 
@@ -68,7 +68,7 @@
         // investment metrics — for the simple payback / IRR / ISA-crossover view
         isaReturn: 5,                 // assumed real return on a shares ISA, %/yr
         investHorizon: 20,            // years over which the extra capital's savings accrue
-        // advanced — annual solar-matching estimate (used when the half-hourly model is off)
+        // advanced — annual solar-matching estimate (used when the 15-minute model is off)
         daytimeFrac: 0.40, directMatch: 0.70,
         // carbon — operational emission factors
         petrolKgPerL: 2.9,            // well-to-wheel: ~2.3 combustion + ~0.6 upstream
@@ -219,7 +219,7 @@
     }
 
     // Map the ledger's build + assumptions onto model.js parameters and run the
-    // half-hourly simulation, returning the annual solar / import / export flows.
+    // 15-minute simulation, returning the annual solar / import / export flows.
     // ctx.runModel does the actual model.run (and memoises).
     function flowsHH(p, c, d, ctx) {
         var mp = {
@@ -245,7 +245,7 @@
             },
             // Flat import/export rates feed the model's own flat-cost figure (unused
             // here — the ledger applies its own rates); Agile figures come from the
-            // half-hourly dataset prices baked into the model.
+            // half-hourly Agile prices baked into the model.
             import_rate: p.elecRate,
             export_rate: p.segRate
         };
@@ -289,9 +289,9 @@
         var demand = p.elecBaseload + evElec + hpElec + cookingElec;
 
         // ---- solar generation, self-consumption & grid import ----
-        // Two interchangeable engines produce the same flow figures. The half-hourly
+        // Two interchangeable engines produce the same flow figures. The 15-minute
         // simulation in model.js is the default; the original annualised estimate is
-        // kept for comparison. The Agile tariff is priced half-hourly, so it always
+        // kept for comparison. The Agile tariff is priced per interval, so it always
         // uses the simulation regardless of the toggle.
         var useHH = (ctx.useHHModel || c.agile || (c.exportMode && c.exportMode !== 'flat')) && ctx.modelReady;
         var solarGen, solarSelf, solarExport, gridImport;
@@ -318,7 +318,7 @@
         }
 
         // ---- electricity cost ----
-        // Import and export are priced independently and the half-hourly model has
+        // Import and export are priced independently and the 15-minute model has
         // already costed each interval at the right source (see flowsHH / model.js),
         // so when the model ran we read its totals straight off. The avg-rate figures
         // are only meaningful for a time-varying side (import: agile/custom; export:
@@ -338,7 +338,7 @@
         var elecStandingCost = p.elecStanding * 365 / 100;
 
         // ---- effective electricity unit rate by load (diagnostic) ----
-        // For each load we know (from the half-hourly attribution) how many kWh
+        // For each load we know (from the per-interval attribution) how many kWh
         // it drew from the grid, from solar-direct and from the battery, and the
         // grid kWh are already priced at the timing-weighted rate paid. The home-
         // generated/stored kWh are priced two ways:
@@ -349,7 +349,7 @@
         // Capital already appears in the ledger as the solar/battery asset lines,
         // so this is a STANDALONE lens (never summed into the all-in total) — it
         // shows how much solar+battery cut the rate the heat pump etc. pays, and
-        // hence the spark gap vs gas. Only available with the half-hourly model.
+        // hence the spark gap vs gas. Only available with the 15-minute model.
         var elecRates = null, sparkGap = null;
         if (f && f.loadAttr) {
             // £/kWh prices for home energy

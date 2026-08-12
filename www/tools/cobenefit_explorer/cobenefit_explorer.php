@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title><?php echo $title; ?></title>
 <meta name="description" content="<?php echo $description; ?>">
-<link rel="stylesheet" href="<?php echo $path; ?>cobenefit_explorer.css?v=3">
+<link rel="stylesheet" href="<?php echo $path; ?>cobenefit_explorer.css?v=4">
 <script>
 // Theme, applied before the first paint so the page never flashes the palette
 // the visitor is about to switch away from. A stored choice wins; with none,
@@ -61,9 +61,8 @@
 
   <header class="masthead">
     <div class="brand">
-      <p class="eyebrow">UK Household · cost &amp; carbon ledger</p>
       <h1>Household Co-benefit Explorer</h1>
-      <p>Start from the fossil status quo, then switch on technologies in any order. Running costs <em>and</em> the assets you'd replace anyway are tracked together, so each step is compared fairly.</p>
+      <p>Start from a fossil-fueled baseline, then switch on low carbon technologies in any order. Running costs <em>and</em> the assets you would replace anyway are tracked together, so each step is compared fairly.</p>
     </div>
     <div class="masthead-actions">
       <div class="modeseg" role="group" aria-label="Metric basis">
@@ -71,14 +70,14 @@
         <button :class="{on:costMode==='allin'}" @click="costMode='allin'">Running costs + assets</button>
         <button :class="{on:costMode==='carbon'}" @click="costMode='carbon'">Carbon</button>
       </div>
-      <button class="reset" @click="resetAll">↺ reset assumptions</button>
+      <button class="reset" @click="resetAll">↺ Reset assumptions</button>
     </div>
   </header>
 
   <!-- HERO LEDGER -->
   <section class="hero" v-if="!isCarbon">
     <div class="hero-top">
-      <div class="hero-headline">{{ costModeLabel }} annual cost — fossil status quo vs your current build</div>
+      <div class="hero-headline">{{ costModeLabel }} annual cost: fossil fueled status quo vs your current build</div>
       <div class="saving-badge" :class="saving>=0?'pos':'neg'">
         {{ saving>=0 ? '▼ saves ' : '▲ costs ' }}{{ gbp(Math.abs(saving)) }}/yr
       </div>
@@ -120,7 +119,7 @@
   <!-- CARBON HERO LEDGER -->
   <section class="hero" v-if="isCarbon">
     <div class="hero-top">
-      <div class="hero-headline">Carbon — fossil status quo vs your current build <span class="pill" style="margin-left:8px;">operational + embodied</span></div>
+      <div class="hero-headline">Carbon: fossil status quo vs your current build <span class="pill" style="margin-left:8px;">operational + embodied</span></div>
       <div class="saving-badge" :class="carbonSaving>=0?'pos':'neg'">
         {{ carbonSaving>=0 ? '▼ cuts ' : '▲ adds ' }}{{ co2(Math.abs(carbonSaving)) }} CO₂e/yr
       </div>
@@ -214,12 +213,12 @@
 
         <div class="subcard" v-if="cfg.battery && useHHModel">
           <label class="chk"><input type="checkbox" v-model="optimalDispatch"><b>Optimal battery dispatch</b> <span class="pill warn" v-if="optimalDispatch">slower</span></label>
-          <p class="subcard-note">Schedules the battery to minimise cost against the half-hourly prices — charge when cheap, discharge / export when expensive, with perfect foresight — instead of the simple solar-surplus rule.<template v-if="!timeVaryingPricing"> With flat import &amp; export prices there's nothing to arbitrage, so this makes little difference.</template></p>
+          <p class="subcard-note">Schedules the battery to minimise cost against the half-hourly prices (charging when cheap, discharging or exporting when expensive, with perfect foresight) rather than following the simple solar-surplus rule.<template v-if="!timeVaryingPricing"> With flat import and export prices there is nothing to arbitrage, so this makes little difference.</template></p>
         </div>
 
         <div class="tech" :class="{disabled: !useHHModel}">
           <div class="icon" style="background:var(--grid)">⚡</div>
-          <div class="tx"><b>Tariff</b><small v-if="useHHModel">flat rate, half-hourly Agile, or your own time-of-day schedule</small><small v-else>time-varying tariffs need the half-hourly model · enable it under Advanced</small></div>
+          <div class="tx"><b>Tariff</b><small v-if="useHHModel">flat rate, half-hourly Agile, or your own time-of-day schedule</small><small v-else>time-varying tariffs need the 15-minute model · enable it under Advanced</small></div>
           <div class="mg" v-if="useHHModel && cfg.agile">
             <div class="mgtop"><span class="val">{{ marginalPrimary('agile') }}</span><span class="infotip" tabindex="0" role="img" aria-label="Step breakdown"><span class="ic">i</span><span class="tipcard" v-html="marginalTipHtml('agile')"></span></span></div>
             <span>{{ marginalCaption() }}</span>
@@ -287,14 +286,14 @@
             <input class="num-in" type="number" step="0.01" v-model.number="p.elecStanding">
           </div>
 
-          <p class="subcard-note" v-if="useHHModel && timeVaryingPricing">Avg across this build: <b>{{ current.avgAgileImport==null ? Number(p.elecRate).toFixed(1) : current.avgAgileImport.toFixed(1) }}p</b> import / <b>{{ current.avgAgileExport==null ? Number(p.segRate).toFixed(1) : current.avgAgileExport.toFixed(1) }}p</b> export.</p>
+          <p class="subcard-note" v-if="useHHModel && timeVaryingPricing">Average across this build: <b>{{ current.avgAgileImport==null ? Number(p.elecRate).toFixed(1) : current.avgAgileImport.toFixed(1) }}p</b> import / <b>{{ current.avgAgileExport==null ? Number(p.segRate).toFixed(1) : current.avgAgileExport.toFixed(1) }}p</b> export.</p>
         </div>
 
         <div class="tech">
           <div class="icon neutral">◆</div>
-          <div class="tx"><b>Hyundai Kona preset</b><small>loads real new &amp; used petrol car / EV figures into the car cells</small></div>
+          <div class="tx"><b>Hyundai Kona preset</b><small>loads real new and used petrol car / EV figures into the car assumptions</small></div>
           <select v-model="konaChoice" @change="applyKona" class="kona-select">
-            <option value="">— choose —</option>
+            <option value="">Select a car</option>
             <option value="petrol-new">Petrol · new (~£27k · 48mpg)</option>
             <option value="petrol-used">Petrol · used 30k mi (~£12.5k)</option>
             <option value="ev-new">Electric · new 65kWh (~£33.5k)</option>
@@ -334,9 +333,9 @@
           <summary>Home energy use <span class="chev">›</span></summary>
           <div class="fields">
             <div class="field"><label>Annual gas use <span class="unit">kWh</span></label><input type="number" v-model.number="p.gasTotal"></div>
-            <div class="field"><label>— share for space heating <span class="unit">%</span></label><input type="number" step="1" v-model.number="p.heatingPct"></div>
-            <div class="field"><label>— share for hot water <span class="unit">%</span></label><input type="number" step="1" v-model.number="p.waterPct"></div>
-            <div class="field"><label>— share for cooking <span class="unit">%</span></label><input type="number" step="1" v-model.number="p.cookingPct"></div>
+            <div class="field"><label>Share for space heating <span class="unit">%</span></label><input type="number" step="1" v-model.number="p.heatingPct"></div>
+            <div class="field"><label>Share for hot water <span class="unit">%</span></label><input type="number" step="1" v-model.number="p.waterPct"></div>
+            <div class="field"><label>Share for cooking <span class="unit">%</span></label><input type="number" step="1" v-model.number="p.cookingPct"></div>
             <div class="field"><label>Gas boiler efficiency <span class="unit">0–1</span></label><input type="number" step="0.01" v-model.number="p.boilerEff"></div>
             <div class="field"><label>Electricity baseload <span class="unit">kWh</span></label><input type="number" v-model.number="p.elecBaseload"></div>
           </div>
@@ -369,8 +368,8 @@
           <summary>Electric vehicle <span class="chev">›</span></summary>
           <div class="fields">
             <div class="field"><label>Efficiency <span class="unit">mi/kWh</span></label><input type="number" step="0.1" v-model.number="p.evEfficiency"></div>
-            <div class="field"><label>Charge window — from <span class="unit">h · 0.5 = 00:30</span></label><input type="number" step="0.5" min="0" max="23.5" v-model.number="p.evChargeStart"></div>
-            <div class="field"><label>Charge window — until <span class="unit">h</span></label><input type="number" step="0.5" min="0.5" max="24" v-model.number="p.evChargeEnd"></div>
+            <div class="field"><label>Charge window start <span class="unit">h · 0.5 = 00:30</span></label><input type="number" step="0.5" min="0" max="23.5" v-model.number="p.evChargeStart"></div>
+            <div class="field"><label>Charge window end <span class="unit">h</span></label><input type="number" step="0.5" min="0.5" max="24" v-model.number="p.evChargeEnd"></div>
             <div class="field"><label>Purchase price <span class="unit">£</span></label><input type="number" v-model.number="p.evPrice"></div>
             <div class="field"><label>Ownership period <span class="unit">yrs</span></label><input type="number" v-model.number="p.evLife"></div>
             <div class="field"><label>Resale value at end <span class="unit">£</span></label><input type="number" v-model.number="p.evResidual"></div>
@@ -420,16 +419,16 @@
         <details>
           <summary>Advanced · solar matching <span class="chev">›</span></summary>
           <div class="fields">
-            <label class="chk" style="padding:8px 0;"><input type="checkbox" v-model="useHHModel">Half-hourly simulation <span v-if="useHHModel && !modelReady" class="pill" style="margin-left:8px;">loading…</span><span v-else-if="useHHModel && usingSynthetic" class="pill" style="margin-left:8px;">demo data</span></label>
+            <label class="chk" style="padding:8px 0;"><input type="checkbox" v-model="useHHModel">15-minute simulation <span v-if="useHHModel && !modelReady" class="pill" style="margin-left:8px;">loading…</span><span v-else-if="useHHModel && usingSynthetic" class="pill" style="margin-left:8px;">demo data</span></label>
 
             <template v-if="useHHModel">
-              <p style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Dispatches solar, battery and EV charging across a real half-hourly year (from the solar-matching dataset). Self-consumption, import and export emerge from the timing rather than a fixed ratio. The EV charge window is set under <em>Electric vehicle</em>. The <b>Agile tariff</b> switch always uses this simulation, since it prices each half-hour against the dataset's wholesale-linked rates. <em>Optimal battery dispatch</em> is set under <em>Build your home</em>, alongside the home battery.</p>
+              <p style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Dispatches solar, battery and EV charging across a real year of 15-minute data (from the solar-matching dataset). Self-consumption, import and export emerge from the timing rather than a fixed ratio. The EV charge window is set under <em>Electric vehicle</em>. The <b>Agile tariff</b> switch always uses this simulation, since it prices each interval against the dataset's half-hourly wholesale-linked rates. <em>Optimal battery dispatch</em> is set under <em>Build your home</em>, alongside the home battery.</p>
             </template>
             <template v-else>
               <div class="field"><label>Daytime share of demand <span class="unit">0–1</span></label><input type="number" step="0.05" v-model.number="p.daytimeFrac"></div>
               <div class="field"><label>Hour-by-hour match factor <span class="unit">0–1</span></label><input type="number" step="0.05" v-model.number="p.directMatch"></div>
               <div class="field"><label>Battery cycling utilisation <span class="unit">0–1</span></label><input type="number" step="0.05" v-model.number="p.batteryUtil"></div>
-              <p style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Simple annualised estimate: a fixed daytime-match plus battery shift, with no time-of-day detail. Useful as a back-of-envelope comparison against the half-hourly simulation.</p>
+              <p style="font-size:11px;color:var(--faint);margin:6px 2px 0;">Simple annualised estimate: a fixed daytime-match plus battery shift, with no time-of-day detail. Useful as a rough comparison against the 15-minute simulation.</p>
             </template>
           </div>
         </details>
@@ -466,7 +465,7 @@
         <div class="stat-row">
           <div class="stat"><div class="k">{{ costModeLabel }} / yr</div><div class="v">{{ gbp(costOf(current)) }}</div><div class="s">{{ costModeSub }}</div></div>
           <div class="stat"><div class="k">vs status quo / yr</div><div class="v" :style="{color: saving>=0?'var(--good)':'var(--bad)'}">{{ saving>=0?'−':'+' }}{{ gbp(Math.abs(saving)) }}</div><div class="s">{{ costModeSub }}</div></div>
-          <div class="stat"><div class="k">Extra upfront</div><div class="v">{{ gbp(extraUpfront) }}</div><div class="s">{{ likeForLike>0 ? 'above '+kgbp(likeForLike)+' '+likeForLikeLabel : 'all net-new kit' }}</div></div>
+          <div class="stat"><div class="k">Extra upfront</div><div class="v">{{ gbp(extraUpfront) }}</div><div class="s">{{ likeForLike>0 ? 'above '+kgbp(likeForLike)+' '+likeForLikeLabel : 'all additional kit' }}</div></div>
         </div>
 
         <div class="stat-row" style="margin-top:10px;">
@@ -500,7 +499,7 @@
         <div class="stat-row">
           <div class="stat"><div class="k">CO₂e / yr</div><div class="v">{{ co2(current.totalCO2) }}</div><div class="s">operational + embodied</div></div>
           <div class="stat"><div class="k">vs status quo</div><div class="v" :style="{color: carbonSaving>=0?'var(--good)':'var(--bad)'}">{{ carbonSaving>=0?'−':'+' }}{{ co2(Math.abs(carbonSaving)) }}</div><div class="s">per year</div></div>
-          <div class="stat"><div class="k">Carbon payback</div><div class="v">{{ carbonPayback===null ? '—' : carbonPayback.toFixed(1) }}<span v-if="carbonPayback!==null" style="font-size:12px;color:var(--faint);"> yrs</span></div><div class="s">debt vs op. saving</div></div>
+          <div class="stat"><div class="k">Carbon payback</div><div class="v">{{ carbonPayback===null ? 'never' : carbonPayback.toFixed(1) }}<span v-if="carbonPayback!==null" style="font-size:12px;color:var(--faint);"> yrs</span></div><div class="s">debt vs operational saving</div></div>
         </div>
 
         <table class="flows">
@@ -525,21 +524,23 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;">
           <div class="stat">
             <div class="k">To the household</div>
-            <div class="v" :style="{color: abatementCost===null ? 'var(--faint)' : (abatementCost<0?'var(--good)':'var(--text)')}">{{ abatementCost===null ? '—' : (abatementCost<0?'−':'')+gbp(Math.abs(abatementCost)) }}<span v-if="abatementCost!==null" style="font-size:12px;color:var(--faint);">/t</span></div>
+            <div class="v" :style="{color: abatementCost===null ? 'var(--faint)' : (abatementCost<0?'var(--good)':'var(--text)')}">{{ abatementCost===null ? 'n/a' : (abatementCost<0?'−':'')+gbp(Math.abs(abatementCost)) }}<span v-if="abatementCost!==null" style="font-size:12px;color:var(--faint);">/t</span></div>
             <div class="s">{{ abatementCost===null ? 'no carbon cut' : (abatementCost<0 ? 'net of grant · paid to abate' : 'net of grant') }}</div>
           </div>
           <div class="stat">
             <div class="k">To society</div>
-            <div class="v" :style="{color: societalAbatementCost===null ? 'var(--faint)' : (societalAbatementCost<0?'var(--good)':'var(--text)')}">{{ societalAbatementCost===null ? '—' : (societalAbatementCost<0?'−':'')+gbp(Math.abs(societalAbatementCost)) }}<span v-if="societalAbatementCost!==null" style="font-size:12px;color:var(--faint);">/t</span></div>
-            <div class="s">{{ grantAnnualised>0 ? 'grant counted as real cost' : 'same — no grant in build' }}</div>
+            <div class="v" :style="{color: societalAbatementCost===null ? 'var(--faint)' : (societalAbatementCost<0?'var(--good)':'var(--text)')}">{{ societalAbatementCost===null ? 'n/a' : (societalAbatementCost<0?'−':'')+gbp(Math.abs(societalAbatementCost)) }}<span v-if="societalAbatementCost!==null" style="font-size:12px;color:var(--faint);">/t</span></div>
+            <div class="s">{{ grantAnnualised>0 ? 'grant counted as real cost' : 'same, no grant in this build' }}</div>
           </div>
         </div>
         <p v-if="grantAnnualised>0" style="font-size:11.5px;color:var(--muted);margin:12px 2px 2px;">
-          The household figure is net of the {{ gbp(p.busGrant) }} BUS grant, so it can read as a saving — privately the homeowner may be paid to decarbonise. The societal figure adds the grant back: it's a transfer from taxpayers, a real resource cost rather than a saving the measure creates, so the true cost of abatement to society is higher. For context, UK government appraisal currently values carbon at roughly £250/tCO₂e.
+          The household figure is net of the {{ gbp(p.busGrant) }} BUS grant, so it can read as a saving: privately the homeowner may be paid to decarbonise. The societal figure adds the grant back, because it is a transfer from taxpayers, a real resource cost rather than a saving the measure creates, so the true cost of abatement to society is higher. For context, UK government appraisal currently values carbon at roughly £250/tCO₂e.
         </p>
 
         <p v-if="extraEmbodiedTotal>0" style="font-size:11.5px;color:var(--muted);margin:12px 2px 2px;">
-          Switching adds ~{{ co2(extraEmbodiedTotal) }} of one-off manufacturing carbon (the “carbon debt”), repaid by lower running emissions in <b>{{ carbonPayback===null ? 'n/a' : carbonPayback.toFixed(1)+' years' }}</b> — after which it's all saving.
+          Switching adds about {{ co2(extraEmbodiedTotal) }} of one-off manufacturing carbon (the carbon debt).
+          <template v-if="carbonPayback!==null">Lower running emissions repay it in <b>{{ carbonPayback.toFixed(1) }} years</b>, after which every year is a net saving.</template>
+          <template v-else>Running emissions do not fall in this build, so that debt is never repaid.</template>
         </p>
       </div>
 
@@ -547,23 +548,23 @@
         <div class="card-head"><h2>Electricity flows</h2><span class="hint">the co-benefit engine</span></div>
         <table class="flows">
           <tr><td>Total electricity demand</td><td class="num">{{ kwh(current.demand) }}</td></tr>
-          <tr class="sub"><td>— household baseload</td><td class="num">{{ kwh(p.elecBaseload) }}</td></tr>
-          <tr class="sub" v-if="current.cookingElec>0"><td>— cooking (induction)</td><td class="num">{{ kwh(current.cookingElec) }}</td></tr>
-          <tr class="sub" v-if="cfg.ev"><td>— EV charging</td><td class="num">{{ kwh(current.evElec) }}</td></tr>
-          <tr class="sub" v-if="cfg.hp"><td>— heat pump</td><td class="num">{{ kwh(current.hpElec) }}</td></tr>
+          <tr class="sub"><td>Household baseload</td><td class="num">{{ kwh(p.elecBaseload) }}</td></tr>
+          <tr class="sub" v-if="current.cookingElec>0"><td>Cooking (induction)</td><td class="num">{{ kwh(current.cookingElec) }}</td></tr>
+          <tr class="sub" v-if="cfg.ev"><td>EV charging</td><td class="num">{{ kwh(current.evElec) }}</td></tr>
+          <tr class="sub" v-if="cfg.hp"><td>Heat pump</td><td class="num">{{ kwh(current.hpElec) }}</td></tr>
           <tr v-if="cfg.solar"><td><span class="tag" style="background:var(--solar)"></span>Solar generated</td><td class="num">{{ kwh(current.solarGen) }}</td></tr>
-          <tr v-if="cfg.solar"><td class="sub">— self-consumed ({{ current.selfPct }}%)</td><td class="num credit">{{ kwh(current.solarSelf) }}</td></tr>
-          <tr v-if="cfg.solar"><td class="sub">— exported</td><td class="num">{{ kwh(current.solarExport) }}</td></tr>
+          <tr v-if="cfg.solar"><td class="sub">Self-consumed ({{ current.selfPct }}%)</td><td class="num credit">{{ kwh(current.solarSelf) }}</td></tr>
+          <tr v-if="cfg.solar"><td class="sub">Exported</td><td class="num">{{ kwh(current.solarExport) }}</td></tr>
           <tr class="tot"><td>Grid import</td><td class="num">{{ kwh(current.gridImport) }}</td></tr>
-          <tr v-if="cfg.agile && current.avgAgileImport!=null"><td class="sub">— avg {{ tariffLabel }} import price</td><td class="num">{{ current.avgAgileImport.toFixed(1) }} p/kWh</td></tr>
+          <tr v-if="cfg.agile && current.avgAgileImport!=null"><td class="sub">Average {{ tariffLabel }} import price</td><td class="num">{{ current.avgAgileImport.toFixed(1) }} p/kWh</td></tr>
         </table>
         <div v-if="cfg.solar" class="bartrack" :title="'Self-consumed vs exported'">
           <div class="seg" :style="{flexGrow:current.solarSelf, background:'var(--battery)'}"></div>
           <div class="seg" :style="{flexGrow:Math.max(current.solarExport,0.001), background:'var(--solar)'}"></div>
         </div>
         <p v-if="cfg.solar" style="font-size:11.5px;color:var(--muted);margin:10px 2px 4px;">
-          {{ current.selfPct }}% of your solar is used at home. Adding load (EV, heat pump) or a battery pushes this up — every self-consumed kWh is worth the
-          ~{{ current.avgAgileImport!=null ? current.avgAgileImport.toFixed(1) : Number(p.elecRate).toFixed(1) }}p {{ current.avgAgileImport!=null ? 'avg ' : '' }}import rate you avoid, versus only ~{{ current.avgAgileExport!=null ? current.avgAgileExport.toFixed(1) : Number(p.segRate).toFixed(1) }}p {{ current.avgAgileExport!=null ? 'avg ' : '' }}if exported.
+          {{ current.selfPct }}% of your solar is used at home. Adding load (EV, heat pump) or a battery pushes this up, because every self-consumed kWh is worth the
+          {{ current.avgAgileImport!=null ? current.avgAgileImport.toFixed(1) : Number(p.elecRate).toFixed(1) }}p {{ current.avgAgileImport!=null ? 'average ' : '' }}import rate you avoid, against only {{ current.avgAgileExport!=null ? current.avgAgileExport.toFixed(1) : Number(p.segRate).toFixed(1) }}p {{ current.avgAgileExport!=null ? 'average ' : '' }}if it is exported.
         </p>
 
         <template v-if="current.elecRates">
@@ -581,19 +582,19 @@
             </tr>
           </table>
           <p style="font-size:11.5px;color:var(--muted);margin:9px 2px 2px;">
-            What each use actually pays per kWh once solar and battery are mixed in. <b>Cash</b> prices home-generated power at what it gives up — self-used solar at the {{ current.elecRates.forgoneExport.toFixed(1) }}p export you forgo, battery at the {{ current.elecRates.batUnitCash.toFixed(1) }}p it cost to charge. <b>All-in</b> prices it at its own capital cost — solar at its {{ current.elecRates.solarLcoe.toFixed(1) }}p levelised cost, battery at {{ current.elecRates.batUnitLev.toFixed(1) }}p incl. storage hardware. (A diagnostic lens — this capital is already in the asset lines, so it isn't re-added to the all-in total.)
+            What each use actually pays per kWh once solar and battery are mixed in. <b>Cash</b> prices home-generated power at what it gives up: self-used solar at the {{ current.elecRates.forgoneExport.toFixed(1) }}p export you forgo, battery at the {{ current.elecRates.batUnitCash.toFixed(1) }}p it cost to charge. <b>All-in</b> prices it at its own capital cost: solar at its {{ current.elecRates.solarLcoe.toFixed(1) }}p levelised cost, battery at {{ current.elecRates.batUnitLev.toFixed(1) }}p including the storage hardware. This is a diagnostic view only; the capital is already in the asset lines, so it is not added again to the all-in total.
           </p>
         </template>
 
         <div v-if="current.sparkGap" class="sparkgap">
-          <h3>Heat pump vs gas — closing the spark gap</h3>
+          <h3>Heat pump vs gas: closing the spark gap</h3>
           <p>
             The heat pump's electricity effectively costs
             <b>{{ current.elecRates.hp.cashRate.toFixed(1) }}p</b><template v-if="hpRateSpread">–<b>{{ current.elecRates.hp.levRate.toFixed(1) }}p</b></template>/kWh
-            (grid {{ Math.round(current.elecRates.hp.gridKwh/current.elecRates.hp.kwh*100) }}%<template v-if="current.elecRates.hp.solarKwh>1">, solar {{ Math.round(current.elecRates.hp.solarKwh/current.elecRates.hp.kwh*100) }}%</template><template v-if="current.elecRates.hp.batteryKwh>1">, battery {{ Math.round(current.elecRates.hp.batteryKwh/current.elecRates.hp.kwh*100) }}%</template>)<template v-if="!cfg.solar && !cfg.battery"> — flat grid rate, before any solar or battery</template>.
+            (grid {{ Math.round(current.elecRates.hp.gridKwh/current.elecRates.hp.kwh*100) }}%<template v-if="current.elecRates.hp.solarKwh>1">, solar {{ Math.round(current.elecRates.hp.solarKwh/current.elecRates.hp.kwh*100) }}%</template><template v-if="current.elecRates.hp.batteryKwh>1">, battery {{ Math.round(current.elecRates.hp.batteryKwh/current.elecRates.hp.kwh*100) }}%</template>)<template v-if="!cfg.solar && !cfg.battery">, at the flat grid rate, before any solar or battery</template>.
           </p>
           <p>
-            At SCOP {{ p.scop }} that's <b>{{ current.sparkGap.hpHeatCash.toFixed(1) }}p</b><template v-if="hpRateSpread">–<b>{{ current.sparkGap.hpHeatLev.toFixed(1) }}p</b></template> per kWh of <em>heat</em>, versus gas at <b>{{ current.sparkGap.gasHeat.toFixed(1) }}p</b>/kWh ({{ p.gasRate }}p ÷ {{ Math.round(p.boilerEff*100) }}% boiler).
+            At SCOP {{ p.scop }} that is <b>{{ current.sparkGap.hpHeatCash.toFixed(1) }}p</b><template v-if="hpRateSpread">–<b>{{ current.sparkGap.hpHeatLev.toFixed(1) }}p</b></template> per kWh of <em>heat</em>, versus gas at <b>{{ current.sparkGap.gasHeat.toFixed(1) }}p</b>/kWh ({{ p.gasRate }}p ÷ {{ Math.round(p.boilerEff*100) }}% boiler).
           </p>
           <div class="sparkbar" :title="'Cost of useful heat: heat pump vs gas'">
             <div class="seg" :style="{flexGrow:current.sparkGap.hpHeatCash, background:'var(--hp)'}"></div>
@@ -605,19 +606,19 @@
               <template v-if="cfg.solar || cfg.battery"> Solar and battery widen that gap by cutting the heat pump's unit rate.</template>
             </template>
             <template v-else-if="current.sparkGap.hpHeatCash < current.sparkGap.gasHeat">
-              Heat is cheaper from the heat pump on a cash basis, but once you price the solar/battery capital it's about line-ball with gas — adding solar or battery, or a cheaper tariff, tips it further in the heat pump's favour.
+              Heat is cheaper from the heat pump on a cash basis, but once the solar and battery capital is priced in it is roughly level with gas. More solar or battery capacity, or a cheaper tariff, tips it further in the heat pump's favour.
             </template>
             <template v-else>
-              At these rates a unit of heat costs more from the heat pump than from gas — a higher SCOP, a cheaper tariff (Agile), or solar/battery self-supply would close the gap.
+              At these rates a unit of heat costs more from the heat pump than from gas. A higher SCOP, a cheaper tariff (Agile), or self-supply from solar and battery would close the gap.
             </template>
           </p>
         </div>
       </div>
 
       <div class="foot">
-        <p><b>How to read this.</b> Lumpy purchases (a car, a boiler) are spread over their life as an equivalent annual cost — discounted for the time-value of money — so options compare like-for-like. The fossil status quo already carries a car and a boiler you'd replace anyway — switching to an EV or heat pump swaps one asset cost for another rather than adding to it. “Extra upfront” is the cash needed today for the new kit beyond a like-for-like petrol-car / boiler replacement.</p>
-        <p style="margin-top:10px;"><b>Simplifications.</b> Solar self-consumption is, by default, run through a half-hourly simulation of a real year (the solar-matching engine, <code>model.js</code>) — solar, battery and EV charging are dispatched interval-by-interval, so self-consumption and the import / export split emerge from the timing. A simple annualised daytime-match estimate is available under <em>Advanced · solar matching</em> for comparison. The <b>Agile tariff</b> switch prices every half-hour of import and export against the dataset's wholesale-linked rates (the same dispatch, re-costed); with it off, a flat unit rate and a flat export rate apply. The EV charges within the window set under <em>Electric vehicle</em>. Lumpy purchases are converted to an equivalent annual cost with a capital-recovery (annuity) factor at a real discount rate (default {{ p.discountRate }}%, editable under <em>Assumptions · Discounting</em>), so capital spent today weighs more than future spend and resale values are discounted back — set it to 0 for plain straight-line spreading. Insurance is treated as roughly neutral between petrol and EV. All prices are inc. VAT (flat rates default to the price cap; Agile import comes from the region-D dataset, grossed up by 5%). Prices are a mid-2026 snapshot and unusually high. <span class="pill">v2 · half-hourly</span></p>
-        <p style="margin-top:10px;"><b>Carbon basis.</b> Petrol ~2.9 kgCO₂e/L well-to-wheel; gas 0.183 kgCO₂e/kWh combustion plus an upstream/methane uplift (default +20%, GWP100 — the evidence suggests this is the floor, not the ceiling). Grid taken at ~75 gCO₂/kWh — a deliberately conservative forward average (2024-25 actual is ~125, falling fast toward ~50 by 2030), so the electrified case looks better every year. Exported solar is credited against the gas (CCGT) generation it displaces (~400 gCO₂/kWh, <em>marginal</em>) — deliberately a different, consequential basis from the attributional ~75 g <em>average</em> applied to imports, since an exported unit backs out the marginal plant rather than the grid mix. Both the import average and the export displacement factor are editable under <em>Carbon · operational factors</em>. Both the financial and carbon value of export would be expected to fall over time: as more solar is added to the grid, daytime wholesale (and so export) prices decline and curtailment from over-generation rises, so each exported unit displaces less and earns less. Embodied carbon follows the Hoekstra framing: the car glider is ~equal for petrol and EV, with the battery the main difference (~75 kgCO₂e/kWh of cell). “Carbon payback” = one-off extra manufacturing carbon ÷ annual operational saving. <b>“Abatement cost”</b> = the change in all-in annual cost ÷ the tonnes of CO₂e abated per year (whole build vs status quo, or per step given the rest of the build): a <b>negative</b> figure means the measure cuts carbon <em>and</em> saves money — effectively being paid to decarbonise — while a positive figure is the cost per tonne avoided (for context, UK government appraisal currently values carbon at roughly £250/tCO₂e). It is shown two ways: the <b>household</b> figure is net of any grant, so the homeowner may privately be paid to decarbonise; the <b>societal</b> figure adds the BUS grant back, since a grant is a transfer from taxpayers — a real resource cost, not a saving the measure creates. Steps that don't cut carbon show “—”. <span class="pill">factors editable</span></p>
+        <p><b>How to read this.</b> Lumpy purchases (a car, a boiler) are spread over their life as an equivalent annual cost, discounted for the time-value of money, so that options compare like-for-like. The fossil status quo already carries a car and a boiler that you would replace anyway, so switching to an EV or heat pump swaps one asset cost for another rather than adding to it. ‘Extra upfront’ is the cash needed today for the new kit beyond a like-for-like petrol car or boiler replacement.</p>
+        <p style="margin-top:10px;"><b>Simplifications.</b> Solar self-consumption is, by default, run through a 15-minute simulation of a real year (the solar-matching engine, <code>model.js</code>): solar, battery and EV charging are dispatched interval by interval, so self-consumption and the import / export split emerge from the timing. A simple annualised daytime-match estimate is available under <em>Advanced · solar matching</em> for comparison. The <b>Agile tariff</b> switch prices every interval of import and export against the dataset's half-hourly wholesale-linked rates (the same dispatch, re-costed); with it off, a flat unit rate and a flat export rate apply. The EV charges within the window set under <em>Electric vehicle</em>. Lumpy purchases are converted to an equivalent annual cost with a capital-recovery (annuity) factor at a real discount rate (default {{ p.discountRate }}%, editable under <em>Assumptions · Discounting</em>), so capital spent today weighs more than future spend and resale values are discounted back; set it to 0 for plain straight-line spreading. Insurance is treated as roughly neutral between petrol and EV. All prices include VAT (flat rates default to the price cap; Agile import comes from the region-D dataset, grossed up by 5%). Prices are a mid-2026 snapshot and unusually high. <span class="pill">v2 · 15-minute</span></p>
+        <p style="margin-top:10px;"><b>Carbon basis.</b> Petrol ~2.9 kgCO₂e/L well-to-wheel; gas 0.183 kgCO₂e/kWh combustion plus an upstream and methane uplift (default +20%, GWP100, which the evidence suggests is the floor rather than the ceiling). Grid taken at ~75 gCO₂/kWh, a deliberately conservative forward average (2024-25 actual is ~125, falling fast towards ~50 by 2030), so the electrified case looks better every year. Exported solar is credited against the gas (CCGT) generation it displaces (~400 gCO₂/kWh, <em>marginal</em>), deliberately a different, consequential basis from the attributional ~75 g <em>average</em> applied to imports, since an exported unit backs out the marginal plant rather than the grid mix. Both the import average and the export displacement factor are editable under <em>Carbon · operational factors</em>. Both the financial and the carbon value of export would be expected to fall over time: as more solar is added to the grid, daytime wholesale (and so export) prices decline and curtailment from over-generation rises, so each exported unit displaces less and earns less. Embodied carbon follows the Hoekstra framing: the car glider is roughly equal for petrol and EV, with the battery the main difference (~75 kgCO₂e/kWh of cell). ‘Carbon payback’ is the one-off extra manufacturing carbon divided by the annual operational saving. <b>‘Abatement cost’</b> is the change in all-in annual cost divided by the tonnes of CO₂e abated per year (whole build vs status quo, or per step given the rest of the build): a <b>negative</b> figure means the measure cuts carbon <em>and</em> saves money, so the household is effectively paid to decarbonise, while a positive figure is the cost per tonne avoided (for context, UK government appraisal currently values carbon at roughly £250/tCO₂e). It is shown two ways: the <b>household</b> figure is net of any grant, so the homeowner may privately be paid to decarbonise; the <b>societal</b> figure adds the BUS grant back, since a grant is a transfer from taxpayers, a real resource cost rather than a saving the measure creates. Steps that do not cut carbon show ‘n/a’. <span class="pill">factors editable</span></p>
       </div>
     </div>
   </div>
@@ -631,6 +632,6 @@
 // dataset without being templated by php.
 const TOOL_PATH = '<?php echo $path; ?>';
 </script>
-<script src="<?php echo $path; ?>cobenefit_explorer.js?v=2"></script>
+<script src="<?php echo $path; ?>cobenefit_explorer.js?v=3"></script>
 </body>
 </html>

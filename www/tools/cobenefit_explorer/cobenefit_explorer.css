@@ -201,15 +201,27 @@
   --knob: #fff;
   --knob-shadow: 0 1px 2px rgb(43 38 30 / 28%);
 
-  /* The carriers deepen a little: the dark theme's fills were mixed to glow
-     against ink and go chalky on paper */
-  --petrol: #b8503a;
-  --gas: #d98a2b;
-  --grid: #3a92cf;
-  --solar: #e4b22e;
-  --battery: #35a76e;
-  --hp: #2aa39b;
-  --ev: #7570e2;
+  /* The carriers are re-mixed rather than dimmed. A fill loses apparent
+     colourfulness as the surround brightens, so the dark theme's values —
+     mixed to glow against ink — go chalky on paper at the same chroma. Each
+     one here keeps its hue and is taken close to the edge of what sRGB can
+     hold at its lightness, then dropped in lightness far enough to clear 3:1
+     against white. Solar is the exception the hue itself imposes: no yellow
+     reaches 3:1 on white while still reading as yellow, so it stays a bright
+     gold and leans on the legend beside it.
+
+     Battery and heat pump also part company here. Green and teal are the one
+     pair close enough to be confused — as mixed for the dark theme they sit a
+     little over ΔE 7 apart, which is inside the range where neighbouring bar
+     segments blur together. Pushing the green down and the teal up in
+     lightness, and the teal a few degrees bluer, opens that to ΔE 12. */
+  --petrol: #be462b;
+  --gas: #d08012;
+  --grid: #1889ce;
+  --solar: #d4a316;
+  --battery: #17904c;
+  --hp: #15a5a4;
+  --ev: #7168ec;
 
   /* Where these are read rather than seen they darken further: the link
      blue, the gas amber and the solar gold all fail on white at fill
@@ -320,7 +332,7 @@ h3,
 .brand p {
   margin: 6px 0 0;
   color: var(--muted);
-  max-width: 48ch;
+  max-width: 64ch;
   font-size: 13px;
 }
 
@@ -603,6 +615,16 @@ h3,
   border: 1px solid var(--line2);
   color: var(--text);
   font-size: 15px;
+}
+
+/* The light theme reverses the glyph. --on-accent is black there, which is the
+   right answer for the one place a carrier fill appears inside a run of text —
+   the hovered (i) — but on a tile the size of an app icon the letters want to
+   read as a mark rather than as small print. The neutral tile is excluded by
+   the selector rather than by specificity, since it carries no fill to reverse
+   out of. */
+:root[data-theme="light"] .tech .icon:not(.neutral) {
+  color: #fff;
 }
 
 /* min-width: 0 lets long descriptions ellipsis rather than push the toggle out */
@@ -904,9 +926,13 @@ h3,
   box-shadow: var(--knob-shadow);
 }
 
+/* On, the edge goes rather than changing colour: the tinted fill and the solid
+   knob already say the switch is live, and an outline in the same green as the
+   knob only rings the shape twice. The border stays in place, transparent, so
+   the track keeps its size. */
 .sw input:checked + .track {
   background: var(--good-fill);
-  border-color: var(--good);
+  border-color: transparent;
 }
 
 .sw input:checked + .track + .knob {
@@ -1436,6 +1462,13 @@ table.flows .grp {
 
 table.flows .sub {
   color: var(--muted);
+}
+
+/* Detail lines are indented rather than prefixed with a dash, so the hierarchy
+   reads from the layout instead of from punctuation */
+table.flows tr.sub td:first-child,
+table.flows td.sub:first-child {
+  padding-left: 14px;
 }
 
 table.flows .tot td {

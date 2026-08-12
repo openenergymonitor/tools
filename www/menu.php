@@ -14,7 +14,7 @@ $menu = array(
         "category" => "Featured",
         "case" => "cobenefit_explorer",
         "title" => "Household Co-benefit Explorer",
-        "description" => "Start from the fossil status quo and switch on solar, battery, heat pump and EV in any order. Running costs, asset replacement and carbon are tracked together, over a half-hourly simulation of a real year.",
+        "description" => "Start from the fossil status quo and switch on solar, battery, heat pump and EV in any order. Running costs, asset replacement and carbon are tracked together, over a 15-minute simulation of a real year.",
         "standalone" => true
     ),
     "ukgridsim" => array(

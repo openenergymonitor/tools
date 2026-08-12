@@ -2,7 +2,7 @@
 // cobenefit_explorer/model/harness.js
 //
 // Node test harness for the household energy ledger. It wires the real
-// half-hourly dataset into model.js and runs the exact ledger logic the browser
+// 15-minute dataset into model.js and runs the exact ledger logic the browser
 // uses (ledger.js — DEFAULTS, ann, flowsHH, compute), so results match the page.
 //
 // The point of the tool: explore how solar, battery, tariffs, EVs and heat pumps
@@ -60,7 +60,7 @@ const DATA_PATH = path.join(__dirname, 'data.json');
 // 2. Running the model and the ledger
 // =============================================================================
 
-// A single half-hourly simulation over a full year is by far the most expensive
+// A single 15-minute simulation over a full year is by far the most expensive
 // thing here, and the coalition reports ask for the same builds over and over
 // (32 subsets, each report re-deriving status quo, etc.). So memoise (cache the 
 // run result) on the model parameters, exactly as the view's runModel() does. 
@@ -85,8 +85,8 @@ function runModel(mp) {
 //   p                the parameter set (DEFAULTS plus any --p overrides)
 //   runModel         how to run a simulation (our memoised wrapper, above)
 //   modelReady       is the dataset loaded? always true — we loaded it up front
-//   useHHModel       prefer the half-hourly simulation over annual averages.
-//                    Note compute() overrides this and uses half-hourly anyway
+//   useHHModel       prefer the 15-minute simulation over annual averages.
+//                    Note compute() overrides this and uses the simulation anyway
 //                    when the tariff varies in time, since averages cannot price it
 //   optimalDispatch  battery uses the perfect-foresight optimiser, not the
 //                    simple self-consumption/cheap-rate heuristic
@@ -790,7 +790,7 @@ function main() {
         default: {
             console.log(hr('═'));
             console.log('  HOUSEHOLD ENERGY LEDGER — test harness report');
-            console.log('  Dataset: real half-hourly year (15-min, ' + model.series[0].data.length + ' samples)');
+            console.log('  Dataset: real 15-minute year (' + model.series[0].data.length + ' samples)');
             console.log(hr('═'));
 
             scenarioReport(cfg([]), p, opts);                                    // where we start

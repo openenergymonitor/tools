@@ -821,7 +821,7 @@ var model = {
                 // its plot series from these) plus the month boundary timestamps.
                 monthly: monthly,
 
-                // half-hourly power series (values only) for the power view
+                // 15-minute power series (values only) for the power view
                 solar_data: solar_data,
                 demand_data: demand_data,
                 soc_data: soc_data,

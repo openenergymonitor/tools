@@ -10,7 +10,7 @@
 
 const { createApp } = Vue;
 
-// Cache of half-hourly model runs, keyed on the model-relevant parameters.
+// Cache of 15-minute model runs, keyed on the model-relevant parameters.
 // compute() is evaluated for several scenarios per render (current, status quo
 // and each marginal flip), so identical parameter sets are reused rather than
 // re-simulated. Lives outside the reactive system; cleared on reset.
@@ -31,7 +31,7 @@ createApp({
       // is the independent export source: 'flat' SEG, 'agile' Outgoing, or 'schedule'
       // (the custom band table's export column).
       cfg: { ev:false, hp:false, solar:false, battery:false, agile:false, tariffMode:'agile', exportMode:'flat', disconnectGas:false },
-      // solar-matching engine: half-hourly simulation (model.js) by default,
+      // solar-matching engine: 15-minute simulation (model.js) by default,
       // with the simple annual estimate available for comparison.
       useHHModel: true,
       costMode: 'allin',           // how every metric is expressed: 'allin' = running + annualised assets; 'running' = running costs only; 'carbon' = CO₂e
@@ -57,8 +57,8 @@ createApp({
     };
   },
   watch:{
-    // Time-varying tariffs are inherently half-hourly, so they're only offered while
-    // the half-hourly model is on. Switching to the annual estimate forces flat both sides.
+    // Time-varying tariffs need per-interval prices, so they're only offered while
+    // the 15-minute model is on. Switching to the annual estimate forces flat both sides.
     useHHModel(on){ if(!on){ this.cfg.agile = false; this.cfg.exportMode = 'flat'; } },
     // Optimal dispatch pays off only when a price varies over the day, so default it
     // on whenever any non-flat import or export is selected (and off when fully flat).
@@ -178,17 +178,17 @@ createApp({
       return this.irr(this.extraUpfront, this.cashSaving, this.p.investHorizon);
     },
     paybackLabel(){
-      if(this.cashSaving <= 0) return '—';                       // never recovers
+      if(this.cashSaving <= 0) return 'never';                   // never recovers
       if(this.extraUpfront <= 0) return 'immediate';             // no extra to recover
       return (this.extraUpfront / this.cashSaving).toFixed(1) + ' yrs';
     },
     irrLabel(){
-      if(this.investIRR === null) return '—';
+      if(this.investIRR === null) return 'n/a';
       return this.investIRR >= 1 ? '>100%' : (this.investIRR * 100).toFixed(1) + '%';
     },
     crossoverLabel(){
       // years until reinvested bill savings overtake the same money left in an ISA
-      if(this.extraUpfront <= 0 || this.cashSaving <= 0) return '—';
+      if(this.extraUpfront <= 0 || this.cashSaving <= 0) return 'n/a';
       const y = this.crossoverYear(this.cashSaving, this.extraUpfront, this.p.isaReturn/100, this.p.investHorizon);
       return y === null ? ('> ' + this.p.investHorizon + ' yrs') : ('year ' + y);
     },
@@ -286,9 +286,9 @@ createApp({
     crossoverYear(yearly, principal, rate, maxYears){ return ledger.crossoverYear(yearly, principal, rate, maxYears); },
 
     // Map the ledger's build + assumptions onto model.js parameters and run the
-    // half-hourly simulation, returning the annual solar / import / export flows.
+    // 15-minute simulation, returning the annual solar / import / export flows.
     // Results are memoised on the model-relevant parameters (see modelCache).
-    // Context handed to ledger.compute so it can run the half-hourly model and
+    // Context handed to ledger.compute so it can run the 15-minute model and
     // read the live build flags without reaching into the Vue instance directly.
     ledgerCtx(){
       return {
@@ -394,16 +394,16 @@ createApp({
       return { upfront, saving, irr, crossover };
     },
     stepPaybackLabel(inv){
-      if(inv.saving <= 0) return '—';            // never recovers
+      if(inv.saving <= 0) return 'never';        // never recovers
       if(inv.upfront <= 0) return 'immediate';   // no extra capital to recover
       return (inv.upfront / inv.saving).toFixed(1) + ' yrs';
     },
     stepIrrLabel(inv){
-      if(inv.irr === null) return '—';
+      if(inv.irr === null) return 'n/a';
       return inv.irr >= 1 ? '>100%' : (inv.irr * 100).toFixed(1) + '%';
     },
     stepCrossoverLabel(inv){
-      if(inv.upfront <= 0 || inv.saving <= 0) return '—';
+      if(inv.upfront <= 0 || inv.saving <= 0) return 'n/a';
       return inv.crossover === null ? ('> ' + this.p.investHorizon + ' yrs') : ('year ' + inv.crossover);
     },
 
@@ -413,7 +413,7 @@ createApp({
       const on = this.cfg[tech];
       const hd = (on ? 'Contribution of ' : 'Adding ') + this.techLabel(tech);
       const sub = on
-        ? 'Effect of this step, given the rest of the build — i.e. what you’d give up by removing it.'
+        ? 'Effect of this step, given the rest of the build: what you would give up by removing it.'
         : 'Effect of adding this step, given whatever is already switched on.';
       const head = `<div class="tiphd"><span class="tdot" style="background:var(${this.techColor(tech)})"></span>${hd}</div>`
                  + `<div class="tipsub">${sub}</div>`;
@@ -469,7 +469,7 @@ createApp({
 
     // Annual cost & carbon ledger for a build config. The logic lives in
     // ledger.compute (shared with the Node harness); ledgerCtx() supplies the
-    // live parameters, flags and the half-hourly model runner.
+    // live parameters, flags and the 15-minute model runner.
     compute(c){ return ledger.compute(c, this.ledgerCtx()); },
 
     // ---- custom tariff schedule editing ----
@@ -503,7 +503,7 @@ createApp({
   },
   mounted(){
     document.querySelector('#app').removeAttribute('v-cloak');
-    // Load the half-hourly dataset for the solar-matching model. model.load()
+    // Load the 15-minute dataset for the solar-matching model. model.load()
     // falls back to a synthetic year if the file is missing, so this always
     // resolves; until it does, compute() uses the annual estimate.
     if(typeof model !== 'undefined'){
