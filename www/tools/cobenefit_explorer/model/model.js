@@ -1,6 +1,6 @@
 // cobenefit_explorer/model/model.js
 //
-// Core half-hourly solar / battery / demand simulation, extracted from
+// Core quarter-hourly solar / battery / demand simulation, extracted from
 // the tool page so it can be reused independently of the Vue view.
 //
 // Usage:
@@ -17,6 +17,136 @@
 // file small. The fixed start time and interval are enough to derive the time
 // of any sample; timestamps are only added to the series handed to a plotting
 // library (see timeseries() in the view).
+//
+//
+// ============================================================================
+// THE IDEA IN ONE PARAGRAPH
+// ============================================================================
+//
+// We walk a whole year of measured 15-minute data, one interval at a time. In
+// each interval we work out how much solar there is and how much demand there
+// is, and take the difference:
+//
+//     balance = solar - demand                      (watts, before the battery)
+//
+// The battery then moves that balance: charging subtracts from it, discharging
+// adds to it. Whatever balance is left at the end of the interval must come
+// from, or go to, the grid:
+//
+//     balance < 0  ->  grid import  (costs money at that interval's import price)
+//     balance > 0  ->  grid export  (earns money at that interval's export price)
+//
+// Everything else in this file is either (a) preparing the per-interval solar,
+// demand and price numbers that feed that balance, (b) deciding what the
+// battery should do, or (c) accumulating the results into annual and monthly
+// totals. If you hold that one equation in mind, the rest reads easily.
+//
+//
+// ============================================================================
+// CONTENTS
+// ============================================================================
+//
+// 1. LOADED DATA                                            (search: ---- loaded data)
+//    data_start_time / interval  – the dataset is one fixed year at 15-minute
+//                                  resolution; there are no timestamps in the
+//                                  data, so time_at(i) derives them.
+//    series[]                    – the six series the simulation works from:
+//                                  [0] solar  [1] lac demand  [2] heat pump
+//                                  [3] import price  [4] export price  [5] measured EV
+//    input{}                     – annual kWh totals of the raw series, used as
+//                                  the denominator when scaling shapes (below).
+//
+// 2. DATA LOADING                                           (search: ---- data loading)
+//    load()      – fetch the cached data file; on failure fall back to a
+//                  synthetic year so the tool still runs (usingSynthetic flag).
+//    _apply()    – remap the 8 raw file series to the 6 the model expects:
+//                  appliance + cooker + lighting are summed into one "lac"
+//                  series, and the import price is grossed up by 5% VAT.
+//    normalise() – sum each series to annual kWh (the `input` totals).
+//
+// 3. PARAMETERS                                             (search: defaultParams)
+//    One flat object describing the house: PV size, annual demands, EV
+//    behaviour, a nested `battery` block, and the tariff. run() merges the
+//    caller's params over these defaults, so partial parameter sets work.
+//
+// 4. run() — THE SIMULATION, IN SEVEN STEPS                 (search: STEP 1 ... STEP 7)
+//
+//    STEP 1  Merge parameters over the defaults, and split the single
+//            round-trip efficiency control into charge and discharge halves.
+//
+//    STEP 2  Derive the annual energy totals implied by the parameters
+//            (heat pump elec = heat demand / SCOP, EV elec = miles / mi-per-kWh)
+//            and turn them into *normalisation factors*. This is the key approach
+//            of the model: the data file supplies realistic shapes, and each
+//            shape is scaled so its annual total matches what the user asked
+//            for. A shape is never used at its raw magnitude.
+//
+//    STEP 3  Pre-pass over the year building solar_w[] and demand_w[] (plus the
+//            per-load lac_w[] / hp_w[] / ev_w[] behind it, needed later for
+//            attribution). The simulated EV is charged here: fill the day's
+//            energy need at a fixed power inside the charging window. None of
+//            this depends on battery state, so it is built once and reused by
+//            every later pass.
+//
+//    STEP 4  Build the per-interval import and export price arrays. Each side
+//            is independently 'agile' (the half-hourly feed), 'flat' (a single
+//            rate) or 'schedule' (a user-defined time-of-day band table). Built
+//            once so the optimiser and the main loop price against the same
+//            numbers.
+//
+//    STEP 5  If dispatch is 'optimal', solve the whole year's battery schedule
+//            up front with the dynamic program at the bottom of this file. The
+//            main loop then just replays that schedule.
+//
+//    STEP 6  The main loop — for each interval: apply the battery, settle the
+//            grid balance, cost it, attribute the energy to each load, and roll
+//            up monthly totals at month boundaries. This is where the paragraph
+//            at the top actually happens.
+//
+//    STEP 7  Derive the headline annual figures (cost, saving, self-sufficiency,
+//            self-consumption, average prices) and assemble the result object.
+//
+//    Wrapping STEPs 6-7 is the SOC convergence loop: a battery that ends the
+//    year part-full should have started it part-full, so the whole year is
+//    re-run with the closing SOC as the opening SOC until it settles (max_runs).
+//    The 'optimal' dispatch already chooses its own start, so it runs once.
+//
+// 5. WHAT run() RETURNS
+//    result.annual      – energy, cost and saving totals for the year, plus
+//                         load_attr (electricity split per load) and
+//                         battery_flow (where the battery's energy came from).
+//    result.monthly     – one table row per month + month boundary timestamps;
+//                         the view plots its charts straight off these rows.
+//    result.solar_data / demand_data / soc_data
+//                       – values-only power series for the power view.
+//    result.battery_soc_end / run_count – convergence diagnostics.
+//
+// 6. SYNTHETIC DATA                                         (search: ---- synthetic data)
+//    mulberry32() + generateSyntheticData() produce a plausible year in the
+//    same 8-series raw shape as the data file, so the model always has
+//    something to run against when the real data is unavailable.
+//
+// 7. OPTIMAL BATTERY DISPATCH                               (search: ---- optimal battery dispatch)
+//    optimiseBatteryDP() discretises state-of-charge into levels and runs a
+//    forward dynamic program over the year to find the cheapest schedule with
+//    perfect foresight of prices. It is the "what is the best this battery
+//    could possibly do" reference against which the greedy rules are judged.
+//
+//
+// ============================================================================
+// CONVENTIONS WORTH KNOWING BEFORE YOU READ
+// ============================================================================
+//
+//  * Powers are watts (W) and instantaneous; energies are kWh per interval.
+//    power_to_kwh = interval / 3600000 converts one to the other.
+//  * Prices are pence per kWh; the `* 0.01` scattered through the code converts
+//    a p/kWh cost into pounds.
+//  * `balance` is always grid-side and signed: negative = importing from the
+//    grid, positive = exporting to it.
+//  * "lac" = lights, appliances and cooking, i.e. everything that is not the
+//    heat pump or the EV.
+//  * The battery's charge_max / discharge_max are inverter ratings in W and are
+//    independent of the PV array size.
 
 var model = {
 
@@ -204,6 +334,7 @@ var model = {
     // Does not mutate the passed params object.
     run: function (params) {
 
+        // ---- STEP 1: parameters ----
         // Merge over defaults so partial parameter sets work. Battery is merged
         // separately (onto a fresh default battery, so partial battery objects
         // keep defaults and the caller's object is never mutated).
@@ -230,6 +361,7 @@ var model = {
         let power_to_kwh = interval / 3600000;
         let max_runs = p.max_runs || 1;
 
+        // ---- STEP 2: annual totals and normalisation factors ----
         // Derived demand totals (independent of the per-interval loop).
         // 'real' EV mode uses the recorded annual total, otherwise derive it
         // from annual mileage and efficiency.
@@ -238,7 +370,11 @@ var model = {
         let total_elec_kwh = p.lac_demand + heatpump_elec_kwh + ev_elec_kwh;
 
         // Normalisation factors scale the raw shape series to the requested
-        // annual energy figures.
+        // annual energy figures: factor = (kWh we want) / (kWh the raw series
+        // happens to contain). Multiplying every sample of a shape by its factor
+        // preserves the shape exactly while making its annual total the
+        // requested one. Solar is per-kWp, so it is additionally multiplied by
+        // solar_kWp in the pre-pass below.
         let solar_normalisation_factor = p.solar_kWh_per_kWp / input.solar_kwh;
         let lac_normalisation_factor = p.lac_demand / input.lac_kwh;
         let heatpump_normalisation_factor = heatpump_elec_kwh / input.heatpump_kwh;
@@ -255,6 +391,7 @@ var model = {
         // quantisation level per interval.)
         let overnight_target_soc = p.battery.capacity * p.battery.overnight_charge_target_pct / 100;
 
+        // ---- STEP 3: pre-pass, per-interval solar and demand ----
         // Pre-pass: solar generation (W) and total demand (W) per interval.
         // Neither depends on battery state, so we build them once here and reuse
         // them across every SOC-convergence pass and the optimal-dispatch DP.
@@ -302,6 +439,7 @@ var model = {
             demand_w[pi] = lac + heatpump + ev;
         }
 
+        // ---- STEP 4: per-interval prices ----
         // Per-interval import / export prices (p/kWh). Each side is sourced
         // independently via p.tariff.import / p.tariff.export:
         //   'agile'    – the half-hourly feed (series[3] import, series[4] export)
@@ -351,6 +489,7 @@ var model = {
             }
         }
 
+        // ---- STEP 5: optional whole-year optimal battery schedule ----
         // Optimal dispatch: compute the whole-year schedule once, up front.
         // Perfect foresight over the half-hourly import/export prices.
         let optimal = (p.battery.dispatch === 'optimal' && p.battery.capacity > 0);
@@ -375,8 +514,11 @@ var model = {
         // Result holder, (re)populated by each pass below.
         var result;
 
+        // ---- STEPS 6-7, wrapped in the SOC convergence loop ----
         // SOC convergence loop: feed the final SOC back in as the starting SOC
-        // until it settles or we hit max_runs.
+        // until it settles or we hit max_runs. Each pass re-simulates the whole
+        // year from scratch (the accumulators below are rebuilt every pass), so
+        // only the last pass's numbers survive into the result.
         let battery_soc_start = p.battery.soc_start;
         let run_count = 0;
 
@@ -479,6 +621,9 @@ var model = {
                 return discharge;
             };
 
+            // ---- STEP 6: the main per-interval loop ----
+            // solar - demand -> battery -> grid, then cost, attribute and
+            // accumulate. One iteration is one 15-minute interval of the year.
             for (var i = 0; i < n_intervals; i++) {
 
                 let time = time_at(i);
@@ -621,6 +766,7 @@ var model = {
                 soc_data.push(battery_soc);
             }
 
+            // ---- STEP 7: headline annual figures and the result object ----
             // Flat-rate cost (comparison baseline)
             let annual_cost = (annual.import_kwh * p.import_rate * 0.01) - (annual.export_kwh * p.export_rate * 0.01);
             let saving = 100 * (1 - (annual_cost / (p.import_rate * annual.demand_kwh * 0.01)));
