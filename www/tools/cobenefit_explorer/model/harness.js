@@ -19,6 +19,8 @@
 //   node harness.js grid [solarList] [battList]     solar × battery co-benefit grid
 //   node harness.js sweep <param> <from> <to> <step> [flags] [--optimal]
 //   node harness.js ladder [--optimal]              cumulative build-up ladder (+ investment view)
+//   node harness.js hp [--optimal]                  heat-pump whole-life economics by context
+//                                                   (+ capex / subsidy headroom from co-benefits)
 //
 // Build flags are a comma list of: ev, hp, solar, battery, agile  (gas is
 // auto-disconnected with hp, mirroring the view). Override any DEFAULTS field
@@ -712,6 +714,144 @@ function gridReport(p, opts, positional) {
 }
 
 // -----------------------------------------------------------------------------
+// Heat-pump whole-life economics by context.
+//
+// Question 1: do solar, batteries and time-of-use tariffs improve the
+// whole-life economics of a heat pump, and by how much? The measure is the
+// MARGINAL all-in cost of adding the heat pump to each context — running cost
+// plus annualised capital (CRF at the real discount rate), i.e. exactly the
+// ledger's whole-life basis. The co-benefit is that marginal cost in a context
+// vs the same marginal cost in a plain flat-tariff home.
+//
+// Question 2: can those electricity-cost savings substitute for capex or
+// subsidy? A £/yr running-cost co-benefit sustained over the heat pump's life
+// is worth co-benefit ÷ CRF(hpLife) of capital today — the same annuity maths
+// the ledger uses to spread capital, run backwards. The report turns each
+// context's co-benefit into that capex-equivalent, and also solves the grant
+// needed for all-in parity with gas heating in each context.
+//
+// Tariff contexts use the ledger's TARIFF_PRESETS: 'Agile' is the half-hourly
+// Agile dataset, 'Cosy' the Octopus Cosy schedule (a heat-pump tariff) via the
+// custom-schedule machinery. Preset standing charges are applied so absolute
+// context costs are honest; standing charges cancel out of the HP marginals.
+// -----------------------------------------------------------------------------
+function hpEconomicsReport(p, opts) {
+    const presets = ledger.TARIFF_PRESETS;
+    const CONTEXTS = [
+        { name: 'Flat tariff only',      flags: [] },
+        { name: 'Agile',                 flags: ['agile'],                      standing: presets.agile.standing },
+        { name: 'Cosy (HP tariff)',      flags: ['custom'],                     preset: 'cosy' },
+        { name: 'Solar',                 flags: ['solar'] },
+        { name: 'Solar + Battery',       flags: ['solar', 'battery'] },
+        { name: 'Battery + Agile',       flags: ['battery', 'agile'],           standing: presets.agile.standing },
+        { name: 'Solar + Agile',         flags: ['solar', 'agile'],             standing: presets.agile.standing },
+        { name: 'Solar + Batt + Agile',  flags: ['solar', 'battery', 'agile'],  standing: presets.agile.standing },
+        { name: 'Solar + Batt + Cosy',   flags: ['solar', 'battery', 'custom'], preset: 'cosy' },
+    ];
+
+    // £/yr of all-in cost per £ of heat-pump capital: the capital-recovery
+    // factor over the heat pump's life. Its inverse turns a sustained £/yr
+    // saving back into a present capital sum.
+    const crf = ledger.ann(p, 1, 0, p.hpLife);
+    // What heating with gas ties up per year in kit: the counterfactual the
+    // heat pump's capital line replaces.
+    const boilerAsset = ledger.ann(p, p.boilerPrice, 0, p.boilerLife) + p.boilerService + p.boilerRepairs;
+
+    const rows = CONTEXTS.map(ctx => {
+        // Per-context parameter set: presets carry a schedule (custom tariffs)
+        // and a standing charge; Agile carries just its standing charge.
+        const pp = makeP(p);
+        if (ctx.preset) {
+            pp.tariffSchedule = JSON.parse(JSON.stringify(presets[ctx.preset].schedule));
+            pp.elecStanding = presets[ctx.preset].standing;
+        } else if (ctx.standing != null) {
+            pp.elecStanding = ctx.standing;
+        }
+
+        const base = run(cfg(ctx.flags), pp, opts);
+        const withHp = run(cfg(ctx.flags.concat('hp')), pp, opts);
+
+        const dRun = withHp.running - base.running;      // + = HP raises running cost here
+        const dAllIn = withHp.allIn - base.allIn;        // whole-life marginal cost of the HP
+        const hpRates = withHp.elecRates && withHp.elecRates.hp;
+
+        // Net heat-pump capital at which its all-in marginal cost is zero —
+        // parity with staying on gas. ΔallIn = crf·netCap + upkeep − boilerAsset
+        // + ΔRunning, so solve for netCap; the grant achieving it follows.
+        const parityCapex = (boilerAsset - p.hpUpkeep - dRun) / crf;
+
+        return {
+            ctx, base, withHp, dRun, dAllIn, parityCapex,
+            effRate: hpRates ? hpRates.cashRate : null,
+            heatCost: withHp.sparkGap ? withHp.sparkGap.hpHeatCash : null,
+            gasHeat: withHp.sparkGap ? withHp.sparkGap.gasHeat : null,
+        };
+    });
+
+    const flat = rows[0];
+
+    // ---- table 1: whole-life marginal economics of the heat pump ----
+    h2('Heat pump whole-life economics by context' + dispatchTag(opts));
+    console.log('  Marginal effect of ADDING a heat pump (gas disconnected) to each context.');
+    console.log('  ΔAll-in = running + annualised capital (CRF ' + (crf * 100).toFixed(2) + '%/yr over ' + p.hpLife +
+                'y at ' + p.discountRate + '% real);');
+    console.log('  negative = heating with the HP is cheaper, whole-life, than staying on gas.');
+    console.log('  Co-benefit = improvement vs the same swap in the flat-tariff home.');
+    console.log('  Gas reference: useful heat via boiler costs ' + flat.gasHeat.toFixed(1) + ' p/kWh.\n');
+
+    console.log('  ' + pad('Context', 22) + lpad('HP p/kWh', 10) + lpad('heat p/kWh', 12) +
+                lpad('Δrunning', 11) + lpad('ΔAll-in', 11) + lpad('co-benefit', 12) + lpad('life PV', 10));
+    console.log('  ' + hr('─', 86));
+
+    for (const r of rows) {
+        const cb = flat.dAllIn - r.dAllIn;               // + = this context improves the HP
+        console.log('  ' + pad(r.ctx.name, 22) +
+                    lpad(r.effRate != null ? r.effRate.toFixed(1) : '—', 10) +
+                    lpad(r.heatCost != null ? r.heatCost.toFixed(1) : '—', 12) +
+                    lpad(sgbp(r.dRun) + '/yr', 11) +
+                    lpad(sgbp(r.dAllIn) + '/yr', 11) +
+                    lpad(sgbp(cb) + '/yr', 12) +
+                    lpad(sgbp(-r.dAllIn / crf), 10));
+    }
+
+    console.log('\n  HP p/kWh = effective rate the heat pump pays (grid at time-of-use price,');
+    console.log('  solar at forgone export, battery at charge cost); heat p/kWh = that ÷ SCOP.');
+    console.log('  life PV = present value of the ΔAll-in stream over the heat pump\'s life');
+    console.log('  (+ = the switch away from gas pays, whole-life).');
+
+    // ---- table 2: capex / subsidy headroom ----
+    h2('Capex / subsidy headroom from electricity-cost co-benefits' + dispatchTag(opts));
+    console.log('  capex-equiv = co-benefit ÷ CRF: capital that same saving services over ' + p.hpLife + 'y.');
+    console.log('  grant for gas parity = grant needed for ΔAll-in = 0 in that context');
+    console.log('  (≤£0 means the HP beats gas with NO subsidy). match flat+grant = grant that');
+    console.log('  reproduces the flat-tariff home\'s HP economics at today\'s £' +
+                Math.round(p.busGrant).toLocaleString('en-GB') + ' grant.');
+    console.log('  ctx Δ/yr = what the context itself adds/saves, all-in, before the HP.\n');
+
+    console.log('  ' + pad('Context', 22) + lpad('ctx Δ/yr', 11) + lpad('co-benefit', 12) +
+                lpad('capex-equiv', 13) + lpad('gas parity', 12) + lpad('match flat', 12));
+    console.log('  ' + hr('─', 82));
+
+    for (const r of rows) {
+        const cb = flat.dAllIn - r.dAllIn;
+        const capexEquiv = cb / crf;
+        const parityGrant = p.hpPrice - r.parityCapex;   // grant needed so HP breaks even vs gas
+        const matchGrant = p.busGrant - capexEquiv;      // grant matching the flat-home deal
+        const ctxCost = r.base.allIn - flat.base.allIn;  // the context's own all-in effect
+
+        console.log('  ' + pad(r.ctx.name, 22) +
+                    lpad(r.ctx.flags.length ? sgbp(ctxCost) : '—', 11) +
+                    lpad(sgbp(cb) + '/yr', 12) +
+                    lpad(sgbp(capexEquiv), 13) +
+                    lpad(parityGrant <= 0 ? 'none' : gbp(parityGrant), 12) +
+                    lpad(gbp(Math.max(0, matchGrant)), 12));
+    }
+
+    console.log('\n  Reading it: a context with a big co-benefit but a costly ctx Δ/yr is not a');
+    console.log('  reason to buy the kit for the heat pump\'s sake — check both columns.');
+}
+
+// -----------------------------------------------------------------------------
 // Sensitivity sweep: hold the build fixed, vary one parameter, and watch the
 // saving and cost-of-carbon move. Useful for "how big should the battery be?" or
 // "at what grid intensity does the heat pump stop cutting carbon?".
@@ -783,6 +923,11 @@ function main() {
 
         case 'ladder':
             ladderReport(p, opts);
+            break;
+
+        case 'hp':
+        case 'hpeconomics':
+            hpEconomicsReport(p, opts);
             break;
 
         case 'sweep': {
