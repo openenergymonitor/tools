@@ -11,7 +11,7 @@
 //
 // Usage:
 //   node harness.js                      full report (status quo, build, marginals, synergy)
-//   node harness.js scenario ev,hp,solar,battery,agile [--optimal] [--p k=v ...]
+//   node harness.js scenario ev,hp,solar,battery,agile [--optimal] [--flatcarbon] [--p k=v ...]
 //   node harness.js marginals [base flags] [--optimal]
 //   node harness.js cobenefits [--optimal]          pairwise synergy matrix
 //   node harness.js shapley [--optimal]             fair per-measure attribution of the full build
@@ -90,12 +90,15 @@ function runModel(mp) {
 //                    when the tariff varies in time, since averages cannot price it
 //   optimalDispatch  battery uses the perfect-foresight optimiser, not the
 //                    simple self-consumption/cheap-rate heuristic
+//   hhCarbon         grid carbon from the half-hourly intensity dataset rather
+//                    than the flat gridIntensity / marginalIntensity factors
 function makeCtx(p, opts) {
     return {
         p,
         useHHModel: opts.useHHModel !== false,   // default on; --annual turns it off
         modelReady: true,
         optimalDispatch: !!opts.optimalDispatch,
+        hhCarbon: opts.hhCarbon !== false,       // default on; --flatcarbon turns it off
         runModel,
     };
 }
@@ -221,6 +224,10 @@ function parseArgs(argv) {
             out.opts.optimalDispatch = true;
         } else if (a === '--annual') {
             out.opts.useHHModel = false;
+        } else if (a === '--hhcarbon') {
+            out.opts.hhCarbon = true;            // the default; kept for symmetry
+        } else if (a === '--flatcarbon') {
+            out.opts.hhCarbon = false;
         } else if (a === '--p') {
             // "--p name=value": the value is always numeric.
             const kv = argv[++i].split('=');

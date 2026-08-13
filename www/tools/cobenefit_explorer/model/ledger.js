@@ -17,6 +17,8 @@
 //   useHHModel      use the 15-minute simulation for solar/battery flows
 //   modelReady      the 15-minute dataset has loaded
 //   optimalDispatch battery uses the cost-optimised Agile DP dispatch
+//   hhCarbon        grid carbon from the half-hourly intensity dataset rather
+//                   than the flat gridIntensity / marginalIntensity factors
 //   runModel(mp)    run model.js for the mapped params (caller memoises)
 
 (function (root, factory) {
@@ -271,7 +273,12 @@
             avgAgileImport: r.annual.avg_agile_import_rate,
             avgAgileExport: r.annual.avg_agile_export_rate,
             loadAttr: r.annual.load_attr,
-            batteryFlow: r.annual.battery_flow
+            batteryFlow: r.annual.battery_flow,
+            // half-hourly grid carbon (null when the dataset lacks the series)
+            importCO2: r.annual.import_co2_kg,
+            exportCO2: r.annual.export_co2_kg,
+            avgImportIntensity: r.annual.avg_import_intensity,
+            avgExportIntensity: r.annual.avg_export_intensity
         };
     }
 
@@ -292,8 +299,10 @@
         // Two interchangeable engines produce the same flow figures. The 15-minute
         // simulation in model.js is the default; the original annualised estimate is
         // kept for comparison. The Agile tariff is priced per interval, so it always
-        // uses the simulation regardless of the toggle.
-        var useHH = (ctx.useHHModel || c.agile || (c.exportMode && c.exportMode !== 'flat')) && ctx.modelReady;
+        // uses the simulation regardless of the toggle — as does half-hourly carbon
+        // accounting, which needs each interval's import/export against the
+        // intensity at that time.
+        var useHH = (ctx.useHHModel || c.agile || (c.exportMode && c.exportMode !== 'flat') || ctx.hhCarbon) && ctx.modelReady;
         var solarGen, solarSelf, solarExport, gridImport;
         var f = null;
 
@@ -443,8 +452,21 @@
         var gasFactor = p.gasCombustionKg * (1 + p.gasUpstreamPct / 100);   // combustion + upstream methane
         var petrolCO2 = petrolLitres * p.petrolKgPerL;
         var gasCO2 = gasKwhBurned * gasFactor;
-        var gridCO2 = gridImport * p.gridIntensity / 1000;               // g → kg
-        var exportCO2Credit = solarExport * p.marginalIntensity / 1000;  // displaces gas generation
+        // Grid carbon: flat factors by default (import at the average grid
+        // intensity, export credited at the marginal gas plant it displaces).
+        // With ctx.hhCarbon on and the intensity series present, both sides are
+        // instead summed per interval from the half-hourly carbon intensity
+        // dataset — import and export each valued at the grid intensity at the
+        // time they happened.
+        var hhCarbon = !!(ctx.hhCarbon && f && f.importCO2 != null);
+        var gridCO2, exportCO2Credit;
+        if (hhCarbon) {
+            gridCO2 = f.importCO2;
+            exportCO2Credit = f.exportCO2;
+        } else {
+            gridCO2 = gridImport * p.gridIntensity / 1000;               // g → kg
+            exportCO2Credit = solarExport * p.marginalIntensity / 1000;  // displaces gas generation
+        }
         var opCO2 = petrolCO2 + gasCO2 + gridCO2 - exportCO2Credit;
 
         // ---- carbon: embodied, amortised over each asset's life (kgCO2e/yr) ----
@@ -490,6 +512,9 @@
             carAsset: carAsset, heatAsset: heatAsset, solarAsset: solarAsset, batteryAsset: batteryAsset,
             assets: assets, allIn: allIn, segments: segments,
             petrolCO2: petrolCO2, gasCO2: gasCO2, gridCO2: gridCO2, exportCO2Credit: exportCO2Credit, opCO2: opCO2,
+            hhCarbon: hhCarbon,
+            avgImportIntensity: hhCarbon ? f.avgImportIntensity : null,
+            avgExportIntensity: hhCarbon ? f.avgExportIntensity : null,
             carCO2: carCO2, heatCO2: heatCO2, solarCO2: solarCO2, batteryCO2: batteryCO2,
             embCO2: embCO2, totalCO2: totalCO2, carbonSegments: carbonSegments,
         };

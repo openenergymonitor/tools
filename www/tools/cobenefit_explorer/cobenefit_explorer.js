@@ -36,6 +36,11 @@ createApp({
       useHHModel: true,
       costMode: 'allin',           // how every metric is expressed: 'allin' = running + annualised assets; 'running' = running costs only; 'carbon' = CO₂e
       optimalDispatch: false,   // battery: cost-optimised Agile dispatch (model.js DP)
+      // grid carbon from the half-hourly national intensity dataset rather than
+      // the flat gridIntensity / marginalIntensity factors (needs the 15-min
+      // model). On by default; 'Flat' under Build your home · Grid carbon
+      // switches back to the flat factors.
+      hhCarbon: true,
       modelReady: false,
       usingSynthetic: false,
       konaChoice: 'petrol-used',
@@ -58,8 +63,9 @@ createApp({
   },
   watch:{
     // Time-varying tariffs need per-interval prices, so they're only offered while
-    // the 15-minute model is on. Switching to the annual estimate forces flat both sides.
-    useHHModel(on){ if(!on){ this.cfg.agile = false; this.cfg.exportMode = 'flat'; } },
+    // the 15-minute model is on. Switching to the annual estimate forces flat both
+    // sides — and flat carbon factors, which need per-interval flows too.
+    useHHModel(on){ if(!on){ this.cfg.agile = false; this.cfg.exportMode = 'flat'; this.hhCarbon = false; } },
     // Optimal dispatch pays off only when a price varies over the day, so default it
     // on whenever any non-flat import or export is selected (and off when fully flat).
     // The user can still override afterwards — this only fires on the transition.
@@ -296,6 +302,7 @@ createApp({
         useHHModel: this.useHHModel,
         modelReady: this.modelReady,
         optimalDispatch: this.optimalDispatch,
+        hhCarbon: this.hhCarbon,
         runModel: this.runModel,
       };
     },
@@ -497,6 +504,7 @@ createApp({
       this.cfg = { ev:false, hp:false, solar:false, battery:false, agile:false, tariffMode:'agile', exportMode:'flat', disconnectGas:false };
       this.optimalDispatch = false;
       this.useHHModel = true;
+      this.hhCarbon = true;
       this.konaChoice = '';
       modelCache.clear();
     },
@@ -507,7 +515,9 @@ createApp({
     // falls back to a synthetic year if the file is missing, so this always
     // resolves; until it does, compute() uses the annual estimate.
     if(typeof model !== 'undefined'){
-      model.load(TOOL_PATH + 'model/data.json', () => {
+      // ?v= busts the browser HTTP cache when the dataset gains new series
+      // (v2: added the half-hourly grid carbon intensity feed).
+      model.load(TOOL_PATH + 'model/data.json?v=2', () => {
         this.usingSynthetic = model.usingSynthetic;
         this.modelReady = true;
       });

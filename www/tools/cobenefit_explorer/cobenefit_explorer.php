@@ -288,6 +288,20 @@
           <p class="subcard-note" v-if="useHHModel && timeVaryingPricing">Average across this build: <b>{{ current.avgAgileImport==null ? Number(p.elecRate).toFixed(1) : current.avgAgileImport.toFixed(1) }}p</b> import / <b>{{ current.avgAgileExport==null ? Number(p.segRate).toFixed(1) : current.avgAgileExport.toFixed(1) }}p</b> export.</p>
         </div>
 
+        <div class="tech" :class="{disabled: !useHHModel}">
+          <div class="icon neutral">CO₂</div>
+          <div class="tx"><b>Grid carbon</b><small v-if="useHHModel">flat factors, or the measured half-hourly grid intensity</small><small v-else>half-hourly carbon needs the 15-minute model · enable it under Advanced</small></div>
+          <div class="tseg" role="group" aria-label="Grid carbon basis">
+            <button :class="{on: !hhCarbon}" @click="hhCarbon=false">Flat</button>
+            <button :class="{on: hhCarbon}" @click="hhCarbon=true" :disabled="!useHHModel">Half-hourly</button>
+          </div>
+        </div>
+
+        <div class="subcard" v-if="hhCarbon && useHHModel">
+          <p class="subcard-note" v-if="current.hhCarbon">Each interval's grid import and export is valued at the national grid carbon intensity at that time. Across this build: average import intensity <b>{{ current.avgImportIntensity==null ? '–' : Math.round(current.avgImportIntensity) + ' g/kWh' }}</b> · average export intensity <b>{{ current.avgExportIntensity==null ? '–' : Math.round(current.avgExportIntensity) + ' g/kWh' }}</b>.</p>
+          <p class="subcard-note" v-else>Carbon intensity data unavailable in the loaded dataset — using the flat factors.</p>
+        </div>
+
         <div class="tech">
           <div class="icon neutral">◆</div>
           <div class="tx"><b>Hyundai Kona preset</b><small>loads real new and used petrol car / EV figures into the car assumptions</small></div>
@@ -438,8 +452,13 @@
             <div class="field"><label>Petrol (well-to-wheel) <span class="unit">kg/L</span></label><input type="number" step="0.05" v-model.number="p.petrolKgPerL"></div>
             <div class="field"><label>Gas combustion <span class="unit">kg/kWh</span></label><input type="number" step="0.001" v-model.number="p.gasCombustionKg"></div>
             <div class="field"><label>Gas upstream uplift <span class="unit">%</span></label><input type="number" step="1" v-model.number="p.gasUpstreamPct"></div>
-            <div class="field"><label>Grid intensity (average) <span class="unit">g/kWh</span></label><input type="number" v-model.number="p.gridIntensity"></div>
-            <div class="field"><label>Exported solar displaces <span class="unit">g/kWh</span></label><input type="number" v-model.number="p.marginalIntensity"></div>
+            <template v-if="!current.hhCarbon">
+              <div class="field"><label>Grid intensity (average) <span class="unit">g/kWh</span></label><input type="number" v-model.number="p.gridIntensity"></div>
+              <div class="field"><label>Exported solar displaces <span class="unit">g/kWh</span></label><input type="number" v-model.number="p.marginalIntensity"></div>
+            </template>
+            <p v-else style="font-size:11px;color:var(--faint);margin:6px 2px 0;">
+              Grid import and export carbon follow the national half-hourly intensity dataset — set under <em>Build your home · Grid carbon</em>.
+            </p>
           </div>
         </details>
 
@@ -618,7 +637,7 @@
         <p><b>How to read this.</b> Lumpy purchases (a car, a boiler) are spread over their life as an equivalent annual cost, using an annuity at a real {{ p.discountRate }}% discount rate (editable under <em>Assumptions · Discounting</em>; set it to 0 for plain straight-line spreading). This lets options compare like-for-like, and means cash spent today weighs more than costs and resale values years away. The fossil status quo already carries a car and a boiler you would replace anyway, so switching to an EV or heat pump swaps one asset cost for another rather than adding to it. ‘Extra upfront’ is the cash needed today beyond a like-for-like petrol car or boiler replacement.</p>
         <p style="margin-top:10px;"><b>The model.</b> A real year of 15-minute data is simulated interval by interval (<code>model.js</code>): solar, battery and EV charging are dispatched through the year, so self-consumption and the import / export split emerge from the timing rather than a fixed ratio. The <b>Agile tariff</b> switch re-costs the same dispatch against the dataset's half-hourly wholesale-linked prices; with it off, flat import and export rates apply. The EV charges within the window set under <em>Electric vehicle</em>; a simple annualised estimate is available under <em>Advanced · solar matching</em> for comparison. <span class="pill">v2 · 15-minute</span></p>
         <p style="margin-top:10px;"><b>Simplifications.</b> Insurance is treated as roughly neutral between petrol and EV. All prices include VAT: flat rates default to the price cap, and Agile import comes from the region-D dataset grossed up by 5%. Prices are a mid-2026 snapshot and unusually high.</p>
-        <p style="margin-top:10px;"><b>Carbon basis.</b> Petrol ~2.9 kgCO₂e/L well-to-wheel; gas 0.183 kgCO₂e/kWh burned plus an upstream and methane uplift (default +20%, GWP100, and likely a floor rather than a ceiling). Grid electricity is taken at ~75 gCO₂/kWh, a deliberately conservative forward average (2024-25 actual is ~125, falling towards ~50 by 2030), so the electrified case improves every year. Exported solar is credited with the gas (CCGT) generation it displaces, at ~400 gCO₂/kWh. This is deliberately a <em>marginal</em> basis rather than the <em>average</em> applied to imports: an exported unit backs out the marginal plant, not the grid mix. Expect both the price and the carbon value of export to fall as more solar joins the grid (daytime prices decline, curtailment rises). Both factors are editable under <em>Carbon · operational factors</em>. Embodied carbon follows the Hoekstra framing: the car glider is roughly equal for petrol and EV, the battery is the main difference (~75 kgCO₂e/kWh of cell), and ‘carbon payback’ is that one-off extra manufacturing carbon divided by the annual operational saving. <span class="pill">factors editable</span></p>
+        <p style="margin-top:10px;"><b>Carbon basis.</b> Petrol ~2.9 kgCO₂e/L well-to-wheel; gas 0.183 kgCO₂e/kWh burned plus an upstream and methane uplift (default +20%, GWP100, and likely a floor rather than a ceiling). Grid electricity defaults to the measured national <em>half-hourly</em> carbon intensity dataset: each interval's import and export is valued at the grid intensity at that time, so overnight EV charging, battery arbitrage and midday solar export each carry their true carbon weight. Note this is an <em>average</em>-intensity basis on both sides — export is credited with the grid mix it displaces at that moment, not the marginal plant. Switching <em>Build your home · Grid carbon</em> to <em>Flat</em> uses two fixed factors instead: imports at ~75 gCO₂/kWh (a deliberately conservative forward average — 2024-25 actual is ~125, falling towards ~50 by 2030) and exported solar credited with the marginal gas (CCGT) generation it backs out, at ~400 gCO₂/kWh — a much larger export credit than the average basis gives. Expect both the price and the carbon value of export to fall as more solar joins the grid (daytime prices decline, curtailment rises). Both flat factors are editable under <em>Carbon · operational factors</em>. Embodied carbon follows the Hoekstra framing: the car glider is roughly equal for petrol and EV, the battery is the main difference (~75 kgCO₂e/kWh of cell), and ‘carbon payback’ is that one-off extra manufacturing carbon divided by the annual operational saving. <span class="pill">factors editable</span></p>
         <p style="margin-top:10px;"><b>Abatement cost.</b> The change in all-in annual cost divided by the tonnes of CO₂e cut per year (whole build vs status quo, or per step given the rest of the build). A <b>negative</b> figure means the measure cuts carbon <em>and</em> saves money, so the household is effectively paid to decarbonise. A positive figure is the cost per tonne avoided (for context, UK government appraisal values carbon at roughly £250/tCO₂e). The <b>household</b> figure is net of any grant; the <b>societal</b> figure adds the BUS grant back, since a grant is a transfer from taxpayers rather than a saving the measure creates. Steps that do not cut carbon show ‘n/a’.</p>
       </div>
     </div>
@@ -626,13 +645,13 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
-<script src="<?php echo $path; ?>model/model.js?v=6"></script>
-<script src="<?php echo $path; ?>model/ledger.js?v=9"></script>
+<script src="<?php echo $path; ?>model/model.js?v=7"></script>
+<script src="<?php echo $path; ?>model/ledger.js?v=10"></script>
 <script>
 // Url prefix for this tool's own assets, so the javascript below can find the
 // dataset without being templated by php.
 const TOOL_PATH = '<?php echo $path; ?>';
 </script>
-<script src="<?php echo $path; ?>cobenefit_explorer.js?v=3"></script>
+<script src="<?php echo $path; ?>cobenefit_explorer.js?v=5"></script>
 </body>
 </html>

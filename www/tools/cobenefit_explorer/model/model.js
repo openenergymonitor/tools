@@ -156,7 +156,8 @@ var model = {
     interval: 900, // 15 minutes
 
     // Series layout the simulation expects:
-    // [0] solar, [1] lac demand, [2] heatpump, [3] agile import, [4] agile export, [5] measured ev
+    // [0] solar, [1] lac demand, [2] heatpump, [3] agile import, [4] agile export,
+    // [5] measured ev, [6] grid carbon intensity (gCO2/kWh, optional)
     series: [],
 
     // Set true when load() falls back to synthetically generated data because
@@ -206,14 +207,16 @@ var model = {
         });
 
         // Re-map to the series layout the simulation expects:
-        // [0] solar, [1] lac demand, [2] heatpump, [3] agile import, [4] agile export, [5] measured ev
+        // [0] solar, [1] lac demand, [2] heatpump, [3] agile import, [4] agile export,
+        // [5] measured ev, [6] grid carbon intensity (absent in older data files)
         this.series = [
             result[0],
             { data: lac },
             result[4],
             { data: agile_import },
             result[6],
-            result[7]
+            result[7],
+            result[8] || null
         ];
 
         this.normalise();
@@ -589,6 +592,15 @@ var model = {
             let agile_import_rate_sum = 0;
             let agile_export_rate_sum = 0;
 
+            // Half-hourly grid carbon intensity (series[6], gCO2/kWh), when the
+            // data file carries it. Import carbon is the import in each interval
+            // times that interval's intensity; export is credited the same way,
+            // valuing exported solar at the grid intensity at the time of export.
+            let carbon_arr = (series[6] && series[6].data && series[6].data.length >= n_intervals)
+                ? series[6].data : null;
+            let import_carbon_g = 0;   // gCO2 (import_kwh * g/kWh)
+            let export_carbon_g = 0;
+
             let battery_soc = battery_soc_start;
             let month = new Date(data_start_time).getMonth();
             let month_start = data_start_time;
@@ -741,6 +753,13 @@ var model = {
                 agile_import_rate_sum += import_rate * import_kwh;
                 agile_export_rate_sum += export_rate * export_kwh;
 
+                // Grid carbon at this interval's intensity
+                if (carbon_arr) {
+                    let intensity = carbon_arr[i] || 0;
+                    import_carbon_g += import_kwh * intensity;
+                    export_carbon_g += export_kwh * intensity;
+                }
+
                 // Roll up monthly totals for graph and table at month boundaries.
                 let lastMonth = month;
                 month = date.getMonth();
@@ -812,6 +831,14 @@ var model = {
                     avg_agile_import_rate: avg_agile_import_rate,
                     avg_agile_export_rate: avg_agile_export_rate,
 
+                    // half-hourly grid carbon (null when the dataset lacks the
+                    // carbon intensity series)
+                    import_co2_kg: carbon_arr ? import_carbon_g / 1000 : null,
+                    export_co2_kg: carbon_arr ? export_carbon_g / 1000 : null,
+                    // volume-weighted average intensity of import / export (g/kWh)
+                    avg_import_intensity: (carbon_arr && annual.import_kwh > 0) ? import_carbon_g / annual.import_kwh : null,
+                    avg_export_intensity: (carbon_arr && annual.export_kwh > 0) ? export_carbon_g / annual.export_kwh : null,
+
                     // per-load electricity attribution & battery energy sourcing
                     load_attr: load_attr,
                     battery_flow: bat_flow
@@ -845,6 +872,7 @@ var model = {
 // synthetic year in the same 8-series raw shape as the data file:
 //   [0] solar [1] appliance [2] cooker [3] lighting
 //   [4] heatpump [5] agile import p/kWh [6] agile export p/kWh [7] measured EV (W)
+//   [8] grid carbon intensity gCO2/kWh
 // load() falls back to this when the live data file can't be fetched, so any
 // tool building on the model still has something to run against.
 function mulberry32(a) {
@@ -861,7 +889,7 @@ function generateSyntheticData() {
     var interval = model.interval; // s
     var n = 365 * 96;
     var rnd = mulberry32(20250601);
-    var solar = [], app = [], cook = [], light = [], hp = [], imp = [], exp = [], ev = [];
+    var solar = [], app = [], cook = [], light = [], hp = [], imp = [], exp = [], ev = [], carbon = [];
     var TWO_PI = Math.PI * 2;
     // per-day random factors
     var cloud = [], evNight = [];
@@ -918,6 +946,13 @@ function generateSyntheticData() {
         exp.push(Math.max(2, er + (rnd() - 0.5) * 1.5));
         // ---- measured EV (W) ----
         ev.push(0);
+        // ---- grid carbon intensity gCO2/kWh ----
+        // Higher in winter, dips with midday solar, bumps at the evening peak
+        // when gas sets the margin.
+        var ci = 130 + 70 * (1 - summer);
+        ci -= 80 * summer * Math.max(0, Math.cos(((h - 13) / 6) * (Math.PI / 2)));
+        if (h >= 16 && h < 19.5) ci += 40;
+        carbon.push(Math.max(20, Math.round(ci + (rnd() - 0.5) * 20)));
     }
     // EV: charge on ~64% of nights, from 00:30, 4-8 intervals at 7kW
     for (var d2 = 0; d2 < 365; d2++) {
@@ -935,7 +970,8 @@ function generateSyntheticData() {
         { name: 'heatpump', data: hp },
         { name: 'agile_import', data: imp },
         { name: 'agile_export', data: exp },
-        { name: 'measured_ev', data: ev }
+        { name: 'measured_ev', data: ev },
+        { name: 'carbon_intensity', data: carbon }
     ];
 }
 

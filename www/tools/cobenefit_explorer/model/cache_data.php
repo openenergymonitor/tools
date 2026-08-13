@@ -16,15 +16,16 @@ if (php_sapi_name() !== 'cli') {
 // solar             542264
 // agile import      518378
 // agile export      399363
+// carbon intensity  428391 (national grid, gCO2/kWh, half-hourly)
 
 // 1. Generate the request URL for the API call
-// http://localhost/tools/api.php?ids=542264,542259,542261,542263,542262,518378,399363,542260&start=1748736000&end=1780272000&interval=900&average=1&skipmissing=0&limitinterval=0&timeformat=notime
+// http://localhost/tools/api.php?ids=542264,542259,542261,542263,542262,518378,399363,542260,428391&start=1748736000&end=1780272000&interval=900&average=1&skipmissing=0&limitinterval=0&timeformat=notime
 
 // 2. Call the API and get the data
 
 // 3. Save the json data file in the cache folder
 
-$data = file_get_contents('http://localhost/tools/api.php?ids=542264,542259,542261,542263,542262,518378,399363,542260&start=1748736000&end=1780272000&interval=900&average=1&skipmissing=0&limitinterval=0&timeformat=notime');
+$data = file_get_contents('http://localhost/tools/api.php?ids=542264,542259,542261,542263,542262,518378,399363,542260,428391&start=1748736000&end=1780272000&interval=900&average=1&skipmissing=0&limitinterval=0&timeformat=notime');
 
 // Decode JSON data to check if it's valid
 $json_data = json_decode($data, true);
