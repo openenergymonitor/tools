@@ -24,9 +24,12 @@
 //   node harness.js hpspf [spfLo] [spfHi] [--optimal]  install-cost premium a higher-SPF system
 //                                                   can carry for equal whole-life economics
 //
-// Build flags are a comma list of: ev, hp, solar, battery, agile  (gas is
-// auto-disconnected with hp, mirroring the view). Override any DEFAULTS field
-// with --p name=value (repeatable), e.g. --p batteryKwh=10 --p gridIntensity=80.
+// Build flags are a comma list of: ev, hp, solar, battery, agile — plus the
+// tariff variants custom (band table), cosy (the real Cosy price feed) and
+// outgoing (Agile Outgoing export). Gas is auto-disconnected with hp,
+// mirroring the view. Override any DEFAULTS field with --p name=value
+// (repeatable), e.g. --p batteryKwh=10 --p gridIntensity=80. --tariff <preset>
+// applies a TARIFF_PRESETS schedule + standing charge (go / cosy / flux).
 //
 // Reading the code: the file goes bottom-up in dependency order —
 //   1. data loading and the memoised model runner
@@ -136,10 +139,21 @@ function cfg(flags) {
         c.tariffMode = 'custom';
     }
 
+    // 'cosy' flag: import priced from the real half-hourly Cosy dataset feed
+    // (region K, incl. price-cap resets) rather than a band table.
+    if (flags.includes('cosy')) {
+        c.agile = true;
+        c.tariffMode = 'cosy';
+    }
+
     // Export source defaults to match the import (agile→agile, custom→schedule,
-    // else flat); the 'outgoing' flag forces the half-hourly Agile Outgoing feed
-    // even when importing on the custom schedule.
-    c.exportMode = c.agile ? (c.tariffMode === 'custom' ? 'schedule' : 'agile') : 'flat';
+    // cosy→flat SEG — Cosy has no time-of-use export — else flat); the
+    // 'outgoing' flag forces the half-hourly Agile Outgoing feed regardless.
+    c.exportMode = 'flat';
+    if (c.agile) {
+        if (c.tariffMode === 'custom') c.exportMode = 'schedule';
+        else if (c.tariffMode === 'agile') c.exportMode = 'agile';
+    }
     if (flags.includes('outgoing')) c.exportMode = 'agile';
 
     if (c.hp) c.disconnectGas = true;
@@ -194,9 +208,12 @@ function h2(title) {
 const TECHS = ['ev', 'hp', 'solar', 'battery', 'agile'];
 const TECH_LABEL = { ev: 'EV', hp: 'Heat pump', solar: 'Solar', battery: 'Battery', agile: 'Agile tariff' };
 
-// Human name for a build, e.g. "Solar + Battery + Agile tariff".
+// Human name for a build, e.g. "Solar + Battery + Agile tariff". The tariff
+// label follows the import source (Agile / Cosy feed / custom schedule).
 function buildName(c) {
-    const on = TECHS.filter(t => c[t]).map(t => TECH_LABEL[t]);
+    const tariffName = c.tariffMode === 'custom' ? 'Custom tariff'
+                     : (c.tariffMode === 'cosy' ? 'Cosy tariff' : TECH_LABEL.agile);
+    const on = TECHS.filter(t => c[t]).map(t => t === 'agile' ? tariffName : TECH_LABEL[t]);
     return on.length ? on.join(' + ') : 'fossil status quo';
 }
 
@@ -245,7 +262,7 @@ function parseArgs(argv) {
             // to the parameter set (pair with the 'custom' build flag). The hp /
             // hpspf reports manage presets per-context themselves.
             out.tariff = argv[++i];
-        } else if (a.includes(',') || TECHS.includes(a)) {
+        } else if (a.includes(',') || TECHS.includes(a) || ['custom', 'cosy', 'outgoing'].includes(a)) {
             // A build-flag list, e.g. "solar,battery,agile" or a lone "solar".
             out.flags = a.split(',').filter(Boolean);
         } else {
@@ -289,7 +306,8 @@ function scenarioReport(c, p, opts) {
     if (r.avgAgileImport != null || r.avgAgileExport != null) {
         const imp = r.avgAgileImport != null ? r.avgAgileImport.toFixed(1) : 'flat';
         const exp = r.avgAgileExport != null ? r.avgAgileExport.toFixed(1) : 'flat';
-        const name = c.tariffMode === 'custom' ? 'custom' : 'Agile';
+        const name = c.tariffMode === 'custom' ? 'custom'
+                   : (c.tariffMode === 'cosy' ? 'Cosy' : 'Agile');
         row('Avg ' + name + ' import/export', imp + ' / ' + exp + ' p/kWh');
     }
 
@@ -762,16 +780,19 @@ function gridReport(p, opts, positional) {
 // -----------------------------------------------------------------------------
 // The contexts a heat pump might land in, shared by the hp* reports. Tariff
 // contexts carry the preset's schedule and/or standing charge.
+// The cosy contexts price import from the real Cosy dataset feed (the 'cosy'
+// build flag); the preset still supplies the standing charge and the band
+// table the model would fall back to without the feed.
 const HP_CONTEXTS = [
     { name: 'Flat tariff only',      flags: [] },
     { name: 'Agile',                 flags: ['agile'],                      standing: 'agile' },
-    { name: 'Cosy (HP tariff)',      flags: ['custom'],                     preset: 'cosy' },
+    { name: 'Cosy (HP tariff)',      flags: ['cosy'],                       preset: 'cosy' },
     { name: 'Solar',                 flags: ['solar'] },
     { name: 'Solar + Battery',       flags: ['solar', 'battery'] },
     { name: 'Battery + Agile',       flags: ['battery', 'agile'],           standing: 'agile' },
     { name: 'Solar + Agile',         flags: ['solar', 'agile'],             standing: 'agile' },
     { name: 'Solar + Batt + Agile',  flags: ['solar', 'battery', 'agile'],  standing: 'agile' },
-    { name: 'Solar + Batt + Cosy',   flags: ['solar', 'battery', 'custom'], preset: 'cosy' },
+    { name: 'Solar + Batt + Cosy',   flags: ['solar', 'battery', 'cosy'],   preset: 'cosy' },
 ];
 
 // Per-context parameter set: presets carry a schedule (custom tariffs) and a

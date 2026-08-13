@@ -117,9 +117,15 @@
         // band runs to midnight; the explicit 00:00 day band then resumes the day rate
         // through to the 04:00 cheap window.
 
-        // Rates are South Wales region K Cosy variable
+        // Priced from the real half-hourly Cosy dataset feed (region K, incl.
+        // price-cap resets through the year) — `dataset: 'cosy'` makes picking
+        // this preset switch the import source to that feed rather than the
+        // band table below. The table is kept as the display/edit reference and
+        // as the model's fallback when the data file lacks the Cosy series;
+        // its rates are South Wales region K Cosy variable (spring 2026).
         cosy: {
             label: 'Octopus Cosy',
+            dataset: 'cosy',
             standing: 69.7,
             schedule: [
                 { start: '00:00', price: 26.67, export: 12 },
@@ -261,16 +267,26 @@
             export_rate: p.segRate
         };
         // Tell the model where to source import & export prices. Import follows the
-        // build: 'schedule' (custom), 'agile' (agile import) or 'flat'. Export is an
-        // independent choice (c.exportMode): 'flat' SEG, 'agile' Outgoing, or
-        // 'schedule' (the custom band table's export column). The agile/agile pair is
-        // the model default, so we only attach mp.tariff when something differs —
-        // keeping the common Agile-tariff cache keys unchanged.
-        var importSrc = c.agile ? (c.tariffMode === 'custom' ? 'schedule' : 'agile') : 'flat';
+        // build: 'schedule' (custom), 'cosy' (the Cosy price feed), 'agile' (agile
+        // import) or 'flat'. Export is an independent choice (c.exportMode): 'flat'
+        // SEG, 'agile' Outgoing, or 'schedule' (the custom band table's export
+        // column). The agile/agile pair is the model default, so we only attach
+        // mp.tariff when something differs — keeping the common Agile-tariff cache
+        // keys unchanged.
+        var importSrc = 'flat';
+        if (c.agile) {
+            importSrc = c.tariffMode === 'custom' ? 'schedule'
+                      : (c.tariffMode === 'cosy' ? 'cosy' : 'agile');
+        }
         var exportSrc = c.exportMode || 'flat';
         if (importSrc !== 'agile' || exportSrc !== 'agile') {
             mp.tariff = { import: importSrc, export: exportSrc };
-            if (importSrc === 'schedule' || exportSrc === 'schedule') mp.tariff.schedule = p.tariffSchedule;
+            // The band table rides along for the 'schedule' source, and as the
+            // model's fallback when a 'cosy' build runs against a data file
+            // that predates the Cosy series.
+            if (importSrc === 'schedule' || importSrc === 'cosy' || exportSrc === 'schedule') {
+                mp.tariff.schedule = p.tariffSchedule;
+            }
         }
         var r = ctx.runModel(mp);
         return {

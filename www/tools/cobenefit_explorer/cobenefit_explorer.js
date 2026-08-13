@@ -77,18 +77,22 @@ createApp({
   },
   computed:{
     current(){ return this.compute(this.cfg); },
-    // Three-way IMPORT selector backing the segmented control. 'flat' clears the
-    // time-varying import; 'agile'/'custom' turn it on and pick the source. Switching
-    // import keeps a still-valid export choice, else snaps export to a sensible default.
+    // Four-way IMPORT selector backing the segmented control. 'flat' clears the
+    // time-varying import; 'agile' / 'cosy' / 'custom' turn it on and pick the
+    // source — 'cosy' prices from the real half-hourly Cosy dataset feed.
+    // Switching import keeps a still-valid export choice, else snaps export to
+    // a sensible default (Cosy pays flat SEG — it has no time-of-use export).
     tariffSel:{
       get(){ return this.cfg.agile ? this.cfg.tariffMode : 'flat'; },
       set(v){
         if(v==='flat'){ this.cfg.agile = false; if(this.cfg.exportMode==='schedule') this.cfg.exportMode='flat'; }
         else { this.cfg.agile = true; this.cfg.tariffMode = v;
           if(v==='custom'){ if(this.cfg.exportMode==='flat') this.cfg.exportMode='schedule'; }
-          else { if(this.cfg.exportMode==='schedule') this.cfg.exportMode='agile';
-            // Agile import carries its own standing charge
-            const ag = ledger.TARIFF_PRESETS.agile; if(ag && ag.standing!=null) this.p.elecStanding = ag.standing;
+          else {
+            if(this.cfg.exportMode==='schedule') this.cfg.exportMode = v==='cosy' ? 'flat' : 'agile';
+            // Agile and Cosy each carry their own standing charge
+            const pr = ledger.TARIFF_PRESETS[v==='cosy' ? 'cosy' : 'agile'];
+            if(pr && pr.standing!=null) this.p.elecStanding = pr.standing;
           }
         }
       },
@@ -101,8 +105,11 @@ createApp({
     },
     // Any time-varying pricing on either side — used to default optimal dispatch on.
     timeVaryingPricing(){ return this.cfg.agile || this.cfg.exportMode !== 'flat'; },
-    // Display name for the active time-varying import tariff ('Agile' / 'Custom').
-    tariffLabel(){ return this.cfg.tariffMode === 'custom' ? 'Custom' : 'Agile'; },
+    // Display name for the active time-varying import tariff.
+    tariffLabel(){
+      return this.cfg.tariffMode === 'custom' ? 'Custom'
+           : (this.cfg.tariffMode === 'cosy' ? 'Cosy' : 'Agile');
+    },
     // Schedule presets (Go / Cosy / Flux) offered as one-click buttons in the editor
     // — only entries that carry a schedule (the Agile entry holds a standing charge only).
     tariffPresets(){
@@ -371,7 +378,7 @@ createApp({
     },
 
     // display name + carrier colour for a technology, used in the step tooltip
-    techLabel(tech){ if(tech==='agile') return (this.cfg.tariffMode==='custom'?'Custom':'Agile')+' tariff'; return {ev:'Electric vehicle', hp:'Heat pump', solar:'Solar PV', battery:'Home battery'}[tech] || tech; },
+    techLabel(tech){ if(tech==='agile') return this.tariffLabel+' tariff'; return {ev:'Electric vehicle', hp:'Heat pump', solar:'Solar PV', battery:'Home battery'}[tech] || tech; },
     techColor(tech){ return {ev:'--ev', hp:'--hp', solar:'--solar', battery:'--battery', agile:'--grid'}[tech] || '--text'; },
 
     // Marginal upfront capital to add this single technology, given the rest of
@@ -484,9 +491,11 @@ createApp({
     // only has to nudge the time/price.
     addTariffRow(){ this.p.tariffSchedule.push({ start:'12:00', price: this.p.elecRate, export: this.p.segRate }); },
     removeTariffRow(i){ if(this.p.tariffSchedule.length>1) this.p.tariffSchedule.splice(i,1); },
-    // Load a ready-made schedule (Go / Cosy / Flux) into the editor — copied, so the
-    // bands stay editable and the shared preset isn't mutated — and apply its daily
-    // standing charge.
+    // Load a ready-made schedule (Go / Cosy / Flux) into the editor — copied, so
+    // the bands stay editable and the shared preset isn't mutated — and apply
+    // its daily standing charge. Import stays table-priced ('custom'): the Cosy
+    // preset here is the editable current-rates table, while the Cosy option on
+    // the main tariff selector prices from the real half-hourly feed instead.
     applyTariffPreset(key){
       const pr = ledger.TARIFF_PRESETS[key];
       if(!pr) return;
@@ -517,7 +526,7 @@ createApp({
     if(typeof model !== 'undefined'){
       // ?v= busts the browser HTTP cache when the dataset gains new series
       // (v2: added the half-hourly grid carbon intensity feed).
-      model.load(TOOL_PATH + 'model/data.json?v=2', () => {
+      model.load(TOOL_PATH + 'model/data.json?v=3', () => {
         this.usingSynthetic = model.usingSynthetic;
         this.modelReady = true;
       });

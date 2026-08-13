@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title><?php echo $title; ?></title>
 <meta name="description" content="<?php echo $description; ?>">
-<link rel="stylesheet" href="<?php echo $path; ?>cobenefit_explorer.css?v=4">
+<link rel="stylesheet" href="<?php echo $path; ?>cobenefit_explorer.css?v=6">
 <script>
 // Theme, applied before the first paint so the page never flashes the palette
 // the visitor is about to switch away from. A stored choice wins; with none,
@@ -217,7 +217,7 @@
 
         <div class="tech" :class="{disabled: !useHHModel}">
           <div class="icon" style="background:var(--grid)">⚡</div>
-          <div class="tx"><b>Tariff</b><small v-if="useHHModel">flat rate, half-hourly Agile, or your own time-of-day schedule</small><small v-else>time-varying tariffs need the 15-minute model · enable it under Advanced</small></div>
+          <div class="tx"><b>Tariff</b><small v-if="useHHModel">flat rate, half-hourly Agile, Octopus Cosy, or your own time-of-day schedule</small><small v-else>time-varying tariffs need the 15-minute model · enable it under Advanced</small></div>
           <div class="mg" v-if="useHHModel && cfg.agile">
             <div class="mgtop"><span class="val">{{ marginalPrimary('agile') }}</span><span class="infotip" tabindex="0" role="img" aria-label="Step breakdown"><span class="ic">i</span><span class="tipcard" v-html="marginalTipHtml('agile')"></span></span></div>
             <span>{{ marginalCaption() }}</span>
@@ -225,6 +225,7 @@
           <div class="tseg" role="group" aria-label="Tariff type">
             <button :class="{on: tariffSel==='flat'}" @click="tariffSel='flat'">Flat</button>
             <button :class="{on: tariffSel==='agile'}" @click="tariffSel='agile'" :disabled="!useHHModel">Agile</button>
+            <button :class="{on: tariffSel==='cosy'}" @click="tariffSel='cosy'" :disabled="!useHHModel">Cosy</button>
             <button :class="{on: tariffSel==='custom'}" @click="tariffSel='custom'" :disabled="!useHHModel">Custom</button>
           </div>
         </div>
@@ -236,13 +237,17 @@
             <input class="num-in" type="number" step="0.01" v-model.number="p.elecRate">
           </div>
 
+          <!-- cosy: priced from the real dataset feed -->
+          <p class="subcard-note" v-if="tariffSel==='cosy'">Octopus Cosy, priced from the <b>real half-hourly price feed</b> (region K, inc. VAT, including price-cap changes through the year). Cheap windows 04:00&ndash;07:00, 13:00&ndash;16:00 and 22:00&ndash;00:00, a teatime peak 16:00&ndash;19:00, day rate in between. To edit rates by hand, use Custom instead.</p>
+
           <!-- custom schedule builder -->
           <div v-if="tariffSel==='custom' && useHHModel">
             <div class="tsched-head">
               <b>Schedule</b>
               <span class="tsched-presets">
                 <span class="preset-lbl">presets</span>
-                <button v-for="(pr,key) in tariffPresets" :key="key" class="presetbtn" @click="applyTariffPreset(key)" :title="'Load '+pr.label">{{ pr.label }}</button>
+                <button v-for="(pr,key) in tariffPresets" :key="key" class="presetbtn"
+                        @click="applyTariffPreset(key)" :title="'Load '+pr.label">{{ pr.label }}</button>
               </span>
             </div>
             <div class="tsched">
@@ -645,13 +650,13 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
-<script src="<?php echo $path; ?>model/model.js?v=8"></script>
-<script src="<?php echo $path; ?>model/ledger.js?v=11"></script>
+<script src="<?php echo $path; ?>model/model.js?v=9"></script>
+<script src="<?php echo $path; ?>model/ledger.js?v=13"></script>
 <script>
 // Url prefix for this tool's own assets, so the javascript below can find the
 // dataset without being templated by php.
 const TOOL_PATH = '<?php echo $path; ?>';
 </script>
-<script src="<?php echo $path; ?>cobenefit_explorer.js?v=5"></script>
+<script src="<?php echo $path; ?>cobenefit_explorer.js?v=8"></script>
 </body>
 </html>

@@ -59,9 +59,10 @@
 // 2. DATA LOADING                                           (search: ---- data loading)
 //    load()      – fetch the cached data file; on failure fall back to a
 //                  synthetic year so the tool still runs (usingSynthetic flag).
-//    _apply()    – remap the 8 raw file series to the 6 the model expects:
+//    _apply()    – remap the raw file series to the layout the model expects:
 //                  appliance + cooker + lighting are summed into one "lac"
-//                  series, and the import price is grossed up by 5% VAT.
+//                  series, and the import prices (Agile, Cosy) are grossed up
+//                  by 5% VAT.
 //    normalise() – sum each series to annual kWh (the `input` totals).
 //
 // 3. PARAMETERS                                             (search: defaultParams)
@@ -157,7 +158,8 @@ var model = {
 
     // Series layout the simulation expects:
     // [0] solar, [1] lac demand, [2] heatpump, [3] agile import, [4] agile export,
-    // [5] measured ev, [6] grid carbon intensity (gCO2/kWh, optional)
+    // [5] measured ev, [6] grid carbon intensity (gCO2/kWh, optional),
+    // [7] cosy import price (p/kWh inc. VAT, optional)
     series: [],
 
     // Set true when load() falls back to synthetically generated data because
@@ -196,19 +198,21 @@ var model = {
             return (v || 0) + (result[2].data[i] || 0) + (result[3].data[i] || 0);
         });
 
-        // The Agile import feed (518378) is stored ex-VAT; domestic electricity
-        // supply carries 5% VAT, so gross the import price up here. This is the
-        // single point that feeds the cost calc, the no-solar baseline, the
-        // volume-weighted average and the DP battery optimiser. Export (399363)
-        // is left as-is: domestic export/SEG payments are not subject to VAT.
+        // The Agile (518384) and Cosy (520109) import feeds are stored ex-VAT;
+        // domestic electricity supply carries 5% VAT, so gross the import
+        // prices up here. This is the single point that feeds the cost calc,
+        // the no-solar baseline, the volume-weighted average and the DP battery
+        // optimiser. Export (399369) is left as-is: domestic export/SEG
+        // payments are not subject to VAT.
         var VAT = 1.05;
-        var agile_import = result[5].data.map(function (v) {
-            return v == null ? v : v * VAT;
-        });
+        var gross = function (v) { return v == null ? v : v * VAT; };
+        var agile_import = result[5].data.map(gross);
+        var cosy_import = result[9] ? { data: result[9].data.map(gross) } : null;
 
         // Re-map to the series layout the simulation expects:
         // [0] solar, [1] lac demand, [2] heatpump, [3] agile import, [4] agile export,
-        // [5] measured ev, [6] grid carbon intensity (absent in older data files)
+        // [5] measured ev, [6] grid carbon intensity, [7] cosy import
+        // ([6] and [7] are absent in older data files)
         this.series = [
             result[0],
             { data: lac },
@@ -216,7 +220,8 @@ var model = {
             { data: agile_import },
             result[6],
             result[7],
-            result[8] || null
+            result[8] || null,
+            cosy_import
         ];
 
         this.normalise();
@@ -446,6 +451,9 @@ var model = {
         // Per-interval import / export prices (p/kWh). Each side is sourced
         // independently via p.tariff.import / p.tariff.export:
         //   'agile'    – the half-hourly feed (series[3] import, series[4] export)
+        //   'cosy'     – the Octopus Cosy price feed (series[7], import only):
+        //                the real historical rates, including price-cap resets,
+        //                rather than a single period's band table
         //   'flat'     – the constant import_rate / export_rate
         //   'schedule' – a user-defined time-of-day band table (p.tariff.schedule)
         // Both default to the Agile feed (so an absent p.tariff = old behaviour).
@@ -453,9 +461,16 @@ var model = {
         let tariff = p.tariff || {};
         let import_src = tariff.import || 'agile';
         let export_src = tariff.export || 'agile';
-        let import_rate_arr = series[3].data;
+        // Older data files lack the Cosy series; fall back to pricing the
+        // caller's band table so the build still runs (the synthetic dataset
+        // carries a Cosy series, so this only fires on a stale data.json).
+        if (import_src === 'cosy' && !(series[7] && series[7].data && series[7].data.length >= n_intervals)) {
+            import_src = 'schedule';
+        }
+        let import_rate_arr = import_src === 'cosy' ? series[7].data : series[3].data;
         let export_rate_arr = series[4].data;
-        if (import_src !== 'agile' || export_src !== 'agile') {
+        let import_is_feed = (import_src === 'agile' || import_src === 'cosy');
+        if (!import_is_feed || export_src !== 'agile') {
             // Time-of-day band lookup, built only when a side is 'schedule'. Bands
             // are {minutes-of-day, price, export}, sorted; minutes parsed from a
             // numeric `minutes` field or a 'HH:MM' `start` string. Export falls back
@@ -477,7 +492,7 @@ var model = {
                     return band;
                 };
             }
-            if (import_src !== 'agile') import_rate_arr = new Array(n_intervals);
+            if (!import_is_feed) import_rate_arr = new Array(n_intervals);
             if (export_src !== 'agile') export_rate_arr = new Array(n_intervals);
             for (var ri = 0; ri < n_intervals; ri++) {
                 var band = null;
@@ -895,7 +910,7 @@ function generateSyntheticData() {
     var interval = model.interval; // s
     var n = 365 * 96;
     var rnd = mulberry32(20250601);
-    var solar = [], app = [], cook = [], light = [], hp = [], imp = [], exp = [], ev = [], carbon = [];
+    var solar = [], app = [], cook = [], light = [], hp = [], imp = [], exp = [], ev = [], carbon = [], cosy = [];
     var TWO_PI = Math.PI * 2;
     // per-day random factors
     var cloud = [], evNight = [];
@@ -959,6 +974,13 @@ function generateSyntheticData() {
         ci -= 80 * summer * Math.max(0, Math.cos(((h - 13) / 6) * (Math.PI / 2)));
         if (h >= 16 && h < 19.5) ci += 40;
         carbon.push(Math.max(20, Math.round(ci + (rnd() - 0.5) * 20)));
+        // ---- cosy import p/kWh (ex-VAT, like the real feed) ----
+        // The fixed Cosy band structure at region K spring-2026 rates: cheap
+        // windows 04-07 / 13-16 / 22-24, a teatime peak 16-19, day rate between.
+        var cz = 25.36;
+        if ((h >= 4 && h < 7) || (h >= 13 && h < 16) || h >= 22) cz = 12.45;
+        else if (h >= 16 && h < 19) cz = 38.05;
+        cosy.push(cz);
     }
     // EV: charge on ~64% of nights, from 00:30, 4-8 intervals at 7kW
     for (var d2 = 0; d2 < 365; d2++) {
@@ -977,7 +999,8 @@ function generateSyntheticData() {
         { name: 'agile_import', data: imp },
         { name: 'agile_export', data: exp },
         { name: 'measured_ev', data: ev },
-        { name: 'carbon_intensity', data: carbon }
+        { name: 'carbon_intensity', data: carbon },
+        { name: 'cosy_import', data: cosy }
     ];
 }
 
