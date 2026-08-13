@@ -420,9 +420,20 @@
                         <div class="cost-highlight">
                             <div class="d-flex justify-content-between mb-1"><span class="text-muted">Energy cost</span><b>£{{ energy_cost_per_mwh | toFixed(1) }}/MWh</b></div>
                             <div class="d-flex justify-content-between mb-1"><span class="text-muted">Grid cost</span><b>£{{ grid_cost_per_mwh | toFixed(1) }}/MWh</b></div>
+                            <!-- Approximate additional costs from https://www.electricitybills.uk/ -->
+                            <div class="d-flex justify-content-between mb-1"><span class="text-muted">Supplier costs &amp; margins</span><b>£{{ supplier_cost_per_mwh | toFixed(1) }}/MWh</b></div>
+                            <div class="d-flex justify-content-between mb-1"><span class="text-muted">Other policy costs</span><b>£{{ other_policy_cost_per_mwh | toFixed(1) }}/MWh</b></div>
+                            <div class="d-flex justify-content-between mb-1"><span class="text-muted">VAT ({{ vat_prc }}%)</span><b>£{{ vat_per_mwh | toFixed(1) }}/MWh</b></div>
                             <hr class="my-2">
                             <div class="d-flex justify-content-between"><span><b>Total cost</b></span><b class="text-primary fs-5">£{{ total_cost_per_mwh | toFixed(1) }}/MWh</b></div>
                         </div>
+
+                        <p class="mt-2 mb-0"><small class="text-muted">
+                            Supplier costs &amp; margins, other policy costs and VAT are approximate figures based on
+                            <a href="https://www.electricitybills.uk/" target="_blank">electricitybills.uk</a>,
+                            a useful breakdown of what makes up UK electricity bills.
+                            Note that the simulated total for 2024 currently runs below the ~£290/MWh average unit cost given there. The average cost of renewables in 2025 was approx ~£160/MWh, adjusting the model costs towards this closes part of the gap.
+                        </small></p>
 
                         <div class="form-check mt-3">
                             <input class="form-check-input" type="checkbox" v-model="include_carbon_cost" @change="model_costs" id="carbonCostCheck">
@@ -550,5 +561,5 @@
     </div><!-- /tab-content -->
 </div><!-- /app -->
 
-<script src="<?php echo $path; ?>lcoe_lib.js?v=1"></script>
-<script src="<?php echo $path; ?>ukgridsim.js?v=33"></script>
+<script src="<?php echo $path; ?>lcoe_lib.js?v=2"></script>
+<script src="<?php echo $path; ?>ukgridsim.js?v=34"></script>

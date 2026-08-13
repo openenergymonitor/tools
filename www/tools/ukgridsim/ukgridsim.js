@@ -92,6 +92,12 @@ var app = new Vue({
         grid_cost_per_mwh: 0,
         total_cost_per_mwh: 0,
 
+        // approximate additional retail costs, see https://www.electricitybills.uk/
+        supplier_cost_per_mwh: 40, // supplier costs and margins
+        other_policy_cost_per_mwh: 5,
+        vat_prc: 5,
+        vat_per_mwh: 0,
+
         // calculated total costs
         solar_cost: 0,
         wind_cost: 0,
@@ -812,8 +818,10 @@ var app = new Vue({
             // Energy cost per MWh not including grid costs
             app.energy_cost_per_mwh = total_energy_cost / app.demand_GWh;
 
-            // Total cost per MWh including grid costs
-            app.total_cost_per_mwh = app.energy_cost_per_mwh + app.grid_cost_per_mwh;
+            // Total cost per MWh including grid costs and approximate additional retail costs
+            let pre_vat_cost_per_mwh = app.energy_cost_per_mwh + app.grid_cost_per_mwh + app.supplier_cost_per_mwh + app.other_policy_cost_per_mwh;
+            app.vat_per_mwh = pre_vat_cost_per_mwh * app.vat_prc * 0.01;
+            app.total_cost_per_mwh = pre_vat_cost_per_mwh + app.vat_per_mwh;
 
         },
         normalise: function () {
