@@ -9,13 +9,12 @@
 <script>
 // Theme, applied before the first paint so the page never flashes the palette
 // the visitor is about to switch away from. A stored choice wins; with none,
-// follow the operating system. The switch itself is wired up in
+// default to light. The switch itself is wired up in
 // cobenefit_explorer.js, which writes the same key.
 (function () {
   var stored = null;
   try { stored = localStorage.getItem('oem-theme'); } catch (e) { /* private mode */ }
-  var light = stored ? stored === 'light'
-                     : window.matchMedia('(prefers-color-scheme: light)').matches;
+  var light = stored ? stored === 'light' : true;
   document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
 })();
 </script>
