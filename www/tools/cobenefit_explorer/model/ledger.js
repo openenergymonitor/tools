@@ -65,6 +65,12 @@
         batteryKwh: 5, batteryFixed: 500, batteryPerKwh: 250, batteryLife: 15, batteryUtil: 0.8,
         // battery performance — inverter power limit (kW) and round-trip efficiency (0-1)
         batteryMaxPowerKw: 3.5, batteryRoundTrip: 0.8,
+        // optimal-dispatch SOC discretisation. The DP quantises the battery to
+        // capacity/levels kWh steps; each discharge overshoots demand by up to a
+        // step, spilling to export, so coarse steps overstate running cost —
+        // ~£60/yr at 100 levels for a 10 kWh battery on a schedule tariff.
+        // 100 keeps the view responsive; analysis (the harness) can raise it.
+        batterySocLevels: 100,
         // discounting — real (above-inflation) discount rate, %/yr, applied to capital
         discountRate: 3,
         // investment metrics — for the simple payback / IRR / ISA-crossover view
@@ -110,17 +116,19 @@
         // a teatime peak (16:00–19:00) and a flat day rate in between. The 22:00 cheap
         // band runs to midnight; the explicit 00:00 day band then resumes the day rate
         // through to the 04:00 cheap window.
+
+        // Rates are South Wales region K Cosy variable
         cosy: {
             label: 'Octopus Cosy',
             standing: 69.7,
             schedule: [
-                { start: '00:00', price: 33.22, export: 12 },
-                { start: '04:00', price: 16.29, export: 12 },
-                { start: '07:00', price: 33.22, export: 12 },
-                { start: '13:00', price: 16.29, export: 12 },
-                { start: '16:00', price: 49.83, export: 12 },
-                { start: '19:00', price: 33.22, export: 12 },
-                { start: '22:00', price: 16.29, export: 12 },
+                { start: '00:00', price: 26.67, export: 12 },
+                { start: '04:00', price: 13.02, export: 12 },
+                { start: '07:00', price: 26.67, export: 12 },
+                { start: '13:00', price: 13.02, export: 12 },
+                { start: '16:00', price: 40.00, export: 12 },
+                { start: '19:00', price: 26.67, export: 12 },
+                { start: '22:00', price: 13.02, export: 12 },
             ],
         },
         // Octopus Flux: import & export both vary by time. A cheap overnight flux
@@ -241,6 +249,7 @@
             battery: {
                 capacity: c.battery ? p.batteryKwh : 0,
                 dispatch: ctx.optimalDispatch ? 'optimal' : 'greedy',
+                soc_levels: p.batterySocLevels,
                 charge_max: p.batteryMaxPowerKw * 1000,
                 discharge_max: p.batteryMaxPowerKw * 1000,
                 round_trip_efficiency: p.batteryRoundTrip

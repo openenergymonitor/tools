@@ -727,13 +727,19 @@ var model = {
                 if (demand > 0) {
                     let onsite_kwh = demand_kwh - import_kwh;
                     if (onsite_kwh < 0) onsite_kwh = 0;
+                    // The loads' own grid draw: total import less what went into
+                    // the battery. When the battery grid-charges alongside the
+                    // loads, import exceeds demand — the surplus is charging
+                    // energy, already priced separately via bat_flow, so it must
+                    // not be attributed to the loads too.
+                    let grid_to_load_kwh = demand_kwh - onsite_kwh;
                     let solar_to_load_kwh = Math.min(solar_kwh, onsite_kwh);
                     let battery_to_load_kwh = onsite_kwh - solar_to_load_kwh;
                     let loads = [[load_attr.lac, lac_w[i]], [load_attr.hp, hp_w[i]], [load_attr.ev, ev_w[i]]];
                     for (var li = 0; li < loads.length; li++) {
                         let a = loads[li][0];
                         let share = loads[li][1] / demand;
-                        let g = import_kwh * share;
+                        let g = grid_to_load_kwh * share;
                         a.grid_kwh += g;
                         a.grid_cost += g * import_rate * 0.01;
                         a.grid_cost_flat += g * p.import_rate * 0.01;

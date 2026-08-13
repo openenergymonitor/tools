@@ -645,8 +645,8 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
-<script src="<?php echo $path; ?>model/model.js?v=7"></script>
-<script src="<?php echo $path; ?>model/ledger.js?v=10"></script>
+<script src="<?php echo $path; ?>model/model.js?v=8"></script>
+<script src="<?php echo $path; ?>model/ledger.js?v=11"></script>
 <script>
 // Url prefix for this tool's own assets, so the javascript below can find the
 // dataset without being templated by php.

@@ -21,6 +21,8 @@
 //   node harness.js ladder [--optimal]              cumulative build-up ladder (+ investment view)
 //   node harness.js hp [--optimal]                  heat-pump whole-life economics by context
 //                                                   (+ capex / subsidy headroom from co-benefits)
+//   node harness.js hpspf [spfLo] [spfHi] [--optimal]  install-cost premium a higher-SPF system
+//                                                   can carry for equal whole-life economics
 //
 // Build flags are a comma list of: ev, hp, solar, battery, agile  (gas is
 // auto-disconnected with hp, mirroring the view). Override any DEFAULTS field
@@ -238,6 +240,11 @@ function parseArgs(argv) {
             // "--p=name=value", the same thing written as one token.
             const kv = a.slice(4).split('=');
             out.p[kv[0]] = parseFloat(kv[1]);
+        } else if (a === '--tariff') {
+            // "--tariff cosy": apply a TARIFF_PRESETS schedule + standing charge
+            // to the parameter set (pair with the 'custom' build flag). The hp /
+            // hpspf reports manage presets per-context themselves.
+            out.tariff = argv[++i];
         } else if (a.includes(',') || TECHS.includes(a)) {
             // A build-flag list, e.g. "solar,battery,agile" or a lone "solar".
             out.flags = a.split(',').filter(Boolean);
@@ -284,6 +291,24 @@ function scenarioReport(c, p, opts) {
         const exp = r.avgAgileExport != null ? r.avgAgileExport.toFixed(1) : 'flat';
         const name = c.tariffMode === 'custom' ? 'custom' : 'Agile';
         row('Avg ' + name + ' import/export', imp + ' / ' + exp + ' p/kWh');
+    }
+
+    // ---- effective electricity rate by use (the ledger's diagnostic lens) ----
+    // Cash basis: grid kWh at the time-of-use price actually paid, solar kWh at
+    // the export they forgo, battery kWh at what charging them cost. Shows what
+    // each load really pays per kWh once solar/battery/tariff timing is counted.
+    if (r.elecRates) {
+        console.log(hr('·'));
+        const er = r.elecRates;
+        const src = a => ` (grid ${Math.round(100 * a.gridKwh / a.kwh)}%` +
+                         ` · solar ${Math.round(100 * a.solarKwh / a.kwh)}%` +
+                         ` · battery ${Math.round(100 * a.batteryKwh / a.kwh)}%)`;
+        for (const [label, a] of [['Baseload', er.baseload], ['Cooking', er.cooking],
+                                  ['EV', er.ev], ['Heat pump', er.hp]]) {
+            if (a) row(label + ' pays', a.cashRate.toFixed(1) + ' p/kWh', src(a));
+        }
+        if (er.batUnitCash > 0)
+            row('Battery unit cost', er.batUnitCash.toFixed(1) + ' p/kWh', '  (charge cost ÷ kWh delivered)');
     }
 
     // ---- money: running costs + annualised capital = the all-in figure ----
@@ -735,20 +760,35 @@ function gridReport(p, opts, positional) {
 // custom-schedule machinery. Preset standing charges are applied so absolute
 // context costs are honest; standing charges cancel out of the HP marginals.
 // -----------------------------------------------------------------------------
-function hpEconomicsReport(p, opts) {
-    const presets = ledger.TARIFF_PRESETS;
-    const CONTEXTS = [
-        { name: 'Flat tariff only',      flags: [] },
-        { name: 'Agile',                 flags: ['agile'],                      standing: presets.agile.standing },
-        { name: 'Cosy (HP tariff)',      flags: ['custom'],                     preset: 'cosy' },
-        { name: 'Solar',                 flags: ['solar'] },
-        { name: 'Solar + Battery',       flags: ['solar', 'battery'] },
-        { name: 'Battery + Agile',       flags: ['battery', 'agile'],           standing: presets.agile.standing },
-        { name: 'Solar + Agile',         flags: ['solar', 'agile'],             standing: presets.agile.standing },
-        { name: 'Solar + Batt + Agile',  flags: ['solar', 'battery', 'agile'],  standing: presets.agile.standing },
-        { name: 'Solar + Batt + Cosy',   flags: ['solar', 'battery', 'custom'], preset: 'cosy' },
-    ];
+// The contexts a heat pump might land in, shared by the hp* reports. Tariff
+// contexts carry the preset's schedule and/or standing charge.
+const HP_CONTEXTS = [
+    { name: 'Flat tariff only',      flags: [] },
+    { name: 'Agile',                 flags: ['agile'],                      standing: 'agile' },
+    { name: 'Cosy (HP tariff)',      flags: ['custom'],                     preset: 'cosy' },
+    { name: 'Solar',                 flags: ['solar'] },
+    { name: 'Solar + Battery',       flags: ['solar', 'battery'] },
+    { name: 'Battery + Agile',       flags: ['battery', 'agile'],           standing: 'agile' },
+    { name: 'Solar + Agile',         flags: ['solar', 'agile'],             standing: 'agile' },
+    { name: 'Solar + Batt + Agile',  flags: ['solar', 'battery', 'agile'],  standing: 'agile' },
+    { name: 'Solar + Batt + Cosy',   flags: ['solar', 'battery', 'custom'], preset: 'cosy' },
+];
 
+// Per-context parameter set: presets carry a schedule (custom tariffs) and a
+// standing charge; the Agile context carries just its standing charge.
+function hpContextParams(ctx, p) {
+    const presets = ledger.TARIFF_PRESETS;
+    const pp = makeP(p);
+    if (ctx.preset) {
+        pp.tariffSchedule = JSON.parse(JSON.stringify(presets[ctx.preset].schedule));
+        pp.elecStanding = presets[ctx.preset].standing;
+    } else if (ctx.standing === 'agile') {
+        pp.elecStanding = presets.agile.standing;
+    }
+    return pp;
+}
+
+function hpEconomicsReport(p, opts) {
     // £/yr of all-in cost per £ of heat-pump capital: the capital-recovery
     // factor over the heat pump's life. Its inverse turns a sustained £/yr
     // saving back into a present capital sum.
@@ -757,17 +797,8 @@ function hpEconomicsReport(p, opts) {
     // heat pump's capital line replaces.
     const boilerAsset = ledger.ann(p, p.boilerPrice, 0, p.boilerLife) + p.boilerService + p.boilerRepairs;
 
-    const rows = CONTEXTS.map(ctx => {
-        // Per-context parameter set: presets carry a schedule (custom tariffs)
-        // and a standing charge; Agile carries just its standing charge.
-        const pp = makeP(p);
-        if (ctx.preset) {
-            pp.tariffSchedule = JSON.parse(JSON.stringify(presets[ctx.preset].schedule));
-            pp.elecStanding = presets[ctx.preset].standing;
-        } else if (ctx.standing != null) {
-            pp.elecStanding = ctx.standing;
-        }
-
+    const rows = HP_CONTEXTS.map(ctx => {
+        const pp = hpContextParams(ctx, p);
         const base = run(cfg(ctx.flags), pp, opts);
         const withHp = run(cfg(ctx.flags.concat('hp')), pp, opts);
 
@@ -852,6 +883,68 @@ function hpEconomicsReport(p, opts) {
 }
 
 // -----------------------------------------------------------------------------
+// What is a better SPF worth in install cost, per context?
+//
+// Two installs of the same heat pump job: one achieves spfLo, the other spfHi
+// (better design: bigger radiators, careful commissioning, low flow temps).
+// Both cost p.hpPrice before any premium. The whole-life marginal cost of the
+// heat pump is linear in its price (through the CRF), so the install-cost
+// premium the better system can carry while keeping the SAME whole-life
+// economics is simply (ΔAllIn@spfLo − ΔAllIn@spfHi) ÷ CRF.
+//
+// The premium is context-dependent: solar, batteries and cheap-window tariffs
+// lower the effective price of the heat pump's electricity, and the cheaper
+// each kWh is, the less an efficiency improvement is worth — co-benefits and
+// SPF are partial substitutes. This report quantifies that across contexts.
+// -----------------------------------------------------------------------------
+function hpSpfReport(p, opts, positional) {
+    const spfLo = positional[0] != null ? parseFloat(positional[0]) : 3.7;
+    const spfHi = positional[1] != null ? parseFloat(positional[1]) : 4.5;
+    const crf = ledger.ann(p, 1, 0, p.hpLife);
+
+    h2(`SPF ${spfLo} vs ${spfHi} — install-cost premium for equal whole-life economics` + dispatchTag(opts));
+    console.log('  Same £' + Math.round(p.hpPrice).toLocaleString('en-GB') + ' install at SPF ' + spfLo +
+                '; premium = extra the SPF ' + spfHi + ' system can cost');
+    console.log('  for an identical ΔAll-in vs gas (gap ÷ CRF ' + (crf * 100).toFixed(2) + '%/yr over ' +
+                p.hpLife + 'y). Both share each context\'s kit.\n');
+
+    console.log('  ' + pad('Context', 22) + lpad('HP p/kWh', 10) + lpad(`Δrun ${spfLo}`, 11) + lpad(`Δrun ${spfHi}`, 11) +
+                lpad(`ΔAllIn ${spfLo}`, 12) + lpad(`ΔAllIn ${spfHi}`, 12) + lpad('gap/yr', 9) + lpad('premium', 10));
+    console.log('  ' + hr('─', 95));
+
+    for (const ctx of HP_CONTEXTS) {
+        const base = run(cfg(ctx.flags), hpContextParams(ctx, p), opts);
+        const at = spf => {
+            const pp = hpContextParams(ctx, p);
+            pp.scop = spf;
+            return run(cfg(ctx.flags.concat('hp')), pp, opts);
+        };
+        const lo = at(spfLo), hi = at(spfHi);
+
+        const dLo = lo.allIn - base.allIn;
+        const dHi = hi.allIn - base.allIn;
+        const gap = dLo - dHi;                       // £/yr the better SPF saves here
+
+        // Effective rate the HP pays barely moves with SPF (same kit, slightly
+        // less load), so one column: the spfHi build's cash rate.
+        const eff = hi.elecRates && hi.elecRates.hp ? hi.elecRates.hp.cashRate : null;
+
+        console.log('  ' + pad(ctx.name, 22) +
+                    lpad(eff != null ? eff.toFixed(1) : '—', 10) +
+                    lpad(sgbp(lo.running - base.running), 11) +
+                    lpad(sgbp(hi.running - base.running), 11) +
+                    lpad(sgbp(dLo) + '/yr', 12) +
+                    lpad(sgbp(dHi) + '/yr', 12) +
+                    lpad(sgbp(gap), 9) +
+                    lpad(sgbp(gap / crf), 10));
+    }
+
+    console.log('\n  premium = what the higher-SPF install may additionally cost, in that context,');
+    console.log('  for the same whole-life economics. Cheap-electricity contexts shrink it:');
+    console.log('  efficiency and cheap kWh are partial substitutes.');
+}
+
+// -----------------------------------------------------------------------------
 // Sensitivity sweep: hold the build fixed, vary one parameter, and watch the
 // saving and cost-of-carbon move. Useful for "how big should the battery be?" or
 // "at what grid intensity does the heat pump stop cutting carbon?".
@@ -891,6 +984,17 @@ function main() {
     const p = makeP(args.p);
     const opts = args.opts;
 
+    if (args.tariff) {
+        const preset = ledger.TARIFF_PRESETS[args.tariff];
+        if (!preset) {
+            console.error('unknown tariff preset "' + args.tariff + '" — one of: ' +
+                          Object.keys(ledger.TARIFF_PRESETS).join(', '));
+            process.exit(1);
+        }
+        if (preset.schedule) p.tariffSchedule = JSON.parse(JSON.stringify(preset.schedule));
+        p.elecStanding = preset.standing;
+    }
+
     // Should never fire — loadData() sets the flag — but if data.json is ever
     // swapped for the synthetic fallback the numbers must not be trusted.
     if (model.usingSynthetic) console.log('⚠  using SYNTHETIC data (real dataset not found)\n');
@@ -928,6 +1032,10 @@ function main() {
         case 'hp':
         case 'hpeconomics':
             hpEconomicsReport(p, opts);
+            break;
+
+        case 'hpspf':
+            hpSpfReport(p, opts, args.positional);
             break;
 
         case 'sweep': {
