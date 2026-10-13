@@ -181,6 +181,16 @@ var controller = (function () {
             }
         }
 
+        // A disabled heating-season month is a hard stop for the room-control
+        // path. Reset its state to avoid a stored PI demand when heating is
+        // enabled again. DHW priority below deliberately remains available.
+        if (!inp.space_heating_enabled) {
+            heatpump_heat_target = 0;
+            pstate.ITerm = 0;
+            pstate.ITerm_outer = 0;
+            rstate.max_roomT_state = 0;
+        }
+
         // DHW priority: diverter valve sends all heat pump output to the
         // cylinder coil. The reheat runs at the schedule window's modulation
         // limit (an eco mode: e.g. 40% of capacity gives a slower reheat at

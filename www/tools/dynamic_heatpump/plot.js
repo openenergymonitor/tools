@@ -150,6 +150,9 @@ function plot() {
     window.outsideT_data = timeseries(sim_series.outsideT_data);
     window.agile_data = timeseries(sim_series.agile_data);
     window.targetT_data = timeseries(sim_series.targetT_data);
+    window.roomDeltaT_data = timeseries(sim_series.roomDeltaT_data || []);
+    window.systemDeltaT_data = timeseries(sim_series.systemDeltaT_data || []);
+    window.deltaZero_data = window.roomDeltaT_data.map(function (p) { return [p[0], 0]; });
     window.solar_pv_data = timeseries(sim_series.solar_pv_data);
     window.cylTopT_data = timeseries(sim_series.cylTopT_data);
     window.cylBottomT_data = timeseries(sim_series.cylBottomT_data);
@@ -227,6 +230,15 @@ function plot() {
         series.push({ label: "CH", data: window.ch_mode_data, yaxis: 4, color: cs.ch.color, lines: { lineWidth: 0, show: true, fill: 0.15 } });
     if (cs.targetT.show)
         series.push({ label: "TargetT", data: window.targetT_data, yaxis: 2, color: cs.targetT.color });
+    // The reference is a regular Flot line, not a grid marking. Grid markings
+    // are filled ranges when their bounds are incomplete, which darkens the
+    // entire plot area rather than drawing the intended zero line.
+    if (cs.roomDeltaT.show || cs.systemDeltaT.show)
+        series.push({ label: "Delta zero", data: window.deltaZero_data, yaxis: 6, color: "#999", hoverable: false, lines: { lineWidth: 1, show: true } });
+    if (cs.roomDeltaT.show)
+        series.push({ label: "Room ΔT", data: window.roomDeltaT_data, yaxis: 6, color: cs.roomDeltaT.color });
+    if (cs.systemDeltaT.show)
+        series.push({ label: "System ΔT", data: window.systemDeltaT_data, yaxis: 6, color: cs.systemDeltaT.color });
     if (cs.flowT.show)
         series.push({ label: "FlowT", data: window.flowT_data, yaxis: 2, color: cs.flowT.color });
     if (cs.returnT.show)
@@ -270,7 +282,10 @@ function plot() {
             // 4: mode shading bands
             { min: 0, max: 1, show: false, reserveSpace: false },
             // 5: frost mass
-            { min: 0, font: { size: flot_font_size, color: "#00aacc" }, reserveSpace: false }
+            { min: 0, font: { size: flot_font_size, color: "#00aacc" }, reserveSpace: false },
+            // 6: temperature differences (K and degrees C have equal steps).
+            // Explicitly left so it stacks with the simulator's other axes.
+            { position: "left", font: style, reserveSpace: false }
         ],
         grid: {
             show: true,
@@ -317,6 +332,8 @@ $(document).on("plothover", "#graph", function (event, pos, item) {
                 "DHW": { name: "Hot Water", unit: "", dp: 0 },
                 "CH": { name: "Central Heating", unit: "", dp: 0 },
                 "TargetT": { name: "Target", unit: "°C", dp: 1 },
+                "Room ΔT": { name: "Room ΔT", unit: "K", dp: 1 },
+                "System ΔT": { name: "System ΔT", unit: "K", dp: 1 },
                 "FlowT": { name: "FlowT", unit: "°C", dp: 1 },
                 "ReturnT": { name: "ReturnT", unit: "°C", dp: 1 },
                 "OutsideT": { name: "Outside", unit: "°C", dp: 1 },

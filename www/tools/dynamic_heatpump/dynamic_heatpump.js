@@ -366,6 +366,12 @@ var app = new Vue({
             { start: "15:00", set_point: 19, price: price_cap },
             { start: "22:00", set_point: 17, price: price_cap }
         ],
+        // Space heating is enabled in every calendar month by default. This
+        // is only applied to full-year runs; single-day behaviour is unchanged.
+        heating_months: [true, true, true, true, true, true,
+                         true, true, true, true, true, true],
+        month_names: ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
         // Chart legend: one entry per series, rendered as clickable pills.
         // `show` is the default visibility; colours are shared with the plot
         // so the legend dots always match the chart. Order = legend order.
@@ -380,6 +386,8 @@ var app = new Vue({
             outsideT:   { label: "Outside T",   color: "#c880ff", show: true },
             roomT:      { label: "Room T",      color: "#000000", show: true },
             targetT:    { label: "Target T",    color: "#cccccc", show: false },
+            roomDeltaT: { label: "Room ΔT",     color: "#805ad5", show: false },
+            systemDeltaT: { label: "System ΔT", color: "#dd6b20", show: false },
             cylTopT:    { label: "Cyl top",     color: "#cc0000", show: true },
             cylBottomT: { label: "Cyl bottom",  color: "#e08080", show: true },
             agile:      { label: "Agile price", color: "#a6196b", show: false },
@@ -1152,6 +1160,7 @@ var app = new Vue({
                     primary: app.primary,
                     control: app.control,
                     schedule: app.schedule,
+                    heating_months: app.heating_months,
                     dhw: app.dhw,
                     dhw_schedule: app.dhw_schedule,
                     dhw_draw_profile: dhw_draw_profile,
@@ -1348,6 +1357,7 @@ var app = new Vue({
                 primary: JSON.parse(JSON.stringify(this.primary)),
                 control: JSON.parse(JSON.stringify(this.control)),
                 schedule: JSON.parse(JSON.stringify(this.schedule)),
+                heating_months: JSON.parse(JSON.stringify(this.heating_months)),
                 dhw: JSON.parse(JSON.stringify(this.dhw)),
                 dhw_schedule: JSON.parse(JSON.stringify(this.dhw_schedule)),
                 battery: JSON.parse(JSON.stringify(this.battery)),
@@ -1399,6 +1409,15 @@ var app = new Vue({
             }
             if (config.schedule && Array.isArray(config.schedule)) {
                 this.schedule = JSON.parse(JSON.stringify(config.schedule));
+            }
+            if (config.heating_months && Array.isArray(config.heating_months)) {
+                // Keep older/shorter imports safe: unspecified months retain
+                // their enabled default, while explicit false disables a month.
+                for (var m = 0; m < 12; m++) {
+                    if (config.heating_months[m] !== undefined) {
+                        this.heating_months.splice(m, 1, config.heating_months[m] !== false);
+                    }
+                }
             }
             if (config.dhw) {
                 Object.assign(this.dhw, config.dhw);

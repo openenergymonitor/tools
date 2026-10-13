@@ -261,6 +261,12 @@
         gap: .75rem .9rem;
         align-content: start;
     }
+    .hp-month-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(56px, 1fr));
+        gap: .5rem;
+        max-width: 230px;
+    }
     .hp-field-wide { grid-column: 1 / -1; }
     @media (max-width: 575.98px) {
         /* minmax(0, 1fr) so the track can shrink below the steppers'
@@ -846,6 +852,16 @@
                     <div class="d-flex flex-wrap gap-2 mt-3">
                         <button type="button" class="btn btn-sm btn-outline-secondary" @click="load_octopus_cosy">Load Octopus Cosy example</button>
                         <button type="button" class="btn btn-sm btn-outline-secondary" @click="set_schedule_max">Set all to {{ Math.max(...schedule.map(s => s.set_point)) }} &deg;C</button>
+                    </div>
+
+                    <div class="hp-subheading">Heating season</div>
+                    <p class="hp-note">Choose the months when the heat pump may heat the rooms in a full-year simulation. All months start selected. Clear a month to let the house free-run, while sunlight, internal gains and hot-water reheating continue as normal.</p>
+                    <div class="hp-month-grid">
+                        <label v-for="(month, index) in month_names" :key="month" class="btn btn-sm"
+                            :class="heating_months[index] ? 'btn-outline-primary' : 'btn-outline-secondary'">
+                            <input class="visually-hidden" type="checkbox" v-model="heating_months[index]" @change="simulate">
+                            {{ month }}
+                        </label>
                     </div>
                 </div>
 

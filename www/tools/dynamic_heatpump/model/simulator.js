@@ -41,6 +41,19 @@ var simulator = (function () {
         return parseInt(hourmin[0]) + parseInt(hourmin[1]) / 60;
     }
 
+    // Simulation time starts at 1 January in annual mode. Keep this small and
+    // deterministic rather than depending on the browser's local time zone.
+    function month_from_time(time_seconds) {
+        var day = Math.floor(time_seconds / 86400) % 365;
+        var month_days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        var month = 0;
+        while (month < 11 && day >= month_days[month]) {
+            day -= month_days[month];
+            month++;
+        }
+        return month;
+    }
+
     // Sample the annual dataset (half-hourly, wrapping) at a simulation time
     function get_from_dataset(dataset, time_seconds) {
         if (!dataset || !dataset.loaded || dataset.outsideT.length === 0) {
@@ -267,6 +280,8 @@ var simulator = (function () {
         var heat_data = [];
         var agile_data = [];
         var targetT_data = [];
+        var roomDeltaT_data = [];
+        var systemDeltaT_data = [];
         var solar_pv_data = [];
         var cylTopT_data = [];
         var cylBottomT_data = [];
@@ -304,6 +319,7 @@ var simulator = (function () {
         var ext_mid = cfg.external.mid;
         var ext_use_csv = cfg.external.use_csv;
         var ext_swing_half = cfg.external.swing * 0.5;
+        var heating_months = cfg.heating_months || [];
 
         // Hoisted loop invariants
         var max_elec_trim = 0;   // max electrical power limiter feedback trim, W
@@ -545,6 +561,12 @@ var simulator = (function () {
                 setpoint = processed_schedule[scheduleIndex].set_point;
                 price = processed_schedule[scheduleIndex].price;
 
+                // Heating season only has a calendar meaning in annual mode.
+                // Missing settings and all single-day simulations preserve the
+                // historic always-on room-control behaviour.
+                var space_heating_enabled = days <= 1 ||
+                    heating_months[month_from_time(time)] !== false;
+
                 // Load DHW schedule - check if current hour falls within any DHW period
                 DHW_active = false;
                 for (var jd = 0; jd < dhw_schedule_length; jd++) {
@@ -583,6 +605,7 @@ var simulator = (function () {
                     days: days,
                     setpoint: setpoint,
                     room: fabric_state.room,
+                    space_heating_enabled: space_heating_enabled,
                     outside: outside,
                     ext_mid: ext_mid,
                     flow_temperature: flow_temperature,
@@ -814,6 +837,8 @@ var simulator = (function () {
                 heat_data[i] = heatpump_heat;
                 agile_data[i] = agile_price;
                 targetT_data[i] = setpoint;
+                roomDeltaT_data[i] = fabric_state.room - setpoint;
+                systemDeltaT_data[i] = flow_temperature - return_temperature;
                 cylTopT_data[i] = cyl_T[cyl_params.node_count - 1];
                 cylBottomT_data[i] = cyl_T[0];
                 frost_data[i] = frost_state.mass;
@@ -1089,6 +1114,8 @@ var simulator = (function () {
                     heat_data: heat_data,
                     agile_data: agile_data,
                     targetT_data: targetT_data,
+                    roomDeltaT_data: roomDeltaT_data,
+                    systemDeltaT_data: systemDeltaT_data,
                     solar_pv_data: solar_pv_data,
                     cylTopT_data: cylTopT_data,
                     cylBottomT_data: cylBottomT_data,
