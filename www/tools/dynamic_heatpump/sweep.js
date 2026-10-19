@@ -5,15 +5,24 @@
 // Each scenario is a full year on llanberis2024.csv, run through harness.js
 // (the real app, headless). Scenarios run in parallel, one per worker thread.
 //
-// Fixed for every scenario: carnot_variable COP model at 47% of Carnot, single
-// PI control (AUTO_ADAPT). Everything not listed in make_scenarios() keeps the
-// app default (including frost and primary pipework). Varied: heat loss,
-// capacity, design flow temperature, system DT, water volume, minimum
-// modulation, standby and pump power, gains, room setpoint and setback, DHW
-// volume, cylinder size and DHW set points.
+// The COP model is the same for every scenario, chosen with --cop-model:
+//   generic_v2       (default) Vaillant Arotherm+ datasheet fit, speed based.
+//                    Each unit is an Arotherm+ badge size (3.5-12 kW) nearest
+//                    the sampled sizing; max output and minimum modulation
+//                    (30 of 120 rps) come from the fit's capacity model.
+//   generic          as above, with the load-fraction efficiency curve
+//   carnot_variable  47% of Carnot with load-dependent offsets; capacity and
+//                    minimum modulation are sampled directly
+// Control is single PI (AUTO_ADAPT). Everything not listed in
+// make_scenarios() keeps the app default (including frost and primary
+// pipework). Varied: heat loss, sizing, design flow temperature, system DT,
+// water volume, standby and pump power, gains, room setpoint and setback,
+// DHW volume, cylinder size and DHW set points. The same seed gives the same
+// houses whatever the COP model, so models can be compared like for like.
 //
 // Usage:
-//   node sweep.js [--n 400] [--workers <cpus-2>] [--seed 20260715] [--out sweep_results.csv]
+//   node sweep.js [--n 400] [--workers <cpus-2>] [--seed 20260715]
+//                 [--cop-model generic_v2] [--out sweep_results.csv]
 //
 // Output is one CSV row per scenario: the sampled design, the
 // HeatpumpMonitor.org-style annual stats (metered at the heat pump, as the
@@ -44,13 +53,27 @@ function mulberry32(a) {
     };
 }
 
-function make_scenarios(n, seed) {
+// Arotherm+ badge sizes, kW
+const AROTHERM_BADGES = [3.5, 5, 7, 10, 12];
+const FITTED_MODELS = ['generic', 'generic_v2'];
+
+function make_scenarios(n, seed, cop_model) {
     const rng = mulberry32(seed);
     const U = (a, b) => a + (b - a) * rng();
+    const fitted = FITTED_MODELS.includes(cop_model);
     const scenarios = [];
+    // Every value is drawn whatever the COP model, so a seed always gives the
+    // same houses and the models can be compared scenario by scenario
     for (let i = 0; i < n; i++) {
         const heat_loss = U(2000, 9000);                       // W at design conditions
-        const capacity = Math.min(18000, Math.max(3500, heat_loss * U(1.0, 2.2)));
+        const sizing = U(1.0, 2.2);                            // capacity / heat loss
+        // carnot_variable: capacity is the maximum output. Fitted models:
+        // nearest Arotherm+ badge (nominal capacity), and the worker sets the
+        // maximum output and minimum modulation from the fit
+        const capacity = Math.min(18000, Math.max(3500, heat_loss * sizing));
+        const target_kw = heat_loss * sizing / 1000;
+        const badge = AROTHERM_BADGES.reduce((best, b) =>
+            Math.abs(Math.log(b / target_kw)) < Math.abs(Math.log(best / target_kw)) ? b : best);
         const design_flowT = U(35, 55);                        // emitters sized from this
         const system_DT = U(4, 8);                             // flow rate sized for this at full output
         const setpointT = U(18.5, 21.5);
@@ -64,7 +87,8 @@ function make_scenarios(n, seed) {
             i: i,
             params: {
                 heat_loss: heat_loss,
-                capacity: capacity,
+                sizing: sizing,
+                badge: fitted ? badge : '',
                 design_flowT: design_flowT,
                 system_DT: system_DT,
                 setpointT: setpointT,
@@ -78,12 +102,13 @@ function make_scenarios(n, seed) {
                     metabolic_gains: U(50, 150)
                 },
                 heatpump: {
-                    cop_model: 'carnot_variable',
-                    prc_carnot: 47,
+                    cop_model: cop_model,
+                    prc_carnot: 47,                                     // carnot models only
+                    nominal_capacity: badge * 1000,                     // fitted models only
+                    eta_scale: 1.0,
                     capacity: capacity,
                     design_flowT: design_flowT,
                     system_water_volume: U(60, 250),
-                    flow_rate: (capacity * 60) / (4187 * system_DT),   // L/min, the app clamps to 1-40
                     minimum_modulation: U(20, 45),
                     standby: U(5, 20),
                     pumps: U(10, 30),
@@ -91,7 +116,7 @@ function make_scenarios(n, seed) {
                 },
                 control: { mode: 0 },                                   // single PI (AUTO_ADAPT)
                 dhw: {
-                    daily_volume: U(60, 350),
+                    daily_volume: U(40, 200),             // L/day mixed at the tap
                     cylinder_volume: U(120, 300)
                 },
                 dhw_schedule: [
@@ -109,12 +134,14 @@ function make_scenarios(n, seed) {
 // All electricity-free, so they can be tested as COP predictors on real
 // monitoring data too (flowT, outsideT, heat and rated capacity only). Heat is
 // net of the reverse-cycle defrost draw; samples without net heat are skipped.
+// Load ratios use the rated capacity: the badge for fitted models (as on
+// heatpumpmonitor.org), the maximum output for carnot models.
 function annual_metrics(series, capacity, days) {
     const heat = series.heat_data, defrost = series.defrost_data;
     const flowT = series.flowT_data, outsideT = series.outsideT_data;
     const n = heat.length;
     let sh = 0, s_ideal_fixed = 0, s_ideal_var = 0, s_dT = 0, s_dT2 = 0;
-    let below40 = 0, on_steps = 0, starts = 0, prev_on = false;
+    let s_hr = 0, below40 = 0, on_steps = 0, starts = 0, prev_on = false;
     for (let i = 0; i < n; i++) {
         const on = heat[i] > 0;
         if (on && !prev_on) starts++;
@@ -132,6 +159,7 @@ function annual_metrics(series, capacity, days) {
         const r = h / capacity;
         const lift_var = (fT + 3 * r) - (oT - 8 * r);
         if (lift_var > 0) s_ideal_var += h * lift_var / (fT + 3 * r + 273.15);
+        s_hr += h * r;
         if (h < 0.4 * capacity) below40 += h;
     }
     const dT_w = s_dT / sh;
@@ -143,7 +171,8 @@ function annual_metrics(series, capacity, days) {
         runtime_frac: on_steps / n,
         starts_per_day: starts / days,
         heat_frac_below_40pct: below40 / sh,
-        mean_load_ratio: sh / on_steps / capacity
+        mean_load_ratio: sh / on_steps / capacity,             // time-weighted while running
+        r_bar: s_hr / sh                                       // heat-weighted
     };
 }
 
@@ -153,9 +182,14 @@ if (isMainThread) {
     const seed = parseInt(arg_value('--seed', '20260715'));
     const n_workers = Math.min(N, parseInt(arg_value('--workers', String(Math.max(1, os.cpus().length - 2)))));
     const out_file = path.resolve(arg_value('--out', 'sweep_results.csv'));
+    const cop_model = arg_value('--cop-model', 'generic_v2');
+    if (!FITTED_MODELS.includes(cop_model) && cop_model !== 'carnot_variable') {
+        console.error('--cop-model must be generic_v2, generic or carnot_variable');
+        process.exit(1);
+    }
 
-    const scenarios = make_scenarios(N, seed);
-    console.log('running ' + N + ' scenarios on ' + n_workers + ' workers (seed ' + seed + ')');
+    const scenarios = make_scenarios(N, seed, cop_model);
+    console.log('running ' + N + ' scenarios on ' + n_workers + ' workers (seed ' + seed + ', ' + cop_model + ')');
 
     const rows = new Array(N);
     let next = 0, done = 0;
@@ -196,9 +230,23 @@ if (isMainThread) {
     console.log = function () {};   // the app and simulator log every run
     const harness = require('./harness.js');
     parentPort.on('message', function (s) {
+        const hp = s.config.heatpump;
+        const fitted = FITTED_MODELS.includes(hp.cop_model);
+        if (fitted) {
+            // Arotherm+ modulation range from the fit's capacity model at A7/W35
+            hp.capacity = 1000 * outputRange(0.001 * hp.nominal_capacity, 35, 7).maxKW;
+            hp.minimum_modulation = 100 * VAILLANT_MIN_RPS / VAILLANT_MAX_RPS;
+        }
+        // Load ratios and flow rate use the rated capacity: the badge for
+        // fitted models, the maximum output for carnot models. Flow is sized
+        // for the system DT at rated output (the app clamps to 1-40 L/min)
+        const rated = fitted ? hp.nominal_capacity : hp.capacity;
+        hp.flow_rate = (rated * 60) / (4187 * s.params.system_DT);
         harness.run_annual(s.config).then(function (app) {
             const r = app.results, h = app.hpm_model;
             const row = Object.assign({ scenario: s.i }, s.params, {
+                capacity: app.heatpump.capacity,
+                minimum_modulation: app.heatpump.minimum_modulation,
                 flow_rate: app.heatpump.flow_rate,
                 spf: h.combined_cop,
                 heat_kwh: h.combined_heat_kwh,
@@ -214,7 +262,7 @@ if (isMainThread) {
                 mean_room_temp: r.mean_room_temp,
                 degree_hours_below_setpoint: app.stats.degree_hours_below_setpoint,
                 degree_hours_above_setpoint: app.stats.degree_hours_above_setpoint
-            }, annual_metrics(sim_series, app.heatpump.capacity, app.days));
+            }, annual_metrics(sim_series, rated, app.days));
             for (const k in row) {
                 if (typeof row[k] === 'number' && !Number.isInteger(row[k])) row[k] = +row[k].toPrecision(6);
             }
