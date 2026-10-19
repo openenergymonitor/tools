@@ -18,6 +18,11 @@
 // completion is detected by polling app.progress.running / sim_time_ms.
 // Note: in annual mode app.simulate() only flags needs_run - the harness uses
 // app.run_model() to actually run.
+//
+// It can also be loaded from another script with require('./harness.js'),
+// which skips the CLI and exports run_annual() (see the end of the file).
+// The app lives in the globals of the thread that loads it, so one thread
+// runs one simulation at a time: sweep.js uses a worker thread per core.
 // ============================================================================
 
 const fs = require('fs');
@@ -26,9 +31,10 @@ const path = require('path');
 
 const BASE = __dirname;
 const LIB = path.join(BASE, '..', '..', 'lib');
+const is_cli = require.main === module;
 
 // --- CLI arguments ----------------------------------------------------------
-const args = process.argv.slice(2);
+const args = is_cli ? process.argv.slice(2) : [];
 function arg_value(name) {
     const i = args.indexOf(name);
     return (i >= 0 && i + 1 < args.length) ? args[i + 1] : null;
@@ -217,9 +223,115 @@ function report() {
     }
 }
 
+// --- Library use ------------------------------------------------------------
+// Defaults as loaded, before the first run touches anything: each run_annual()
+// config is applied on top of these so earlier runs can't leak into later ones
+const default_config = app.get_config();
+
+// The app auto-runs a single-day simulation on load; runs wait for it
+const app_ready = new Promise(function (resolve) { wait_done(resolve); });
+
+// Recursive merge of plain objects; arrays and values from src replace
+function merge_config(base, src) {
+    const out = JSON.parse(JSON.stringify(base));
+    for (const k in src) {
+        const v = src[k];
+        if (v && typeof v === 'object' && !Array.isArray(v) &&
+            out[k] && typeof out[k] === 'object' && !Array.isArray(out[k])) {
+            out[k] = merge_config(out[k], v);
+        } else {
+            out[k] = JSON.parse(JSON.stringify(v));
+        }
+    }
+    return out;
+}
+
+// Run a full year on llanberis2024.csv with config (any subset of the
+// export_config shape) applied over the defaults, from a cold start. Two
+// extra optional keys: days_pre_sim, and outsideT_offset (K added to every
+// outside temperature in the dataset, to stand in for a colder or warmer
+// site). Resolves with the app once results are in: app.results, app.stats,
+// app.hpm_model and the 30 s series in sim_series.
+let base_outsideT = null;
+function run_annual(config) {
+    return app_ready.then(function () {
+        return new Promise(function (resolve) {
+            // Cold start: the simulator re-initialises any null state
+            for (const k in sim_state) sim_state[k] = null;
+            const cfg = Object.assign({}, config);
+            const offset = cfg.outsideT_offset || 0;
+            delete cfg.outsideT_offset;
+            app.apply_config(merge_config(default_config, cfg));
+            app.days_pre_sim = (config && config.days_pre_sim !== undefined) ? config.days_pre_sim : 5;
+            app.mode = 'year';
+            app.days = 365;
+            app.external.use_csv = true;
+            if (!base_outsideT) {
+                // Load the dataset once; parse_csv would also start a run
+                const run_model = app.run_model;
+                app.run_model = function () {};
+                app.parse_csv(fs.readFileSync(path.join(BASE, 'llanberis2024.csv'), 'utf8'));
+                app.run_model = run_model;
+                base_outsideT = annual_dataset_outsideT.slice();
+            }
+            annual_dataset_outsideT = base_outsideT.map(function (t) { return t + offset; });
+            wait_done(function () { resolve(app); });
+            app.run_model();
+        });
+    });
+}
+
+// --- Extra annual metrics from the 30 s series ------------------------------
+// All electricity-free, so they can be tested as COP predictors on real
+// monitoring data too (flowT, outsideT, heat and rated capacity only). Heat is
+// net of the reverse-cycle defrost draw; samples without net heat are skipped.
+// Load ratios use the rated capacity: the badge for fitted models (as on
+// heatpumpmonitor.org), the maximum output for carnot models.
+function annual_metrics(series, capacity, days) {
+    const heat = series.heat_data, defrost = series.defrost_data;
+    const flowT = series.flowT_data, outsideT = series.outsideT_data;
+    const n = heat.length;
+    let sh = 0, s_ideal_fixed = 0, s_ideal_var = 0, s_dT = 0, s_dT2 = 0;
+    let s_hr = 0, below40 = 0, on_steps = 0, starts = 0, prev_on = false;
+    for (let i = 0; i < n; i++) {
+        const on = heat[i] > 0;
+        if (on && !prev_on) starts++;
+        prev_on = on;
+        const h = heat[i] - defrost[i];
+        if (!on || h <= 0) continue;
+        on_steps++;
+        const fT = flowT[i], oT = outsideT[i];
+        const dT = fT - oT;
+        sh += h; s_dT += h * dT; s_dT2 += h * dT * dT;
+        // Ideal Carnot, fixed +2/-6 K offsets (the heatpumpmonitor.org convention)
+        const lift_fixed = (fT + 2) - (oT - 6);
+        if (lift_fixed > 0) s_ideal_fixed += h * lift_fixed / (fT + 2 + 273.15);
+        // Ideal Carnot, offsets growing with load ratio r (+3r / -8r K)
+        const r = h / capacity;
+        const lift_var = (fT + 3 * r) - (oT - 8 * r);
+        if (lift_var > 0) s_ideal_var += h * lift_var / (fT + 3 * r + 273.15);
+        s_hr += h * r;
+        if (h < 0.4 * capacity) below40 += h;
+    }
+    const dT_w = s_dT / sh;
+    return {
+        // Heat-weighted harmonic mean of the ideal COP: sum(heat) / sum(heat / carnot)
+        H_fixed: sh / s_ideal_fixed,
+        H_star: sh / s_ideal_var,
+        dT_sd: Math.sqrt(Math.max(0, s_dT2 / sh - dT_w * dT_w)),
+        runtime_frac: on_steps / n,
+        starts_per_day: starts / days,
+        heat_frac_below_40pct: below40 / sh,
+        mean_load_ratio: sh / on_steps / capacity,             // time-weighted while running
+        r_bar: s_hr / sh                                       // heat-weighted
+    };
+}
+
+module.exports = { run_annual: run_annual, annual_metrics: annual_metrics, default_config: default_config };
+
 // --- Run --------------------------------------------------------------------
 // The app auto-runs a single-day simulation on load; wait for it first
-wait_done(function () {
+if (is_cli) wait_done(function () {
     if (set_snippet) {
         eval(set_snippet);
     }
